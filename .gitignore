@@ -1,0 +1,9 @@
+.DS_Store
+*.pyc
+.vscode
+*.env
+cloudlift.egg-info/
+build/
+dist/
+venv/
+metastore_db/
