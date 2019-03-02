@@ -9,6 +9,13 @@ opinionated. Under the hood, it is a wrapper to AWS cloudformation templates. On
 creating/udpating a service or a cluster this creates/updates a cloudformation
 in AWS.
 
+
+### Demo videos
+- https://asciinema.org/a/j4A2DBjLPadbwJPvwiT6W1c2N
+- https://asciinema.org/a/QC943A8WqNrVJx68rnGD0CQ8T
+- https://asciinema.org/a/RaZb81VDmrnWg8qckWKAm98Bn
+- https://asciinema.org/a/evsaZvW86qff0InxNlzLPMtb6
+
 ## Installing cloudlift
 
 ### 1. Pre-requisites
