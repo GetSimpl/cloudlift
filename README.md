@@ -11,10 +11,13 @@ in AWS.
 
 
 ### Demo videos
-- https://asciinema.org/a/j4A2DBjLPadbwJPvwiT6W1c2N
-- https://asciinema.org/a/QC943A8WqNrVJx68rnGD0CQ8T
-- https://asciinema.org/a/RaZb81VDmrnWg8qckWKAm98Bn
-- https://asciinema.org/a/evsaZvW86qff0InxNlzLPMtb6
+
+- [Create Environment](https://asciinema.org/a/evsaZvW86qff0InxNlzLPMtb6)
+- [Create Service](https://asciinema.org/a/RaZb81VDmrnWg8qckWKAm98Bn)
+- [Deploy Service with image build](https://asciinema.org/a/j4A2DBjLPadbwJPvwiT6W1c2N)
+- [Deploy Service](https://asciinema.org/a/QC943A8WqNrVJx68rnGD0CQ8T)
+
+
 
 ## Installing cloudlift
 
