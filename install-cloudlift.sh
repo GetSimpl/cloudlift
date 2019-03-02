@@ -9,7 +9,7 @@ fi
 
 if ! [ -d "$VENV_DIRNAME" ]; then
    pip install virtualenv $QUIET
-   virtualenv $VENV_DIRNAME $QUIET
+   virtualenv -p python3 $VENV_DIRNAME $QUIET
 fi
 source `pwd`/$VENV_DIRNAME/bin/activate
 echo "Installing requirements..."
