@@ -28,7 +28,7 @@ def do_mfa_login(mfa_code=None, region='ap-south-1'):
         os.environ['AWS_DEFAULT_REGION'] = region
         return session_params
     except botocore.exceptions.ClientError as client_error:
-        log_err(client_error.message)
+        log_err(str(client_error))
         exit(1)
 
 
