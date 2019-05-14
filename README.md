@@ -9,21 +9,18 @@ opinionated. Under the hood, it is a wrapper to AWS cloudformation templates. On
 creating/udpating a service or a cluster this creates/updates a cloudformation
 in AWS.
 
-
-### Demo videos
+## Demo videos
 
 - [Create Environment](https://asciinema.org/a/evsaZvW86qff0InxNlzLPMtb6)
 - [Create Service](https://asciinema.org/a/RaZb81VDmrnWg8qckWKAm98Bn)
 - [Deploy Service with image build](https://asciinema.org/a/j4A2DBjLPadbwJPvwiT6W1c2N)
 - [Deploy Service](https://asciinema.org/a/FUUJ3U2gm7U1yCcTCGjTiGBbp)
 
-
-
 ## Installing cloudlift
 
 ### 1. Pre-requisites
 
-* pip
+- pip
 
 ```sh
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py | python get-pip.py
@@ -47,6 +44,21 @@ Enter the AWS Access Key ID, AWS Secret Access Key. You can find instructions
 here on how to get Access Key ID and Secret Access Key here at
 http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
 
+#### Using AWS Profiles
+
+If you are using [AWS profiles](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html), set the desired profile name in the environment before invoking Cloudlift.
+
+```sh
+AWS_DEFAULT_PROFILE=<profile name> cloudlift <command>
+```
+
+OR
+
+```sh
+export AWS_DEFAULT_PROFILE=<profile name>
+cloudlift <command>
+cloudlift <command>
+```
 
 ## Usage
 
@@ -63,16 +75,16 @@ cloudlift create_environment -e <environment-name>
 This starts a prompt for required details to create an environment, which
 includes -
 
-* AWS region for the environment
-* VPC CIDR
-* NAT Elastic IP allocation ID
-* 2 Public Subnet CIDRs
-* 2 Private Subnet CIDRs
-* Minimum instances for cluster
-* Maximum instances for cluster
-* SSH key name
-* SNS ARN for notifications
-* AWS ACM ARN for SSL certificate
+- AWS region for the environment
+- VPC CIDR
+- NAT Elastic IP allocation ID
+- 2 Public Subnet CIDRs
+- 2 Private Subnet CIDRs
+- Minimum instances for cluster
+- Maximum instances for cluster
+- SSH key name
+- SNS ARN for notifications
+- AWS ACM ARN for SSL certificate
 
 Once the configuration is saved, this is opened in the default `VISUAL` editor.
 Here configurations can be changed if required.
