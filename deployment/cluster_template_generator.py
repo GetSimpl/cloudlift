@@ -2,7 +2,7 @@ import json
 import re
 
 from cfn_flip import to_yaml
-from stringcase import pascalcase
+from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
                          cloudformation)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
@@ -80,7 +80,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
 
     def _create_vpc(self, cidr_block):
         self.vpc = VPC(
-            "{self.env}Vpc".format(**locals()),
+            camelcase("{self.env}Vpc".format(**locals())),
             CidrBlock=cidr_block,
             EnableDnsSupport=True,
             EnableDnsHostnames=True,
@@ -92,7 +92,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         )
         self.template.add_resource(self.vpc)
         self.internet_gateway = InternetGateway(
-            "{self.env}Ig".format(**locals()),
+            camelcase("{self.env}Ig".format(**locals())),
             Tags=[
                 {
                     'Key': 'Name',
@@ -103,7 +103,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         )
         self.template.add_resource(self.internet_gateway)
         vpc_gateway_attachment = VPCGatewayAttachment(
-            "{self.env}Attachment".format(**locals()),
+            camelcase("{self.env}Attachment".format(**locals())),
             InternetGatewayId=Ref(self.internet_gateway),
             VpcId=Ref(self.vpc)
         )
@@ -112,7 +112,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
 
     def _create_public_network(self, subnet_configs):
         public_route_table = RouteTable(
-            "{self.env}Public".format(**locals()),
+            camelcase("{self.env}Public".format(**locals())),
             VpcId=Ref(self.vpc),
             Tags=[
                 {
@@ -131,7 +131,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             else:
                 availability_zone = self.availability_zones[1]
 
-            subnet_title = "{self.env}Public".format(**locals()) + \
+            subnet_title = camelcase("{self.env}Public".format(**locals())) + \
                 pascalcase(re.sub('[^a-zA-Z0-9*]', '', subnet_title))
             subnet_name = "{self.env}-public-{subnet_count}".format(**locals())
             subnet = Subnet(
@@ -148,14 +148,14 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.public_subnets.append(subnet)
             self.template.add_resource(subnet)
             subnet_route_table_association = SubnetRouteTableAssociation(
-                "{self.env}PublicSubnet{subnet_count}Assoc".format(**locals()),
+                camelcase("{self.env}PublicSubnet{subnet_count}Assoc".format(**locals())),
                 RouteTableId=Ref(public_route_table),
                 SubnetId=Ref(subnet)
             )
             self.template.add_resource(subnet_route_table_association)
 
         internet_gateway_route = Route(
-            "{self.env}IgRoute".format(**locals()),
+            camelcase("{self.env}IgRoute".format(**locals())),
             DestinationCidrBlock='0.0.0.0/0',
             GatewayId=Ref(self.internet_gateway),
             RouteTableId=Ref(public_route_table)
@@ -165,7 +165,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
 
     def _create_private_network(self, subnet_configs, eip_allocation_id):
         private_route_table = RouteTable(
-            "{self.env}Private".format(**locals()),
+            camelcase("{self.env}Private".format(**locals())),
             VpcId=Ref(self.vpc),
             Tags=[
                 {
@@ -183,7 +183,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 availability_zone = self.availability_zones[0]
             else:
                 availability_zone = self.availability_zones[1]
-            subnet_title = "{self.env}Private".format(**locals()) + \
+            subnet_title = camelcase("{self.env}Private".format(**locals())) + \
                 pascalcase(re.sub('[^a-zA-Z0-9*]', '', subnet_title))
             subnet_name = "{self.env}-private-{subnet_count}".format(**locals())
             subnet = Subnet(
@@ -200,15 +200,15 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.private_subnets.append(subnet)
             self.template.add_resource(subnet)
             subnet_route_table_association = SubnetRouteTableAssociation(
-                "{self.env}PrivateSubnet{subnet_count}Assoc".format(
-                    **locals()),
+                camelcase("{self.env}PrivateSubnet{subnet_count}Assoc".format(
+                    **locals())),
                 RouteTableId=Ref(private_route_table),
                 SubnetId=Ref(subnet)
             )
             self.template.add_resource(subnet_route_table_association)
 
         nat_gateway = NatGateway(
-            "{self.env}Nat".format(**locals()),
+            camelcase("{self.env}Nat".format(**locals())),
             AllocationId=eip_allocation_id,
             SubnetId=Ref(self.public_subnets[0]),
             Tags=[
@@ -221,7 +221,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         )
         self.template.add_resource(nat_gateway)
         nat_gateway_route = Route(
-            "{self.env}NatRoute".format(**locals()),
+            camelcase("{self.env}NatRoute".format(**locals())),
             DestinationCidrBlock='0.0.0.0/0',
             NatGatewayId=Ref(nat_gateway),
             RouteTableId=Ref(private_route_table)
@@ -252,7 +252,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
 
     def _create_log_group(self):
         log_group = LogGroup(
-            "{self.env}LogGroup".format(**locals()),
+            camelcase("{self.env}LogGroup".format(**locals())),
             LogGroupName="{self.env}-logs".format(**locals()),
             RetentionInDays=365
         )
