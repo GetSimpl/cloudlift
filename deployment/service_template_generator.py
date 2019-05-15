@@ -6,10 +6,11 @@ from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
-from troposphere.ecs import (ContainerDefinition, DeploymentConfiguration,
-                             Environment, LoadBalancer, LogConfiguration,
-                             PlacementStrategy, PortMapping, Service,
-                             TaskDefinition)
+from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
+                             DeploymentConfiguration, Environment,
+                             LoadBalancer, LogConfiguration,
+                             NetworkConfiguration, PlacementStrategy,
+                             PortMapping, Service, TaskDefinition)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -38,6 +39,8 @@ class ServiceTemplateGenerator(TemplateGenerator):
             Type='spread',
             Field='instanceId'
         )]
+    LAUNCH_TYPE_FARGATE = 'FARGATE'
+    LAUNCH_TYPE_EC2 = 'EC2'
 
     def __init__(self, service_configuration, environment_stack):
         super(ServiceTemplateGenerator, self).__init__(
@@ -145,6 +148,7 @@ service is down',
         self.template.add_resource(ecs_no_running_tasks_alarm)
 
     def _add_service(self, service_name, config):
+        launch_type = self.LAUNCH_TYPE_FARGATE if config['fargate'] else self.LAUNCH_TYPE_EC2
         env_config = build_config(
             self.env,
             self.application_name,
@@ -175,11 +179,23 @@ service is down',
             container_definition_arguments['Command'] = [config['command']]
 
         cd = ContainerDefinition(**container_definition_arguments)
-        td = TaskDefinition(
-            service_name + "TaskDefinition",
-            Family=service_name + "Family",
-            ContainerDefinitions=[cd]
-        )
+        if launch_type == self.LAUNCH_TYPE_FARGATE:
+            td = TaskDefinition(
+                service_name + "TaskDefinition",
+                Family=service_name + "Family",
+                ContainerDefinitions=[cd],
+                RequiresCompatibilities=['FARGATE'],
+                ExecutionRoleArn='arn:aws:iam::725827686899:role/ecsTaskExecutionRole',
+                NetworkMode='awsvpc',
+                Cpu=str(config['fargate']['cpu']),
+                Memory=str(config['fargate']['memory'])
+            )
+        else:
+            td = TaskDefinition(
+                service_name + "TaskDefinition",
+                Family=service_name + "Family",
+                ContainerDefinitions=[cd]
+            )
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
         deployment_configuration = DeploymentConfiguration(
@@ -187,17 +203,60 @@ service is down',
             MaximumPercent=200
         )
         if 'http_interface' in config:
-            alb, lb, service_listener = self._add_alb(cd, service_name, config)
-            svc = Service(
-                service_name,
-                LoadBalancers=[lb],
-                Cluster=self.cluster_name,
-                Role=Ref(self.ecs_service_role),
-                TaskDefinition=Ref(td),
-                DesiredCount=desired_count,
-                DependsOn=service_listener.title,
-                PlacementStrategies=self.PLACEMENT_STRATEGIES
-            )
+            alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
+            if launch_type == self.LAUNCH_TYPE_FARGATE:
+                # if launch type is ec2, then services inherit the ec2 instance security group
+                # otherwise, we need to specify a security group for the service
+                service_security_group = SecurityGroup(
+                    pascalcase("FargateService"+self.env+service_name),
+                    GroupName=pascalcase("FargateService"+self.env+service_name),
+                    SecurityGroupIngress=[{
+                        'IpProtocol': 'TCP',
+                        'SourceSecurityGroupId': Ref(alb_sg),
+                        'ToPort': 80,
+                        'FromPort': 80,
+                    },{
+                        'IpProtocol': 'TCP',
+                        'SourceSecurityGroupId': Ref(alb_sg),
+                        'ToPort': 443,
+                        'FromPort': 443,
+                    }],
+                    VpcId=Ref(self.vpc),
+                    GroupDescription=pascalcase("FargateService"+self.env+service_name)
+                )
+                self.template.add_resource(service_security_group)
+                svc = Service(
+                    service_name,
+                    LoadBalancers=[lb],
+                    Cluster=self.cluster_name,
+                    TaskDefinition=Ref(td),
+                    DesiredCount=desired_count,
+                    DependsOn=service_listener.title,
+                    LaunchType=launch_type,
+                    NetworkConfiguration=NetworkConfiguration(
+                        AwsvpcConfiguration=AwsvpcConfiguration(
+                            Subnets=[
+                                Ref(self.private_subnet1),
+                                Ref(self.private_subnet2)
+                            ],
+                            SecurityGroups=[
+                                Ref(service_security_group)
+                            ]
+                        )
+                    )
+                )
+            else:
+                svc = Service(
+                    service_name,
+                    LoadBalancers=[lb],
+                    Cluster=self.cluster_name,
+                    Role=Ref(self.ecs_service_role),
+                    TaskDefinition=Ref(td),
+                    DesiredCount=desired_count,
+                    DependsOn=service_listener.title,
+                    PlacementStrategies=self.PLACEMENT_STRATEGIES,
+                    LaunchType=launch_type
+                )
             self.template.add_output(
                 Output(
                     service_name + 'EcsServiceName',
@@ -214,14 +273,47 @@ service is down',
             )
             self.template.add_resource(svc)
         else:
-            svc = Service(
-                service_name,
-                Cluster=self.cluster_name,
-                TaskDefinition=Ref(td),
-                DesiredCount=desired_count,
-                DeploymentConfiguration=deployment_configuration,
-                PlacementStrategies=self.PLACEMENT_STRATEGIES
-            )
+            if launch_type == self.LAUNCH_TYPE_FARGATE:
+                # if launch type is ec2, then services inherit the ec2 instance security group
+                # otherwise, we need to specify a security group for the service
+                service_security_group = SecurityGroup(
+                    pascalcase("FargateService"+self.env+service_name),
+                    GroupName=pascalcase("FargateService"+self.env+service_name),
+                    SecurityGroupIngress=[],
+                    VpcId=Ref(self.vpc),
+                    GroupDescription=pascalcase("FargateService"+self.env+service_name)
+                )
+                self.template.add_resource(service_security_group)
+                svc = Service(
+                    service_name,
+                    Cluster=self.cluster_name,
+                    TaskDefinition=Ref(td),
+                    DesiredCount=desired_count,
+                    DeploymentConfiguration=deployment_configuration,
+                    PlacementStrategies=self.PLACEMENT_STRATEGIES,
+                    LaunchType=launch_type,
+                    NetworkConfiguration=NetworkConfiguration(
+                        AwsvpcConfiguration=AwsvpcConfiguration(
+                            Subnets=[
+                                Ref(self.private_subnet1),
+                                Ref(self.private_subnet2)
+                            ],
+                            SecurityGroups=[
+                                Ref(service_security_group)
+                            ]
+                        )
+                    )
+                )
+            else:
+                svc = Service(
+                    service_name,
+                    Cluster=self.cluster_name,
+                    TaskDefinition=Ref(td),
+                    DesiredCount=desired_count,
+                    DeploymentConfiguration=deployment_configuration,
+                    PlacementStrategies=self.PLACEMENT_STRATEGIES,
+                    LaunchType=launch_type
+                )
             self.template.add_output(
                 Output(
                     service_name + 'EcsServiceName',
@@ -242,7 +334,7 @@ service is down',
             }
         )
 
-    def _add_alb(self, cd, service_name, config):
+    def _add_alb(self, cd, service_name, config, launch_type):
         sg_name = 'SG'+self.env+service_name
         svc_alb_sg = SecurityGroup(
             re.sub(r'\W+', '', sg_name),
@@ -301,24 +393,45 @@ service is down',
         if config['http_interface']['internal']:
             target_group_name = target_group_name + 'Internal'
 
-        service_target_group = TargetGroup(
-            target_group_name,
-            HealthCheckPath="/elb-check",
-            HealthyThresholdCount=2,
-            HealthCheckIntervalSeconds=30,
-            TargetGroupAttributes=[
-                TargetGroupAttribute(
-                    Key='deregistration_delay.timeout_seconds',
-                    Value='30'
-                )
-            ],
-            VpcId=Ref(self.vpc),
-            Protocol="HTTP",
-            Matcher=Matcher(HttpCode="200-399"),
-            Port=int(config['http_interface']['container_port']),
-            HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3
-        )
+        if launch_type == self.LAUNCH_TYPE_FARGATE:
+            service_target_group = TargetGroup(
+                target_group_name,
+                HealthCheckPath="/elb-check",
+                HealthyThresholdCount=2,
+                HealthCheckIntervalSeconds=30,
+                TargetGroupAttributes=[
+                    TargetGroupAttribute(
+                        Key='deregistration_delay.timeout_seconds',
+                        Value='30'
+                    )
+                ],
+                VpcId=Ref(self.vpc),
+                Protocol="HTTP",
+                Matcher=Matcher(HttpCode="200-399"),
+                Port=int(config['http_interface']['container_port']),
+                HealthCheckTimeoutSeconds=10,
+                UnhealthyThresholdCount=3,
+                TargetType='ip'
+            )
+        else:
+            service_target_group = TargetGroup(
+                target_group_name,
+                HealthCheckPath="/elb-check",
+                HealthyThresholdCount=2,
+                HealthCheckIntervalSeconds=30,
+                TargetGroupAttributes=[
+                    TargetGroupAttribute(
+                        Key='deregistration_delay.timeout_seconds',
+                        Value='30'
+                    )
+                ],
+                VpcId=Ref(self.vpc),
+                Protocol="HTTP",
+                Matcher=Matcher(HttpCode="200-399"),
+                Port=int(config['http_interface']['container_port']),
+                HealthCheckTimeoutSeconds=10,
+                UnhealthyThresholdCount=3,
+            )
         self.template.add_resource(service_target_group)
         # Note: This is a ECS Loadbalancer definition. Not an ALB.
         # Defining this causes the target group to add a target to the correct
@@ -339,7 +452,7 @@ service is down',
             config['http_interface']['internal']
         )
         self._add_alb_alarms(service_name, alb)
-        return alb, lb, service_listener
+        return alb, lb, service_listener, svc_alb_sg
 
     def _add_service_listener(self, service_name, target_group_action,
                               alb, internal):
