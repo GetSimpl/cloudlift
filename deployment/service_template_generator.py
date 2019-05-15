@@ -213,13 +213,8 @@ service is down',
                     SecurityGroupIngress=[{
                         'IpProtocol': 'TCP',
                         'SourceSecurityGroupId': Ref(alb_sg),
-                        'ToPort': 80,
-                        'FromPort': 80,
-                    },{
-                        'IpProtocol': 'TCP',
-                        'SourceSecurityGroupId': Ref(alb_sg),
-                        'ToPort': 443,
-                        'FromPort': 443,
+                        'ToPort': int(config['http_interface']['container_port']),
+                        'FromPort': int(config['http_interface']['container_port']),
                     }],
                     VpcId=Ref(self.vpc),
                     GroupDescription=pascalcase("FargateService"+self.env+service_name)
