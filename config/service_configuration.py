@@ -188,6 +188,21 @@ class ServiceConfiguration(object):
                         }
                     }
                 },
+                "fargate": {
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "type": "number",
+                            "minimum": 256,
+                            "maximum": 4096
+                        },
+                        "memory": {
+                            "type": "number",
+                            "minimum": 512,
+                            "maximum": 30720
+                        }
+                    }
+                },
                 "command": {
                     "oneOf": [
                         {"type": "string"},
