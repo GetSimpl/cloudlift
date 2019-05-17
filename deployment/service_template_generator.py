@@ -148,7 +148,7 @@ service is down',
         self.template.add_resource(ecs_no_running_tasks_alarm)
 
     def _add_service(self, service_name, config):
-        launch_type = self.LAUNCH_TYPE_FARGATE if config['fargate'] else self.LAUNCH_TYPE_EC2
+        launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
         env_config = build_config(
             self.env,
             self.application_name,
