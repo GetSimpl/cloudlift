@@ -62,7 +62,7 @@ def create_service(name, environment):
     ServiceCreator(name, environment).create()
 
 
-@cli.command(help="Update existing servce.")
+@cli.command(help="Update existing service.")
 @_require_environment
 @_require_name
 def update_service(name, environment):

@@ -187,6 +187,9 @@ class ServiceConfiguration(object):
             "title": "configuration",
             "type": "object",
             "properties": {
+                "notifications_arn": {
+                    "type": "string"
+                },
                 "services": {
                     "type": "object",
                     "patternProperties": {
