@@ -135,7 +135,7 @@ This opens the `VISUAL` editor with default config similar to -
                       "0.0.0.0/0"
                   ]
               },
-              "memory_reservation": 1000
+              "memory_reservation": 100
           }
       }
   }
@@ -159,7 +159,7 @@ only within the VPC
 
 `memory_reservation`: Memory size reserved for each task in MBs. This is a soft
 limit, i.e. at least this much memory will be available, and upto whatever
-memory is free in running container instance.
+memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 
 #### 3. Deploy service
 

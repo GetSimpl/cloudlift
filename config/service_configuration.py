@@ -170,7 +170,7 @@ class ServiceConfiguration(object):
                 },
                 "memory_reservation": {
                     "type": "number",
-                    "minimum": 1000,
+                    "minimum": 10,
                     "maximum": 8000
                 },
                 "command": {
