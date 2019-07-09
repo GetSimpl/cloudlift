@@ -747,3 +747,13 @@ building this service",
     @property
     def repo_name(self):
         return self.application_name + '-repo'
+
+    @property
+    def notifications_arn(self):
+        """
+        Get the SNS arn either from service configuration or the cluster
+        """
+        if 'notifications_arn' in self.configuration:
+            return self.configuration['notifications_arn']
+        else:
+            return TemplateGenerator.notifications_arn.fget(self)

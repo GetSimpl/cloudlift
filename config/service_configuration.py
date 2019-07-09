@@ -170,7 +170,7 @@ class ServiceConfiguration(object):
                 },
                 "memory_reservation": {
                     "type": "number",
-                    "minimum": 500,
+                    "minimum": 10,
                     "maximum": 30000
                 },
                 "fargate": {
@@ -202,6 +202,9 @@ class ServiceConfiguration(object):
             "title": "configuration",
             "type": "object",
             "properties": {
+                "notifications_arn": {
+                    "type": "string"
+                },
                 "services": {
                     "type": "object",
                     "patternProperties": {
