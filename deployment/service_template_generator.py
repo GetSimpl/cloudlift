@@ -249,6 +249,7 @@ service is down',
                     TaskDefinition=Ref(td),
                     DesiredCount=desired_count,
                     DependsOn=service_listener.title,
+                    DeploymentConfiguration=deployment_configuration,
                     PlacementStrategies=self.PLACEMENT_STRATEGIES,
                     LaunchType=launch_type
                 )
@@ -285,7 +286,6 @@ service is down',
                     TaskDefinition=Ref(td),
                     DesiredCount=desired_count,
                     DeploymentConfiguration=deployment_configuration,
-                    PlacementStrategies=self.PLACEMENT_STRATEGIES,
                     LaunchType=launch_type,
                     NetworkConfiguration=NetworkConfiguration(
                         AwsvpcConfiguration=AwsvpcConfiguration(
@@ -303,6 +303,7 @@ service is down',
                 svc = Service(
                     service_name,
                     Cluster=self.cluster_name,
+                    Role=Ref(self.ecs_service_role),
                     TaskDefinition=Ref(td),
                     DesiredCount=desired_count,
                     DeploymentConfiguration=deployment_configuration,
