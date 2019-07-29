@@ -489,7 +489,7 @@ for cluster for 15 minutes.',
                 commands={
                     '01_add_instance_to_cluster': {
                         'command': Sub(
-                            'echo ECS_CLUSTER=${Cluster} > /etc/ecs/ecs.config'
+                            'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256" > /etc/ecs/ecs.config'
                         )
                     }
                 }
