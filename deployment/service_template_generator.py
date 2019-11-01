@@ -1,6 +1,8 @@
 import json
 import re
 
+from awacs.aws import PolicyDocument, Statement, Allow, Principal
+from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
 from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub
@@ -175,10 +177,25 @@ service is down',
             container_definition_arguments['Command'] = [config['command']]
 
         cd = ContainerDefinition(**container_definition_arguments)
+
+        task_role = self.template.add_resource(Role(
+            service_name + "Role",
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Action=[AssumeRole],
+                        Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
+                    )
+                ]
+            )
+        ))
+
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
-            ContainerDefinitions=[cd]
+            ContainerDefinitions=[cd],
+            TaskRoleArn=Ref(task_role)
         )
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
