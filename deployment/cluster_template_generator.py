@@ -441,6 +441,7 @@ for cluster for 15 minutes.',
         self.template.add_resource(database_security_group)
         user_data = Base64(Sub('\n'.join([
             "#!/bin/bash",
+            "yum update",
             "yum install -y aws-cfn-bootstrap",
             "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration",
             "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup",
