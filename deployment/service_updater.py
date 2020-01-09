@@ -106,7 +106,12 @@ class ServiceUpdater(object):
 
     def ensure_repository(self):
         try:
-            self.ecr_client.create_repository(repositoryName=self.repo_name)
+            self.ecr_client.create_repository(
+                repositoryName=self.repo_name,
+                imageScanningConfiguration={
+                    'scanOnPush': True
+                },
+            )
             log_intent('Repo created with name: '+self.repo_name)
         except Exception as ex:
             if type(ex).__name__ == 'RepositoryAlreadyExistsException':
