@@ -65,7 +65,7 @@ Resources:
     DependsOn: SslLoadBalancerListenerDummy
     Properties:
       Cluster: cluster-staging
-      DesiredCount: 0
+      DesiredCount: 1
       LoadBalancers:
         - ContainerName: DummyContainer
           ContainerPort: 7003
