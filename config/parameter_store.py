@@ -105,7 +105,7 @@ class ParameterStore(object):
         return True
 
     def _is_a_valid_parameter_key(self, key):
-        return bool(re.match(r"^[\w|\.|\-|\/]*$", key))
+        return bool(re.match(r"^[\w|\.|\-|\/]+$", key))
 
     def _is_a_valid_parameter_value(self, value):
-        return bool(re.match(r"^[\w|\.|\-|\/]*$", value))
+        return bool(re.match(r"^[\w|\.|\-|\/]+$", value))
