@@ -2,7 +2,7 @@
 This module handles global cloudlift configuration that is custom to
 the organization using cloudlift
 """
-
+import ipaddress
 import json
 
 import boto3
@@ -116,16 +116,16 @@ class EnvironmentConfiguration(object):
             \nthe same configuration.\n"
         )
         region = prompt("AWS region for environment", default='ap-south-1')
-        vpc_cidr = prompt("VPC CIDR", default='10.10.10.10/16')
+        vpc_cidr = ipaddress.IPv4Network(prompt("VPC CIDR", default='10.10.10.10/16'))
         nat_eip = prompt("Allocation ID Elastic IP for NAT")
         public_subnet_1_cidr = prompt(
-            "Public Subnet 1 CIDR", default='10.10.0.0/22')
+            "Public Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[0])
         public_subnet_2_cidr = prompt(
-            "Public Subnet 2 CIDR", default='10.10.4.0/22')
+            "Public Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[1])
         private_subnet_1_cidr = prompt(
-            "Private Subnet 1 CIDR", default='10.10.8.0/22')
+            "Private Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[2])
         private_subnet_2_cidr = prompt(
-            "Private Subnet 2 CIDR", default='10.10.12.0/22')
+            "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
         cluster_instance_type = prompt("Instance type", default='m5.xlarge')
@@ -136,25 +136,25 @@ class EnvironmentConfiguration(object):
             self.environment: {
                 "region": region,
                 "vpc": {
-                    "cidr": vpc_cidr,
+                    "cidr": str(vpc_cidr),
                     "nat-gateway": {
                         "elastic-ip-allocation-id": nat_eip
                     },
                     "subnets": {
                         "public": {
                             "subnet-1": {
-                                "cidr": public_subnet_1_cidr
+                                "cidr": str(public_subnet_1_cidr)
                             },
                             "subnet-2": {
-                                "cidr": public_subnet_2_cidr
+                                "cidr": str(public_subnet_2_cidr)
                             }
                         },
                         "private": {
                             "subnet-1": {
-                                "cidr": private_subnet_1_cidr
+                                "cidr": str(private_subnet_1_cidr)
                             },
                             "subnet-2": {
-                                "cidr": private_subnet_2_cidr
+                                "cidr": str(private_subnet_2_cidr)
                             }
                         }
                     }

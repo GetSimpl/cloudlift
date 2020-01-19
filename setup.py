@@ -23,4 +23,5 @@ setup(
         [console_scripts]
         cloudlift=cloudlift:cli
     ''',
+    python_requires='>=3.6',
 )
