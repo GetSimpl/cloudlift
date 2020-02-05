@@ -2,7 +2,7 @@ import boto3
 import pytest
 from moto import mock_dynamodb2, mock_ssm
 
-from config.parameter_store import ParameterStore
+from cloudlift.config.parameter_store import ParameterStore
 
 
 class TestParameterStore(object):

@@ -19,10 +19,10 @@ from troposphere.policies import (AutoScalingRollingUpdate, CreationPolicy,
                                   ResourceSignal)
 from troposphere.rds import DBSubnetGroup
 
-from config.decimal_encoder import DecimalEncoder
-from config.region import get_client_for, get_region_for_environment
-from deployment.template_generator import TemplateGenerator
-from version import VERSION
+from cloudlift.config import DecimalEncoder
+from cloudlift.config import get_client_for, get_region_for_environment
+from cloudlift.deployment.template_generator import TemplateGenerator
+from cloudlift.version import VERSION
 
 
 class ClusterTemplateGenerator(TemplateGenerator):

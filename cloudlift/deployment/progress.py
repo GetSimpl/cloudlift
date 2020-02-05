@@ -1,4 +1,4 @@
-from deployment.logging import log_intent, log_intent_err
+from cloudlift.deployment.logging import log_intent, log_intent_err
 
 
 def get_stack_events(client, stack_name):

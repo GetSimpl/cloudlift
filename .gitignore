@@ -8,3 +8,4 @@ dist/
 venv/
 metastore_db/
 .eggs
+.idea/*

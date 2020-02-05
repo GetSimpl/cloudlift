@@ -4,7 +4,7 @@ from time import sleep
 
 import click
 
-from deployment.logging import log, log_bold, log_err
+from cloudlift.deployment.logging import log, log_bold, log_err
 
 
 def create_change_set(client, service_template_body, stack_name,

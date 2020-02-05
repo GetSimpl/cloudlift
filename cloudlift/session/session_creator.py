@@ -1,14 +1,9 @@
-import os
-import boto3
-import botocore
 import functools
-import subprocess
 import operator
-from config.banner import highlight_production
-from config.region import get_client_for, get_region_for_environment
-from config import mfa
-from deployment.logging import log, log_bold, log_err, log_intent
-from deployment.service_information_fetcher import ServiceInformationFetcher
+from cloudlift.config import get_client_for, get_region_for_environment
+from cloudlift.config import mfa
+from cloudlift.deployment.logging import log, log_bold, log_err
+from cloudlift.deployment import ServiceInformationFetcher
 from awscli.clidriver import create_clidriver
 
 class SessionCreator(object):

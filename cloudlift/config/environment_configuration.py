@@ -12,10 +12,10 @@ from click import confirm, edit, prompt
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
-from config.decimal_encoder import DecimalEncoder
-from config.diff import print_json_changes
+from cloudlift.config import DecimalEncoder
+from cloudlift.config.diff import print_json_changes
 # import config.mfa as mfa
-from deployment.logging import log_bold, log_err, log_warning
+from cloudlift.deployment.logging import log_bold, log_err, log_warning
 
 ENVIRONMENT_CONFIGURATION_TABLE = 'environment_configurations'
 

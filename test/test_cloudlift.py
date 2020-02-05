@@ -2,14 +2,13 @@ import os
 import time
 
 import boto3
-import click
 import requests
 import urllib3
 from mock import patch
 
-from config.service_configuration import ServiceConfiguration
-from deployment.service_creator import ServiceCreator
-from deployment.service_updater import ServiceUpdater
+from cloudlift.config import ServiceConfiguration
+from cloudlift.deployment.service_creator import ServiceCreator
+from cloudlift.deployment.service_updater import ServiceUpdater
 
 
 def setup_module(module):

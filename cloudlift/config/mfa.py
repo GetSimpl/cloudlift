@@ -4,8 +4,8 @@ import botocore
 from boto3 import client
 from boto3.session import Session
 
-from config.account import get_account_id
-from deployment.logging import log_bold, log_err
+from cloudlift.config import get_account_id
+from cloudlift.deployment.logging import log_bold, log_err
 
 
 def do_mfa_login(mfa_code=None, region='ap-south-1'):

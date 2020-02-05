@@ -1,6 +1,6 @@
 from terminaltables import SingleTable
 
-from deployment.logging import log_bold
+from cloudlift.deployment.logging import log_bold
 
 
 def print_parameter_changes(differences):

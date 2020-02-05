@@ -4,9 +4,9 @@ from time import sleep
 from colorclass import Color
 from terminaltables import SingleTable
 
-from config.parameter_store import ParameterStore
-from deployment.ecs import DeployAction
-from deployment.logging import log_bold, log_err, log_intent, log_with_color
+from cloudlift.config.parameter_store import ParameterStore
+from cloudlift.deployment.ecs import DeployAction
+from cloudlift.deployment.logging import log_bold, log_err, log_intent, log_with_color
 
 
 def deploy_new_version(client, cluster_name, ecs_service_name,
