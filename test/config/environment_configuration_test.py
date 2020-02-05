@@ -1,7 +1,7 @@
 import boto3
 from moto import mock_dynamodb2
 
-from cloudlift.config import EnvironmentConfiguration
+from cloudlift.config.environment_configuration import EnvironmentConfiguration
 
 
 class TestEnvironmentConfiguration(object):

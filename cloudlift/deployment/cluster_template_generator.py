@@ -19,8 +19,8 @@ from troposphere.policies import (AutoScalingRollingUpdate, CreationPolicy,
                                   ResourceSignal)
 from troposphere.rds import DBSubnetGroup
 
-from cloudlift.config import DecimalEncoder
-from cloudlift.config import get_client_for, get_region_for_environment
+from cloudlift.config.decimal_encoder import DecimalEncoder
+from cloudlift.config.region import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.version import VERSION
 

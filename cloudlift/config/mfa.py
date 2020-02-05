@@ -4,7 +4,7 @@ import botocore
 from boto3 import client
 from boto3.session import Session
 
-from cloudlift.config import get_account_id
+from cloudlift.config.account import get_account_id
 from cloudlift.deployment.logging import log_bold, log_err
 
 

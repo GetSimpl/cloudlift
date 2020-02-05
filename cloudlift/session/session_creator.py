@@ -1,9 +1,9 @@
 import functools
 import operator
-from cloudlift.config import get_client_for, get_region_for_environment
+from cloudlift.config.region import get_client_for, get_region_for_environment
 from cloudlift.config import mfa
 from cloudlift.deployment.logging import log, log_bold, log_err
-from cloudlift.deployment import ServiceInformationFetcher
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from awscli.clidriver import create_clidriver
 
 class SessionCreator(object):

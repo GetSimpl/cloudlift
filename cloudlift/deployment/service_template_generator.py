@@ -18,13 +18,13 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
 from troposphere.iam import Role
 
 from cloudlift.config import region as region_service
-from cloudlift.config import get_account_id
-from cloudlift.config import DecimalEncoder
+from cloudlift.config.account import get_account_id
+from cloudlift.config.decimal_encoder import DecimalEncoder
 from cloudlift.config.stack import get_service_stack_name
 from cloudlift.deployment.deployer import build_config
 from cloudlift.deployment.ecs import DeployAction, EcsClient
 from cloudlift.deployment.logging import log, log_bold
-from cloudlift.deployment import ServiceInformationFetcher
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
 
 

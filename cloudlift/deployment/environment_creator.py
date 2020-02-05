@@ -3,8 +3,8 @@ from time import sleep
 
 from botocore.exceptions import ClientError
 
-from cloudlift.config import EnvironmentConfiguration
-from cloudlift.config import get_client_for
+from cloudlift.config.environment_configuration import EnvironmentConfiguration
+from cloudlift.config.region import get_client_for
 from cloudlift.config.stack import get_cluster_name
 from cloudlift.deployment.changesets import create_change_set
 from cloudlift.deployment.cluster_template_generator import ClusterTemplateGenerator

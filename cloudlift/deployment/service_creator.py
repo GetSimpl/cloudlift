@@ -7,8 +7,8 @@ from time import sleep
 
 from botocore.exceptions import ClientError
 
-from cloudlift.config import get_client_for
-from cloudlift.config import ServiceConfiguration
+from cloudlift.config.region import get_client_for
+from cloudlift.config.service_configuration import ServiceConfiguration
 from cloudlift.config.stack import get_cluster_name, get_service_stack_name
 from cloudlift.deployment.changesets import create_change_set
 from cloudlift.deployment.logging import log, log_bold, log_err

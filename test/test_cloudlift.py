@@ -6,7 +6,7 @@ import requests
 import urllib3
 from mock import patch
 
-from cloudlift.config import ServiceConfiguration
+from cloudlift.config.service_configuration import ServiceConfiguration
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_updater import ServiceUpdater
 

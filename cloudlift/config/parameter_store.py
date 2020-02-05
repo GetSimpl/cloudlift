@@ -1,6 +1,6 @@
 import re
 
-from cloudlift.config import get_client_for
+from cloudlift.config.region import get_client_for
 from cloudlift.deployment.logging import log_err
 
 

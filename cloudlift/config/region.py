@@ -1,6 +1,6 @@
 import boto3
 
-from cloudlift.config import EnvironmentConfiguration
+from cloudlift.config.environment_configuration import EnvironmentConfiguration
 from cloudlift.deployment.logging import log_err
 
 ECR_REGION = 'ap-south-1'

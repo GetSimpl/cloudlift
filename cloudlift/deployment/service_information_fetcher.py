@@ -1,7 +1,7 @@
 
 from subprocess import call
 
-from cloudlift.config import get_client_for
+from cloudlift.config.region import get_client_for
 from cloudlift.config.stack import get_cluster_name, get_service_stack_name
 from cloudlift.deployment.logging import log, log_bold, log_err, log_intent, log_warning
 

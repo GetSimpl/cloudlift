@@ -10,9 +10,9 @@ from cloudlift.deployment.configs import deduce_name
 from cloudlift.deployment.environment_creator import EnvironmentCreator
 from cloudlift.deployment.logging import log_err
 from cloudlift.deployment.service_creator import ServiceCreator
-from cloudlift.deployment import ServiceInformationFetcher
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
-from cloudlift.session import SessionCreator
+from cloudlift.session.session_creator import SessionCreator
 from cloudlift.version import VERSION
 
 

@@ -12,7 +12,7 @@ from click import confirm, edit, prompt
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
-from cloudlift.config import DecimalEncoder
+from cloudlift.config.decimal_encoder import DecimalEncoder
 from cloudlift.config.diff import print_json_changes
 # import config.mfa as mfa
 from cloudlift.deployment.logging import log_bold, log_err, log_warning

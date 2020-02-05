@@ -8,9 +8,8 @@ from time import sleep
 from botocore.exceptions import ClientError
 from stringcase import spinalcase
 
-from cloudlift.config import get_account_id
-from cloudlift.config import (ECR_REGION, get_client_for,
-                              get_region_for_environment, session_for_ecr)
+from cloudlift.config.account import get_account_id
+from cloudlift.config.region import ECR_REGION, get_client_for, get_region_for_environment, session_for_ecr
 from cloudlift.config.stack import get_cluster_name, get_service_stack_name
 from cloudlift.deployment import deployer
 from cloudlift.deployment.ecs import EcsClient

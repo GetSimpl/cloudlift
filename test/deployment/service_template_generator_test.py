@@ -4,8 +4,8 @@ from cfn_flip import to_json
 from mock import patch
 
 from cloudlift.config.parameter_store import ParameterStore
-from cloudlift.config import ServiceConfiguration
-from cloudlift.deployment import ServiceInformationFetcher
+from cloudlift.config.service_configuration import ServiceConfiguration
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
 from cloudlift.version import VERSION
 
