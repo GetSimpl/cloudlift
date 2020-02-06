@@ -53,17 +53,23 @@ class EcsClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
-    def register_task_definition(self, family, containers, volumes, role_arn, cpu, memory, execution_role_arn=None, requires_compatibilities=[], network_mode='bridge'):
+    def register_task_definition(self, family, containers, volumes, role_arn, cpu, memory, execution_role_arn=None,
+                                 requires_compatibilities=[], network_mode='bridge'):
+        fargate_td = {}
+        if 'FARGATE' in requires_compatibilities:
+            fargate_td = {
+                'executionRoleArn': execution_role_arn or u'',
+                'requiresCompatibilities': requires_compatibilities or [],
+                'networkMode': network_mode or u'',
+                'cpu': cpu,
+                'memory': memory,
+            }
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn or u'',
-            executionRoleArn=execution_role_arn or u'',
-            requiresCompatibilities=requires_compatibilities or [],
-            networkMode=network_mode or u'',
-            cpu=cpu,
-            memory=memory,
+            **fargate_td
         )
 
     def deregister_task_definition(self, task_definition_arn):
@@ -409,16 +415,22 @@ class EcsAction(object):
         return task_definition
 
     def update_task_definition(self, task_definition):
+        fargate_td = {}
+        if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
+            fargate_td = {
+                'execution_role_arn': task_definition.execution_role_arn or u'',
+                'requires_compatibilities': task_definition.requires_compatibilities or [],
+                'network_mode': task_definition.network_mode or u'',
+
+            }
         response = self._client.register_task_definition(
             family=task_definition.family,
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
-            requires_compatibilities=task_definition.requires_compatibilities,
-            execution_role_arn=task_definition.execution_role_arn,
-            network_mode=task_definition.network_mode,
             cpu=task_definition.cpu,
             memory=task_definition.memory,
+            **fargate_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)

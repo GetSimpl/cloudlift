@@ -70,7 +70,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
 
     def _add_service_alarms(self, svc):
         ecs_high_cpu_alarm = Alarm(
-            'EcsHighCPUAlarm'+str(svc.name),
+            'EcsHighCPUAlarm' + str(svc.name),
             EvaluationPeriods=1,
             Dimensions=[
                 MetricDimension(
@@ -94,7 +94,7 @@ indicating instance is down',
         )
         self.template.add_resource(ecs_high_cpu_alarm)
         ecs_high_memory_alarm = Alarm(
-            'EcsHighMemoryAlarm'+str(svc.name),
+            'EcsHighMemoryAlarm' + str(svc.name),
             EvaluationPeriods=1,
             Dimensions=[
                 MetricDimension(
@@ -121,7 +121,7 @@ disappears indicating instance is down',
         # How to add service task count alarm
         # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch-metrics.html#cw_running_task_count
         ecs_no_running_tasks_alarm = Alarm(
-            'EcsNoRunningTasksAlarm'+str(svc.name),
+            'EcsNoRunningTasksAlarm' + str(svc.name),
             EvaluationPeriods=1,
             Dimensions=[
                 MetricDimension(
@@ -208,8 +208,8 @@ service is down',
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
                 service_security_group = SecurityGroup(
-                    pascalcase("FargateService"+self.env+service_name),
-                    GroupName=pascalcase("FargateService"+self.env+service_name),
+                    pascalcase("FargateService" + self.env + service_name),
+                    GroupName=pascalcase("FargateService" + self.env + service_name),
                     SecurityGroupIngress=[{
                         'IpProtocol': 'TCP',
                         'SourceSecurityGroupId': Ref(alb_sg),
@@ -217,7 +217,7 @@ service is down',
                         'FromPort': int(config['http_interface']['container_port']),
                     }],
                     VpcId=Ref(self.vpc),
-                    GroupDescription=pascalcase("FargateService"+self.env+service_name)
+                    GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
                 self.template.add_resource(service_security_group)
                 svc = Service(
@@ -273,11 +273,11 @@ service is down',
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
                 service_security_group = SecurityGroup(
-                    pascalcase("FargateService"+self.env+service_name),
-                    GroupName=pascalcase("FargateService"+self.env+service_name),
+                    pascalcase("FargateService" + self.env + service_name),
+                    GroupName=pascalcase("FargateService" + self.env + service_name),
                     SecurityGroupIngress=[],
                     VpcId=Ref(self.vpc),
-                    GroupDescription=pascalcase("FargateService"+self.env+service_name)
+                    GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
                 self.template.add_resource(service_security_group)
                 svc = Service(
@@ -303,7 +303,6 @@ service is down',
                 svc = Service(
                     service_name,
                     Cluster=self.cluster_name,
-                    Role=Ref(self.ecs_service_role),
                     TaskDefinition=Ref(td),
                     DesiredCount=desired_count,
                     DeploymentConfiguration=deployment_configuration,
@@ -331,15 +330,15 @@ service is down',
         )
 
     def _add_alb(self, cd, service_name, config, launch_type):
-        sg_name = 'SG'+self.env+service_name
+        sg_name = 'SG' + self.env + service_name
         svc_alb_sg = SecurityGroup(
             re.sub(r'\W+', '', sg_name),
-            GroupName=self.env+'-'+service_name,
+            GroupName=self.env + '-' + service_name,
             SecurityGroupIngress=self._generate_alb_security_group_ingress(
                 config
             ),
             VpcId=Ref(self.vpc),
-            GroupDescription=Sub(service_name+"-alb-sg")
+            GroupDescription=Sub(service_name + "-alb-sg")
         )
         self.template.add_resource(svc_alb_sg)
         alb_name = service_name + pascalcase(self.env)
@@ -389,45 +388,30 @@ service is down',
         if config['http_interface']['internal']:
             target_group_name = target_group_name + 'Internal'
 
+        target_group_config = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
-            service_target_group = TargetGroup(
-                target_group_name,
-                HealthCheckPath="/elb-check",
-                HealthyThresholdCount=2,
-                HealthCheckIntervalSeconds=30,
-                TargetGroupAttributes=[
-                    TargetGroupAttribute(
-                        Key='deregistration_delay.timeout_seconds',
-                        Value='30'
-                    )
-                ],
-                VpcId=Ref(self.vpc),
-                Protocol="HTTP",
-                Matcher=Matcher(HttpCode="200-399"),
-                Port=int(config['http_interface']['container_port']),
-                HealthCheckTimeoutSeconds=10,
-                UnhealthyThresholdCount=3,
-                TargetType='ip'
-            )
-        else:
-            service_target_group = TargetGroup(
-                target_group_name,
-                HealthCheckPath="/elb-check",
-                HealthyThresholdCount=2,
-                HealthCheckIntervalSeconds=30,
-                TargetGroupAttributes=[
-                    TargetGroupAttribute(
-                        Key='deregistration_delay.timeout_seconds',
-                        Value='30'
-                    )
-                ],
-                VpcId=Ref(self.vpc),
-                Protocol="HTTP",
-                Matcher=Matcher(HttpCode="200-399"),
-                Port=int(config['http_interface']['container_port']),
-                HealthCheckTimeoutSeconds=10,
-                UnhealthyThresholdCount=3,
-            )
+            target_group_config['TargetType'] = 'ip'
+
+        service_target_group = TargetGroup(
+            target_group_name,
+            HealthCheckPath="/elb-check",
+            HealthyThresholdCount=2,
+            HealthCheckIntervalSeconds=30,
+            TargetGroupAttributes=[
+                TargetGroupAttribute(
+                    Key='deregistration_delay.timeout_seconds',
+                    Value='30'
+                )
+            ],
+            VpcId=Ref(self.vpc),
+            Protocol="HTTP",
+            Matcher=Matcher(HttpCode="200-399"),
+            Port=int(config['http_interface']['container_port']),
+            HealthCheckTimeoutSeconds=10,
+            UnhealthyThresholdCount=3,
+            **target_group_config
+        )
+
         self.template.add_resource(service_target_group)
         # Note: This is a ECS Loadbalancer definition. Not an ALB.
         # Defining this causes the target group to add a target to the correct
@@ -721,9 +705,9 @@ building this service",
                     self.cluster_name,
                     service_name["value"]
                 )
-                actual_service_name = service_name["key"].\
+                actual_service_name = service_name["key"]. \
                     replace("EcsServiceName", "")
-                self.desired_counts[actual_service_name] = deployment.\
+                self.desired_counts[actual_service_name] = deployment. \
                     service.desired_count
             log("Existing service counts: " + str(self.desired_counts))
         except Exception:
@@ -738,8 +722,8 @@ building this service",
     @property
     def ecr_image_uri(self):
         return str(self.account_id) + ".dkr.ecr." + \
-            region_service.ECR_REGION + ".amazonaws.com/" + \
-            self.repo_name
+               region_service.ECR_REGION + ".amazonaws.com/" + \
+               self.repo_name
 
     @property
     def account_id(self):
