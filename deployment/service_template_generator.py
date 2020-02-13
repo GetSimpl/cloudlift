@@ -1,6 +1,7 @@
 import json
 import re
 
+import boto3
 from cfn_flip import to_yaml
 from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub
@@ -185,7 +186,7 @@ service is down',
                 Family=service_name + "Family",
                 ContainerDefinitions=[cd],
                 RequiresCompatibilities=['FARGATE'],
-                ExecutionRoleArn='arn:aws:iam::725827686899:role/ecsTaskExecutionRole',
+                ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
                 NetworkMode='awsvpc',
                 Cpu=str(config['fargate']['cpu']),
                 Memory=str(config['fargate']['memory'])
