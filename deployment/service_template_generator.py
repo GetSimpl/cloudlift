@@ -250,7 +250,7 @@ service is down',
                     TaskDefinition=Ref(td),
                     DesiredCount=desired_count,
                     DependsOn=service_listener.title,
-                    DeploymentConfiguration=deployment_configuration,
+                    # DeploymentConfiguration=deployment_configuration,
                     PlacementStrategies=self.PLACEMENT_STRATEGIES,
                     LaunchType=launch_type
                 )
