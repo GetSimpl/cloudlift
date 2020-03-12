@@ -87,14 +87,10 @@ class ParameterStore(object):
             if parameter_change[0] == 'change':
                 if not self._is_a_valid_parameter_key(parameter_change[1]):
                     errors.append("'%s' is not a valid key." % parameter_change[1])
-                if not self._is_a_valid_parameter_value(parameter_change[2][1]):
-                    errors.append("'%s' is not a valid value for key '%s'" % (parameter_change[2][1],parameter_change[1]))
             elif parameter_change[0] == 'add':
                 for added_parameter in parameter_change[2]:
                     if not self._is_a_valid_parameter_key(added_parameter[0]):
                         errors.append("'%s' is not a valid key." % added_parameter[0])
-                    if not self._is_a_valid_parameter_value(added_parameter[1]):
-                        errors.append("'%s' is not a valid value for key '%s'" % (added_parameter[1],added_parameter[0]))
             elif parameter_change[0] == 'remove':
                 # No validation required
                 pass
@@ -107,5 +103,3 @@ class ParameterStore(object):
     def _is_a_valid_parameter_key(self, key):
         return bool(re.match(r"^[\w|\.|\-|\/]+$", key))
 
-    def _is_a_valid_parameter_value(self, value):
-        return bool(re.match(r"^[\w|\.|\-|\/]+$", value))
