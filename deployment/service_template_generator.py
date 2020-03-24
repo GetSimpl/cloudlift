@@ -350,7 +350,8 @@ service is down',
             DefaultActions=[target_group_action],
             LoadBalancerArn=Ref(alb),
             Port=443,
-            Certificates=[ssl_cert]
+            Certificates=[ssl_cert],
+            SslPolicy="ELBSecurityPolicy-FS-1-2-Res-2019-08"
         )
         self.template.add_resource(service_listener)
         if internal:
