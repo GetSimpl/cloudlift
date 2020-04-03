@@ -631,7 +631,7 @@ building this service",
     @property
     def ecr_image_uri(self):
         return str(self.account_id) + ".dkr.ecr." + \
-            region_service.ECR_REGION + ".amazonaws.com/" + \
+            self.region + ".amazonaws.com/" + \
             self.repo_name
 
     @property
