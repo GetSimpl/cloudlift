@@ -24,7 +24,7 @@ service_name = 'dummy'
 
 def test_cloudlift_can_deploy():
     cfn_client = boto3.client('cloudformation')
-    stack_name = f'{service_name}-{environment_name}
+    stack_name = f'{service_name}-{environment_name}'
     cfn_client.delete_stack(StackName=stack_name)
     print("initiated delete")
     waiter = cfn_client.get_waiter('stack_delete_complete')
