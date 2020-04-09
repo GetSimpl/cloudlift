@@ -169,8 +169,7 @@ class ServiceConfiguration(object):
                     "required": [
                         "internal",
                         "restrict_access_to",
-                        "container_port",
-                        "health_check_path"
+                        "container_port"
                     ]
                 },
                 "memory_reservation": {
