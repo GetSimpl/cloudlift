@@ -20,7 +20,8 @@ def mocked_service_config(cls, *args, **kwargs):
                 "http_interface": {
                     "internal": False,
                     "container_port": 7003,
-                    "restrict_access_to": ["0.0.0.0/0"]
+                    "restrict_access_to": ["0.0.0.0/0"],
+                    "health_check_path": "/elb-check"
                 }
             },
             "DummyRunSidekiqsh": {
