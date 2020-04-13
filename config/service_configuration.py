@@ -160,6 +160,10 @@ class ServiceConfiguration(object):
                         },
                         "container_port": {
                             "type": "number"
+                        },
+                        "health_check_path": {
+                            "type": "string",
+                            "pattern": "^\/.*$"
                         }
                     },
                     "required": [
@@ -217,7 +221,8 @@ class ServiceConfiguration(object):
                     u'http_interface': {
                         u'internal': False,
                         u'restrict_access_to': [u'0.0.0.0/0'],
-                        u'container_port': 80
+                        u'container_port': 80,
+                        u'health_check_path': u'/elb-check'
                     },
                     u'memory_reservation': 1000,
                     u'command': None

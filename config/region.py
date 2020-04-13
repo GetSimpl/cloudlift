@@ -3,20 +3,8 @@ import boto3
 from config.environment_configuration import EnvironmentConfiguration
 from deployment.logging import log_err
 
-ECR_REGION = 'ap-south-1'
-
-
-def session_for_ecr():
-    return boto3.session.Session(region_name=ECR_REGION)
-
-
 def get_region_for_environment(environment):
-    try:
-        return EnvironmentConfiguration(
-            environment
-        ).get_config()[environment]['region']
-    except KeyError:
-        'ap-south-1'
+    return EnvironmentConfiguration(environment).get_config()[environment]['region']
 
 
 def get_client_for(resource, environment):

@@ -3,6 +3,7 @@ import multiprocessing
 import os
 import subprocess
 import sys
+import boto3
 from time import sleep
 
 from botocore.exceptions import ClientError
@@ -10,8 +11,8 @@ from stringcase import spinalcase
 
 from config import region as region_service
 from config.account import get_account_id
-from config.region import (ECR_REGION, get_client_for,
-                           get_region_for_environment, session_for_ecr)
+from config.region import (get_client_for,
+                           get_region_for_environment)
 from config.stack import get_cluster_name, get_service_stack_name
 from deployment import deployer
 from deployment.ecs import EcsClient
@@ -30,7 +31,7 @@ class ServiceUpdater(object):
         else:
             self.env_sample_file = './env.sample'
         self.version = version
-        self.ecr_client = session_for_ecr().client('ecr')
+        self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
         self.cluster_name = get_cluster_name(environment)
         self.working_dir = working_dir
 
@@ -229,7 +230,7 @@ version to be " + self.version + " based on current status")
 
     @property
     def ecr_image_uri(self):
-        return str(self.account_id) + ".dkr.ecr." + ECR_REGION + \
+        return str(self.account_id) + ".dkr.ecr." + self.region + \
             ".amazonaws.com/" + self.repo_name
 
     @property

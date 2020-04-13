@@ -19,27 +19,29 @@ def setup_module(module):
 def mocked_service_config(cls, *args, **kwargs):
     return None
 
+environment_name = 'test'
+service_name = 'dummy'
 
 def test_cloudlift_can_deploy():
     cfn_client = boto3.client('cloudformation')
-    stack_name = 'dummy-staging'
+    stack_name = f'{service_name}-{environment_name}'
     cfn_client.delete_stack(StackName=stack_name)
     print("initiated delete")
     waiter = cfn_client.get_waiter('stack_delete_complete')
     waiter.wait(StackName=stack_name)
     print("completed delete")
-    config_path = '/'.join(["staging", "dummy", 'env.properties'])
+    config_path = '/'.join([environment_name, service_name, 'env.properties'])
     os.chdir('./test/dummy')
     print("adding configuration to parameter store")
     ssm_client = boto3.client('ssm')
     ssm_client.put_parameter(
-        Name="/staging/dummy/PORT",
+        Name=f"/{environment_name}/{service_name}/PORT",
         Value="80",
         Type="SecureString",
         KeyId='alias/aws/ssm', Overwrite=True
     )
     ssm_client.put_parameter(
-        Name="/staging/dummy/LABEL",
+        Name=f"/{environment_name}/{service_name}/LABEL",
         Value="Demo",
         Type="SecureString",
         KeyId='alias/aws/ssm',
@@ -47,8 +49,8 @@ def test_cloudlift_can_deploy():
     )
     with patch.object(ServiceConfiguration, 'edit_config',
                       new=mocked_service_config):
-        ServiceCreator("dummy", "staging").create()
-    ServiceUpdater("dummy", "staging", None).run()
+        ServiceCreator(service_name, environment_name,).create()
+    ServiceUpdater(service_name, environment_name, None).run()
     outputs = cfn_client.describe_stacks(
         StackName=stack_name
     )['Stacks'][0]['Outputs']

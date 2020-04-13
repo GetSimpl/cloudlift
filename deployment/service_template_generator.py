@@ -298,12 +298,13 @@ service is down',
         self.template.add_resource(alb)
 
         target_group_name = "TargetGroup" + service_name
+        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
         if config['http_interface']['internal']:
             target_group_name = target_group_name + 'Internal'
 
         service_target_group = TargetGroup(
             target_group_name,
-            HealthCheckPath="/elb-check",
+            HealthCheckPath=health_check_path,
             HealthyThresholdCount=2,
             HealthCheckIntervalSeconds=30,
             TargetGroupAttributes=[
@@ -630,7 +631,7 @@ building this service",
     @property
     def ecr_image_uri(self):
         return str(self.account_id) + ".dkr.ecr." + \
-            region_service.ECR_REGION + ".amazonaws.com/" + \
+            self.region + ".amazonaws.com/" + \
             self.repo_name
 
     @property
