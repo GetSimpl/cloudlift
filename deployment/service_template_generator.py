@@ -298,7 +298,7 @@ service is down',
         self.template.add_resource(alb)
 
         target_group_name = "TargetGroup" + service_name
-        health_check_path = config['http_interface']['health_check_path'] if config['http_interface']['health_check_path'] else "/elb-check"
+        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
         if config['http_interface']['internal']:
             target_group_name = target_group_name + 'Internal'
 
