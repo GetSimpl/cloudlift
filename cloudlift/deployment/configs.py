@@ -2,7 +2,7 @@ import os
 
 import stringcase
 
-from deployment.logging import log_bold
+from cloudlift.config.logging import log_bold
 
 
 def deduce_name(name):

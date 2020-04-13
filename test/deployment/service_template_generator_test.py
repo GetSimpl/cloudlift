@@ -3,11 +3,11 @@ import datetime
 from cfn_flip import to_json
 from mock import patch
 
-from config.parameter_store import ParameterStore
-from config.service_configuration import ServiceConfiguration
-from deployment.service_information_fetcher import ServiceInformationFetcher
-from deployment.service_template_generator import ServiceTemplateGenerator
-from version import VERSION
+from cloudlift.config import ParameterStore
+from cloudlift.config import ServiceConfiguration
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
+from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
+from cloudlift.version import VERSION
 
 
 def mocked_service_config(cls, *args, **kwargs):
