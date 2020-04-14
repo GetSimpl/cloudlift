@@ -19,7 +19,7 @@ def setup_module(module):
 def mocked_service_config(cls, *args, **kwargs):
     return None
 
-environment_name = 'test'
+environment_name = 'staging'
 service_name = 'dummy'
 
 def test_cloudlift_can_deploy():

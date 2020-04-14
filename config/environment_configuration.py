@@ -48,10 +48,10 @@ class EnvironmentConfiguration(object):
             )
             return configuration_response['Item']['configuration']
         except ClientError:
-            log_err("Unable to fetch configuration from DynamoDB.")
+            log_err("Unable to fetch environment configuration from DynamoDB.")
             exit(1)
         except KeyError:
-            log_err("Configuration not found.")
+            log_err("Environment configuration not found. Does this environment exist?")
             exit(1)
 
     def update_config(self):
@@ -208,7 +208,7 @@ class EnvironmentConfiguration(object):
                     else:
                         log_warning("Changes aborted.")
         except ClientError:
-            log_err("Unable to fetch configuration from DynamoDB.")
+            log_err("Unable to fetch environment configuration from DynamoDB.")
             exit(1)
 
     def _set_config(self, config):
@@ -230,7 +230,7 @@ class EnvironmentConfiguration(object):
             )
             return configuration_response
         except ClientError:
-            log_err("Unable to store configuration in DynamoDB.")
+            log_err("Unable to store environment configuration in DynamoDB.")
             exit(1)
         pass
 
