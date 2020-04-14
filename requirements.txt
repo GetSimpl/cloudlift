@@ -20,4 +20,4 @@ six==1.10.0
 stringcase==1.0.6
 terminaltables==3.1.0
 troposphere>=2.4.1
-urllib3<1.25,>=1.20
+awacs==0.9.6

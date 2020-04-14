@@ -3,20 +3,13 @@ import boto3
 from config.environment_configuration import EnvironmentConfiguration
 from deployment.logging import log_err
 
-ECR_REGION = 'ap-south-1'
-
-
-def session_for_ecr():
-    return boto3.session.Session(region_name=ECR_REGION)
-
-
 def get_region_for_environment(environment):
-    try:
-        return EnvironmentConfiguration(
-            environment
-        ).get_config()[environment]['region']
-    except KeyError:
-        'ap-south-1'
+    if environment:
+        return EnvironmentConfiguration(environment).get_config()[environment]['region']
+    else:
+        # Get the region from the AWS credentials used to execute cloudlift
+        aws_session = boto3.session.Session()
+        return aws_session.region_name
 
 
 def get_client_for(resource, environment):

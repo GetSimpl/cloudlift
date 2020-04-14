@@ -2,6 +2,8 @@ import json
 import re
 
 import boto3
+from awacs.aws import PolicyDocument, Statement, Allow, Principal
+from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
 from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub
@@ -180,11 +182,27 @@ service is down',
             container_definition_arguments['Command'] = [config['command']]
 
         cd = ContainerDefinition(**container_definition_arguments)
+
+        task_role = self.template.add_resource(Role(
+            service_name + "Role",
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Action=[AssumeRole],
+                        Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
+                    )
+                ]
+            )
+        ))
+
+
         if launch_type == self.LAUNCH_TYPE_FARGATE:
             td = TaskDefinition(
                 service_name + "TaskDefinition",
                 Family=service_name + "Family",
                 ContainerDefinitions=[cd],
+                TaskRoleArn=Ref(task_role),
                 RequiresCompatibilities=['FARGATE'],
                 ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
                 NetworkMode='awsvpc',
@@ -195,7 +213,8 @@ service is down',
             td = TaskDefinition(
                 service_name + "TaskDefinition",
                 Family=service_name + "Family",
-                ContainerDefinitions=[cd]
+                ContainerDefinitions=[cd],
+                TaskRoleArn=Ref(task_role)
             )
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
@@ -385,6 +404,7 @@ service is down',
         self.template.add_resource(alb)
 
         target_group_name = "TargetGroup" + service_name
+        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
         if config['http_interface']['internal']:
             target_group_name = target_group_name + 'Internal'
 
@@ -394,7 +414,7 @@ service is down',
 
         service_target_group = TargetGroup(
             target_group_name,
-            HealthCheckPath="/elb-check",
+            HealthCheckPath=health_check_path,
             HealthyThresholdCount=2,
             HealthCheckIntervalSeconds=30,
             TargetGroupAttributes=[
@@ -443,7 +463,8 @@ service is down',
             DefaultActions=[target_group_action],
             LoadBalancerArn=Ref(alb),
             Port=443,
-            Certificates=[ssl_cert]
+            Certificates=[ssl_cert],
+            SslPolicy="ELBSecurityPolicy-FS-1-2-Res-2019-08"
         )
         self.template.add_resource(service_listener)
         if internal:
@@ -722,7 +743,7 @@ building this service",
     @property
     def ecr_image_uri(self):
         return str(self.account_id) + ".dkr.ecr." + \
-               region_service.ECR_REGION + ".amazonaws.com/" + \
+               self.region + ".amazonaws.com/" + \
                self.repo_name
 
     @property

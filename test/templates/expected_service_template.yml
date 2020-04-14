@@ -1,7 +1,7 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.2.0", "services": {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"]}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh"}}}'
+    Value: '{"cloudlift_version": "1.3.0", "services": {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"]}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh"}}}'
   DummyEcsServiceName:
     Description: 'The ECS name which needs to be entered'
     Value: !GetAtt 'Dummy.Name'
@@ -79,6 +79,17 @@ Resources:
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'DummyTaskDefinition'
     Type: AWS::ECS::Service
+  DummyRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
   DummyRunSidekiqsh:
     Properties:
       Cluster: cluster-staging
@@ -94,6 +105,17 @@ Resources:
           Type: spread
       TaskDefinition: !Ref 'DummyRunSidekiqshTaskDefinition'
     Type: AWS::ECS::Service
+  DummyRunSidekiqshRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
   DummyRunSidekiqshTaskDefinition:
     Properties:
       ContainerDefinitions:
@@ -114,6 +136,7 @@ Resources:
           MemoryReservation: 1000
           Name: DummyRunSidekiqshContainer
       Family: DummyRunSidekiqshFamily
+      TaskRoleArn: !Ref 'DummyRunSidekiqshRole'
     Type: AWS::ECS::TaskDefinition
   DummyTaskDefinition:
     Properties:
@@ -135,6 +158,7 @@ Resources:
           PortMappings:
             - ContainerPort: 7003
       Family: DummyFamily
+      TaskRoleArn: !Ref 'DummyRole'
     Type: AWS::ECS::TaskDefinition
   ECSServiceRole:
     Properties:
