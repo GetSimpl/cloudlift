@@ -12,12 +12,12 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
 
-from config.decimal_encoder import DecimalEncoder
-from config.diff import print_json_changes
+from cloudlift.config import DecimalEncoder
+from cloudlift.config import print_json_changes
 # import config.mfa as mfa
-from config.region import get_resource_for
-from deployment.logging import log_bold, log_err, log_warning
-from version import VERSION
+from cloudlift.config import get_resource_for
+from cloudlift.config.logging import log_bold, log_err, log_warning
+from cloudlift.version import VERSION
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -79,7 +79,7 @@ class ServiceConfiguration(object):
                     else:
                         log_warning("Changes aborted.")
         except ClientError:
-            log_err("Unable to fetch configuration from DynamoDB.")
+            log_err("Unable to fetch service configuration from DynamoDB.")
             exit(1)
 
     def get_config(self):
@@ -107,7 +107,7 @@ class ServiceConfiguration(object):
             existing_configuration.pop("cloudlift_version", None)
             return existing_configuration
         except ClientError:
-            log_err("Unable to fetch configuration from DynamoDB.")
+            log_err("Unable to fetch service configuration from DynamoDB.")
             exit(1)
 
     def set_config(self, config):
@@ -131,7 +131,7 @@ class ServiceConfiguration(object):
             )
             return configuration_response
         except ClientError:
-            log_err("Unable to store configuration in DynamoDB.")
+            log_err("Unable to store service configuration in DynamoDB.")
             exit(1)
 
     def update_cloudlift_version(self):

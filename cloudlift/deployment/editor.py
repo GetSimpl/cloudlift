@@ -1,10 +1,10 @@
 import click
 import dictdiffer
 
-from config.diff import print_parameter_changes
-from config.parameter_store import ParameterStore
-from deployment.deployer import read_config
-from deployment.logging import log_warning
+from cloudlift.config import print_parameter_changes
+from cloudlift.config import ParameterStore
+from cloudlift.deployment.deployer import read_config
+from cloudlift.config.logging import log_warning
 
 
 def edit_config(name, environment):

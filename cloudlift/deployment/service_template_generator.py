@@ -1,6 +1,8 @@
 import json
 import re
 
+from awacs.aws import PolicyDocument, Statement, Allow, Principal
+from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
 from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub
@@ -17,15 +19,15 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroupAttribute)
 from troposphere.iam import Role
 
-from config import region as region_service
-from config.account import get_account_id
-from config.decimal_encoder import DecimalEncoder
-from config.stack import get_service_stack_name
-from deployment.deployer import build_config
-from deployment.ecs import DeployAction, EcsClient
-from deployment.logging import log, log_bold
-from deployment.service_information_fetcher import ServiceInformationFetcher
-from deployment.template_generator import TemplateGenerator
+from cloudlift.config import region as region_service
+from cloudlift.config import get_account_id
+from cloudlift.config import DecimalEncoder
+from cloudlift.config import get_service_stack_name
+from cloudlift.deployment.deployer import build_config
+from cloudlift.deployment.ecs import DeployAction, EcsClient
+from cloudlift.config.logging import log, log_bold
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
+from cloudlift.deployment.template_generator import TemplateGenerator
 
 
 class ServiceTemplateGenerator(TemplateGenerator):
@@ -175,10 +177,25 @@ service is down',
             container_definition_arguments['Command'] = [config['command']]
 
         cd = ContainerDefinition(**container_definition_arguments)
+
+        task_role = self.template.add_resource(Role(
+            service_name + "Role",
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Action=[AssumeRole],
+                        Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
+                    )
+                ]
+            )
+        ))
+
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
-            ContainerDefinitions=[cd]
+            ContainerDefinitions=[cd],
+            TaskRoleArn=Ref(task_role)
         )
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)

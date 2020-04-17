@@ -9,14 +9,13 @@ from time import sleep
 from botocore.exceptions import ClientError
 from stringcase import spinalcase
 
-from config import region as region_service
-from config.account import get_account_id
-from config.region import (get_client_for,
-                           get_region_for_environment)
-from config.stack import get_cluster_name, get_service_stack_name
-from deployment import deployer
-from deployment.ecs import EcsClient
-from deployment.logging import log_bold, log_err, log_intent, log_warning
+from cloudlift.config import get_account_id
+from cloudlift.config import (get_client_for,
+                              get_region_for_environment)
+from cloudlift.config import get_cluster_name, get_service_stack_name
+from cloudlift.deployment import deployer
+from cloudlift.deployment.ecs import EcsClient
+from cloudlift.config.logging import log_bold, log_err, log_intent, log_warning
 
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 

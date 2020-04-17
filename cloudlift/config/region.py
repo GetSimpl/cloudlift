@@ -1,10 +1,15 @@
 import boto3
 
-from config.environment_configuration import EnvironmentConfiguration
-from deployment.logging import log_err
+from cloudlift.config import EnvironmentConfiguration
+from cloudlift.config.logging import log_err
 
 def get_region_for_environment(environment):
-    return EnvironmentConfiguration(environment).get_config()[environment]['region']
+    if environment:
+        return EnvironmentConfiguration(environment).get_config()[environment]['region']
+    else:
+        # Get the region from the AWS credentials used to execute cloudlift
+        aws_session = boto3.session.Session()
+        return aws_session.region_name
 
 
 def get_client_for(resource, environment):

@@ -3,13 +3,13 @@ from time import sleep
 
 from botocore.exceptions import ClientError
 
-from config.environment_configuration import EnvironmentConfiguration
-from config.region import get_client_for
-from config.stack import get_cluster_name
-from deployment.changesets import create_change_set
-from deployment.cluster_template_generator import ClusterTemplateGenerator
-from deployment.logging import log, log_bold, log_err
-from deployment.progress import get_stack_events, print_new_events
+from cloudlift.config import EnvironmentConfiguration
+from cloudlift.config import get_client_for
+from cloudlift.config import get_cluster_name
+from cloudlift.deployment.changesets import create_change_set
+from cloudlift.deployment.cluster_template_generator import ClusterTemplateGenerator
+from cloudlift.config.logging import log, log_bold, log_err
+from cloudlift.deployment.progress import get_stack_events, print_new_events
 
 
 class EnvironmentCreator(object):

@@ -1,10 +1,7 @@
 import re
 
-import boto3
-
-import config.mfa as mfa
-from config.region import get_client_for, get_region_for_environment
-from deployment.logging import log_err
+from cloudlift.config import get_client_for
+from cloudlift.config.logging import log_err
 
 
 class ParameterStore(object):
