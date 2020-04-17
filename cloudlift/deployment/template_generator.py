@@ -1,7 +1,7 @@
 from troposphere import Output, Ref, Template
 
-from config import region as region_service
-from config.stack import get_cluster_name
+from cloudlift.config import region as region_service
+from cloudlift.config import get_cluster_name
 
 
 class TemplateGenerator(object):

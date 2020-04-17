@@ -7,13 +7,13 @@ from time import sleep
 
 from botocore.exceptions import ClientError
 
-from config.region import get_client_for
-from config.service_configuration import ServiceConfiguration
-from config.stack import get_cluster_name, get_service_stack_name
-from deployment.changesets import create_change_set
-from deployment.logging import log, log_bold, log_err
-from deployment.progress import get_stack_events, print_new_events
-from deployment.service_template_generator import ServiceTemplateGenerator
+from cloudlift.config import get_client_for
+from cloudlift.config import ServiceConfiguration
+from cloudlift.config import get_cluster_name, get_service_stack_name
+from cloudlift.deployment.changesets import create_change_set
+from cloudlift.config.logging import log, log_bold, log_err
+from cloudlift.deployment.progress import get_stack_events, print_new_events
+from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
 
 
 class ServiceCreator(object):

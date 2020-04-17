@@ -1,10 +1,9 @@
 
 from subprocess import call
 
-from config import region as region_service
-from config.region import get_client_for
-from config.stack import get_cluster_name, get_service_stack_name
-from deployment.logging import log, log_bold, log_err, log_intent, log_warning
+from cloudlift.config import get_client_for
+from cloudlift.config import get_cluster_name, get_service_stack_name
+from cloudlift.config.logging import log, log_bold, log_err, log_intent, log_warning
 
 
 class ServiceInformationFetcher(object):
