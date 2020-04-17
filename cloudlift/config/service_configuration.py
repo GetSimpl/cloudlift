@@ -79,7 +79,7 @@ class ServiceConfiguration(object):
                     else:
                         log_warning("Changes aborted.")
         except ClientError:
-            log_err("Unable to fetch configuration from DynamoDB.")
+            log_err("Unable to fetch service configuration from DynamoDB.")
             exit(1)
 
     def get_config(self):
@@ -107,7 +107,7 @@ class ServiceConfiguration(object):
             existing_configuration.pop("cloudlift_version", None)
             return existing_configuration
         except ClientError:
-            log_err("Unable to fetch configuration from DynamoDB.")
+            log_err("Unable to fetch service configuration from DynamoDB.")
             exit(1)
 
     def set_config(self, config):
@@ -131,7 +131,7 @@ class ServiceConfiguration(object):
             )
             return configuration_response
         except ClientError:
-            log_err("Unable to store configuration in DynamoDB.")
+            log_err("Unable to store service configuration in DynamoDB.")
             exit(1)
 
     def update_cloudlift_version(self):
