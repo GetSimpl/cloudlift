@@ -196,26 +196,24 @@ service is down',
             )
         ))
 
-
+        launch_type_td = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
-            td = TaskDefinition(
-                service_name + "TaskDefinition",
-                Family=service_name + "Family",
-                ContainerDefinitions=[cd],
-                TaskRoleArn=Ref(task_role),
-                RequiresCompatibilities=['FARGATE'],
-                ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
-                NetworkMode='awsvpc',
-                Cpu=str(config['fargate']['cpu']),
-                Memory=str(config['fargate']['memory'])
-            )
-        else:
-            td = TaskDefinition(
-                service_name + "TaskDefinition",
-                Family=service_name + "Family",
-                ContainerDefinitions=[cd],
-                TaskRoleArn=Ref(task_role)
-            )
+            launch_type_td = {
+                'RequiresCompatibilities': ['FARGATE'],
+                'ExecutionRoleArn': boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
+                'NetworkMode': 'awsvpc',
+                'Cpu': str(config['fargate']['cpu']),
+                'Memory': str(config['fargate']['memory'])
+            }
+
+        td = TaskDefinition(
+            service_name + "TaskDefinition",
+            Family=service_name + "Family",
+            ContainerDefinitions=[cd],
+            TaskRoleArn=Ref(task_role),
+            **launch_type_td
+        )
+
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
         deployment_configuration = DeploymentConfiguration(
@@ -224,6 +222,7 @@ service is down',
         )
         if 'http_interface' in config:
             alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
+            launch_type_svc = {}
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
@@ -240,15 +239,9 @@ service is down',
                     GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
                 self.template.add_resource(service_security_group)
-                svc = Service(
-                    service_name,
-                    LoadBalancers=[lb],
-                    Cluster=self.cluster_name,
-                    TaskDefinition=Ref(td),
-                    DesiredCount=desired_count,
-                    DependsOn=service_listener.title,
-                    LaunchType=launch_type,
-                    NetworkConfiguration=NetworkConfiguration(
+
+                launch_type_svc = {
+                    'NetworkConfiguration': NetworkConfiguration(
                         AwsvpcConfiguration=AwsvpcConfiguration(
                             Subnets=[
                                 Ref(self.private_subnet1),
@@ -259,19 +252,22 @@ service is down',
                             ]
                         )
                     )
-                )
+                }
             else:
-                svc = Service(
-                    service_name,
-                    LoadBalancers=[lb],
-                    Cluster=self.cluster_name,
-                    Role=Ref(self.ecs_service_role),
-                    TaskDefinition=Ref(td),
-                    DesiredCount=desired_count,
-                    DependsOn=service_listener.title,
-                    PlacementStrategies=self.PLACEMENT_STRATEGIES,
-                    LaunchType=launch_type
-                )
+                launch_type_svc = {
+                    'Role': Ref(self.ecs_service_role),
+                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                }
+            svc = Service(
+                service_name,
+                LoadBalancers=[lb],
+                Cluster=self.cluster_name,
+                TaskDefinition=Ref(td),
+                DesiredCount=desired_count,
+                DependsOn=service_listener.title,
+                LaunchType=launch_type,
+                **launch_type_svc,
+            )
             self.template.add_output(
                 Output(
                     service_name + 'EcsServiceName',
@@ -288,6 +284,7 @@ service is down',
             )
             self.template.add_resource(svc)
         else:
+            launch_type_svc = {}
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
@@ -299,14 +296,8 @@ service is down',
                     GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
                 self.template.add_resource(service_security_group)
-                svc = Service(
-                    service_name,
-                    Cluster=self.cluster_name,
-                    TaskDefinition=Ref(td),
-                    DesiredCount=desired_count,
-                    DeploymentConfiguration=deployment_configuration,
-                    LaunchType=launch_type,
-                    NetworkConfiguration=NetworkConfiguration(
+                launch_type_svc = {
+                    'NetworkConfiguration': NetworkConfiguration(
                         AwsvpcConfiguration=AwsvpcConfiguration(
                             Subnets=[
                                 Ref(self.private_subnet1),
@@ -317,17 +308,20 @@ service is down',
                             ]
                         )
                     )
-                )
+                }
             else:
-                svc = Service(
-                    service_name,
-                    Cluster=self.cluster_name,
-                    TaskDefinition=Ref(td),
-                    DesiredCount=desired_count,
-                    DeploymentConfiguration=deployment_configuration,
-                    PlacementStrategies=self.PLACEMENT_STRATEGIES,
-                    LaunchType=launch_type
-                )
+                launch_type_svc = {
+                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                }
+            svc = Service(
+                service_name,
+                Cluster=self.cluster_name,
+                TaskDefinition=Ref(td),
+                DesiredCount=desired_count,
+                DeploymentConfiguration=deployment_configuration,
+                LaunchType=launch_type,
+                **launch_type_svc
+            )
             self.template.add_output(
                 Output(
                     service_name + 'EcsServiceName',

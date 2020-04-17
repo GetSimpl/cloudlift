@@ -54,7 +54,8 @@ def mocked_fargate_service_config(cls, *args, **kwargs):
                     "internal": False,
                     "restrict_access_to": [
                         "0.0.0.0/0"
-                    ]
+                    ],
+                    "health_check_path": "/elb-check"
                 },
                 "memory_reservation": 512
             }
