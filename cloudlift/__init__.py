@@ -4,16 +4,15 @@ import boto3
 import click
 from botocore.exceptions import ClientError
 
-from config import editor
-from config.banner import highlight_production
-from deployment.configs import deduce_name
-from deployment.environment_creator import EnvironmentCreator
-from deployment.logging import log_err
-from deployment.service_creator import ServiceCreator
-from deployment.service_information_fetcher import ServiceInformationFetcher
-from deployment.service_updater import ServiceUpdater
-from session.session_creator import SessionCreator
-from version import VERSION
+from cloudlift.config import highlight_production
+from cloudlift.deployment.configs import deduce_name
+from cloudlift.deployment import EnvironmentCreator, editor
+from cloudlift.config.logging import log_err
+from cloudlift.deployment.service_creator import ServiceCreator
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
+from cloudlift.deployment.service_updater import ServiceUpdater
+from cloudlift.session import SessionCreator
+from cloudlift.version import VERSION
 
 
 def _require_environment(func):

@@ -12,12 +12,12 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
 
-from config.decimal_encoder import DecimalEncoder
-from config.diff import print_json_changes
+from cloudlift.config import DecimalEncoder
+from cloudlift.config import print_json_changes
 # import config.mfa as mfa
-from config.region import get_resource_for
-from deployment.logging import log_bold, log_err, log_warning
-from version import VERSION
+from cloudlift.config import get_resource_for
+from cloudlift.config.logging import log_bold, log_err, log_warning
+from cloudlift.version import VERSION
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 

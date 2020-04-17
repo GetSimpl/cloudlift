@@ -1,8 +1,8 @@
 import boto3
 from moto import mock_dynamodb2
 
-from config.service_configuration import ServiceConfiguration
-from version import VERSION
+from cloudlift.config import ServiceConfiguration
+from cloudlift.version import VERSION
 
 
 class TestServiceConfiguration(object):
