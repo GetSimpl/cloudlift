@@ -2,6 +2,7 @@ import sys
 from time import sleep
 
 from botocore.exceptions import ClientError
+from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import EnvironmentConfiguration
 from cloudlift.config import get_client_for
@@ -127,8 +128,7 @@ class EnvironmentCreator(object):
             )
             return response['AutoScalingGroups'][0]['DesiredCapacity']
         except Exception:
-            log_err("Unable to fetch desired instance count.")
-            exit(1)
+            raise UnrecoverableException("Unable to fetch desired instance count.")
 
 
     def __print_progress(self):

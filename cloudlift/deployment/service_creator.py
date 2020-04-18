@@ -6,6 +6,7 @@ using CloudFormation templates
 from time import sleep
 
 from botocore.exceptions import ClientError
+from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import get_client_for
 from cloudlift.config import ServiceConfiguration
@@ -64,8 +65,7 @@ class ServiceCreator(object):
         except ClientError as boto_client_error:
             error_code = boto_client_error.response['Error']['Code']
             if error_code == 'AlreadyExistsException':
-                log_err("Stack " + self.stack_name + " already exists.")
-                exit(1)
+                raise UnrecoverableException("Stack " + self.stack_name + " already exists.")
             else:
                 raise boto_client_error
 
@@ -111,9 +111,8 @@ class ServiceCreator(object):
             log_bold(self.environment+" stack found. Using stack with ID: " +
                      environment_stack['StackId'])
         except ClientError:
-            log_err(self.environment + " cluster not found. Create the environment \
+            raise UnrecoverableException(self.environment + " cluster not found. Create the environment \
 cluster using `create_environment` command.")
-            exit(1)
         return environment_stack
 
     def _print_progress(self):

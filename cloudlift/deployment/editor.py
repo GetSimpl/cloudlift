@@ -14,7 +14,7 @@ def edit_config(name, environment):
 
     if edited_config_content is None:
         log_warning("No changes made, exiting.")
-        exit(0)
+        return
 
     differences = list(dictdiffer.diff(
         read_config(env_config_strings),

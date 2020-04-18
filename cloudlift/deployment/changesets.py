@@ -48,7 +48,6 @@ def create_change_set(client, service_template_body, stack_name,
             "Check AWS console for reason."
         ))
         client.delete_change_set(ChangeSetName=create_change_set_res['Id'])
-        exit(0)
     else:
         log_bold("Changeset created.. Following are the changes")
         _print_changes(change_set)
@@ -59,7 +58,6 @@ def create_change_set(client, service_template_body, stack_name,
             ChangeSetName=create_change_set_res['Id']
         )
         log_bold("Done. Bye!")
-        exit(0)
 
 
 def _print_changes(change_set):

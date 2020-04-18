@@ -1,4 +1,5 @@
 import boto3
+from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import EnvironmentConfiguration
 from cloudlift.config.logging import log_err
@@ -30,8 +31,7 @@ def get_notifications_arn_for_environment(environment):
             environment
         ).get_config()[environment]['environment']["notifications_arn"]
     except KeyError:
-        log_err("Unable to find notifications arn for {environment}".format(**locals()))
-        exit(1)
+        raise UnrecoverableException("Unable to find notifications arn for {environment}".format(**locals()))
 
 
 def get_ssl_certification_for_environment(environment):
@@ -40,5 +40,4 @@ def get_ssl_certification_for_environment(environment):
             environment
         ).get_config()[environment]['environment']["ssl_certificate_arn"]
     except KeyError:
-        log_err("Unable to find ssl certificate for {environment}".format(**locals()))
-        exit(1)
+        raise UnrecoverableException("Unable to find ssl certificate for {environment}".format(**locals()))
