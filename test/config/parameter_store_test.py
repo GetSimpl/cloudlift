@@ -3,7 +3,7 @@ import pytest
 from moto import mock_dynamodb2, mock_ssm
 
 from cloudlift.config import ParameterStore
-
+from cloudlift.exceptions import UnrecoverableException
 
 class TestParameterStore(object):
     def setup_environment_config(self):
@@ -134,11 +134,11 @@ class TestParameterStore(object):
             ['add', '', [('DUMMY_VAR22', ''),('DUMMY_VAR*', 'valid_value')]]
         ]
         store_object = ParameterStore('test-service', 'dummy-staging')
-        with pytest.raises(SystemExit) as pytest_wrapped_e:
+        with pytest.raises(UnrecoverableException) as pytest_wrapped_e:
             store_object.set_config(invalid_differences)
         captured = capsys.readouterr()
         assert captured.out == "'' is not a valid value for key 'DUMMY_VAR12'\n'' is not a valid value for key 'DUMMY_VAR22'\n'DUMMY_VAR*' is not a valid key.\n"
-        assert pytest_wrapped_e.type == SystemExit
+        assert pytest_wrapped_e.type == UnrecoverableException
         assert pytest_wrapped_e.value.code == 1
         response = store_object.get_existing_config()
         assert response == {u'DUMMY_VAR12': u'dummy_values_12', u'DUMMY_VAR11': u'dummy_values_11', u'DUMMY_VAR8': u'dummy_values_8', u'DUMMY_VAR9': u'dummy_values_9', u'DUMMY_VAR0': u'dummy_values_0', u'DUMMY_VAR1': u'dummy_values_1', u'DUMMY_VAR2': u'dummy_values_2', u'DUMMY_VAR3': u'dummy_values_3', u'DUMMY_VAR4': u'dummy_values_4', u'DUMMY_VAR5': u'dummy_values_5', u'DUMMY_VAR6': u'dummy_values_6', u'DUMMY_VAR7': u'dummy_values_7', u'DUMMY_VAR13': u'dummy_values_13', u'DUMMY_VAR10': u'dummy_values_10'}
