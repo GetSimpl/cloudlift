@@ -97,8 +97,9 @@ def edit_config(name, environment):
 @_require_name
 @click.option('--version', default=None,
               help='local image version tag')
-def deploy_service(name, environment, version):
-    ServiceUpdater(name, environment, None, version).run()
+@click.option("--build-arg", type=(str, str), multiple=True)
+def deploy_service(name, environment, version, build_arg):
+    ServiceUpdater(name, environment, None, version, dict(build_arg)).run()
 
 
 @cli.command()

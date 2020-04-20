@@ -22,7 +22,7 @@ DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 
 class ServiceUpdater(object):
     def __init__(self, name, environment, env_sample_file, version=None,
-                 working_dir='.'):
+                 build_args=None, working_dir='.'):
         self.name = name
         self.environment = environment
         if env_sample_file is not None:
@@ -33,6 +33,7 @@ class ServiceUpdater(object):
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
         self.cluster_name = get_cluster_name(environment)
         self.working_dir = working_dir
+        self.build_args = build_args
 
     def run(self):
         log_warning("Deploying to {self.region}".format(**locals()))
@@ -91,14 +92,18 @@ class ServiceUpdater(object):
 
     def _build_image(self, image_name):
         log_bold("Building docker image " + image_name)
-        subprocess.check_call([
-            "docker",
-            "build",
-            "-t",
-            image_name,
-            self.working_dir
-        ])
+        subprocess.check_call(self._build_command(image_name))
         log_bold("Built " + image_name)
+
+    def _build_command(self, image_name):
+        if self.build_args is None:
+            command = f'docker build -t {image_name} {self.working_dir}'
+        else:
+            build_args_command_fragment = []
+            for k, v in self.build_args.items():
+                build_args_command_fragment.append(" --build-arg "+"=".join((k, v)))
+            command = f'docker build -t {image_name} {"".join(build_args_command_fragment)} {self.working_dir}'
+        return command.split()
 
     def upload_artefacts(self):
         self.ensure_repository()
