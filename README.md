@@ -183,6 +183,14 @@ the MFA code.
 
 ## Contributing to cloudlift
 
+### Setup
+
+To ensure the tests use the development version and not the installed version run (refer [here](https://stackoverflow.com/a/20972950/227705))
+
+```
+pip install -e .
+```
+
 ### Tests
 
 First level of tests have been added to assert cloudformation template generated
