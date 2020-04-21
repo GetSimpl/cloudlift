@@ -222,7 +222,7 @@ service is down',
         )
         if 'http_interface' in config:
             alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
-            launch_type_svc = {}
+
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
