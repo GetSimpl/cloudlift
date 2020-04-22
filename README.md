@@ -163,9 +163,22 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 
 #### 3. Deploy service
 
+This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS 
+service task definition. It supports `--build-arg` argument of `docker build` command as well to pass
+custom build time arguments
+
 ```sh
   cloudlift deploy_service -e <environment-name>
 ```
+
+For example, you can pass your SSH key as a build argument to docker build
+
+```sh
+  cloudlift deploy_service --build-arg SSH_KEY "\"`cat ~/.ssh/id_rsa`\"" -e <environment-name>
+```
+This example is bit comprehensive to show
+- it can execute shell commands with "`".
+- It's wrapped with double quotes to avoid line-breaks in SSH keys breaking the command.
 
 ### 6. Starting shell on container instance for service
 
