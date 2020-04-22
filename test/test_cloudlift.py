@@ -47,8 +47,7 @@ environment_name = 'staging'
 service_name = 'dummy'
 fargate_service_name = 'dummy-fargate'
 
-
-def test_cloudlift_can_deploy_to_ec2():
+def test_cloudlift_can_deploy_to_ec2(keep_resources):
     cfn_client = boto3.client('cloudformation')
     stack_name = f'{service_name}-{environment_name}'
     cfn_client.delete_stack(StackName=stack_name)
@@ -90,9 +89,11 @@ def test_cloudlift_can_deploy_to_ec2():
         ), 60)
     os.chdir('../../')
     assert content_matched
+    if not keep_resources:
+        cfn_client.delete_stack(StackName=stack_name)
 
 
-def test_cloudlift_can_deploy_to_fargate():
+def test_cloudlift_can_deploy_to_fargate(keep_resources):
     cfn_client = boto3.client('cloudformation')
     stack_name = f'{fargate_service_name}-{environment_name}'
     cfn_client.delete_stack(StackName=stack_name)
@@ -136,6 +137,8 @@ def test_cloudlift_can_deploy_to_fargate():
         ), 60)
     os.chdir('../../')
     assert content_matched
+    if not keep_resources:
+        cfn_client.delete_stack(StackName=stack_name)
 
 
 def match_page_content(service_url, content_expected):
