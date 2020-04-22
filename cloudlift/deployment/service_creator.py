@@ -90,6 +90,8 @@ class ServiceCreator(object):
                 "",
                 self.environment
             )
+            if change_set is None:
+                return
             self.service_configuration.update_cloudlift_version()
             log_bold("Executing changeset. Checking progress...")
             self.client.execute_change_set(
