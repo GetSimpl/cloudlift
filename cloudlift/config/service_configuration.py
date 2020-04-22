@@ -173,7 +173,22 @@ class ServiceConfiguration(object):
                 "memory_reservation": {
                     "type": "number",
                     "minimum": 10,
-                    "maximum": 8000
+                    "maximum": 30000
+                },
+                "fargate": {
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "type": "number",
+                            "minimum": 256,
+                            "maximum": 4096
+                        },
+                        "memory": {
+                            "type": "number",
+                            "minimum": 512,
+                            "maximum": 30720
+                        }
+                    }
                 },
                 "command": {
                     "oneOf": [

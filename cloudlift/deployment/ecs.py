@@ -53,12 +53,23 @@ class EcsClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
-    def register_task_definition(self, family, containers, volumes, role_arn):
+    def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
+                                 requires_compatibilities=[], network_mode='bridge'):
+        fargate_td = {}
+        if 'FARGATE' in requires_compatibilities:
+            fargate_td = {
+                'executionRoleArn': execution_role_arn or u'',
+                'requiresCompatibilities': requires_compatibilities or [],
+                'networkMode': network_mode or u'',
+                'cpu': cpu,
+                'memory': memory,
+            }
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
-            taskRoleArn=role_arn or u''
+            taskRoleArn=role_arn or u'',
+            **fargate_td
         )
 
     def deregister_task_definition(self, task_definition_arn):
@@ -171,6 +182,26 @@ class EcsTaskDefinition(dict):
     @property
     def arn(self):
         return self.get(u'taskDefinitionArn')
+
+    @property
+    def requires_compatibilities(self):
+        return self.get(u'requiresCompatibilities')
+
+    @property
+    def execution_role_arn(self):
+        return self.get(u'executionRoleArn')
+
+    @property
+    def network_mode(self):
+        return self.get(u'networkMode')
+
+    @property
+    def cpu(self):
+        return self.get(u'cpu')
+
+    @property
+    def memory(self):
+        return self.get(u'memory')
 
     @property
     def family(self):
@@ -384,11 +415,24 @@ class EcsAction(object):
         return task_definition
 
     def update_task_definition(self, task_definition):
+        fargate_td = {}
+        if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
+
+            fargate_td = {
+                'execution_role_arn': task_definition.execution_role_arn or u'',
+                'requires_compatibilities': task_definition.requires_compatibilities or [],
+                'network_mode': task_definition.network_mode or u'',
+                'cpu' : task_definition.cpu or u'',
+                'memory' : task_definition.memory or u'',
+
+            }
         response = self._client.register_task_definition(
             family=task_definition.family,
             containers=task_definition.containers,
             volumes=task_definition.volumes,
-            role_arn=task_definition.role_arn
+            role_arn=task_definition.role_arn,
+
+            **fargate_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)
