@@ -93,7 +93,6 @@ class ServiceUpdater(object):
     def _build_image(self, image_name):
         log_bold("Building docker image " + image_name)
         command = self._build_command(image_name)
-        log_intent(command)
         subprocess.check_call(command, shell=True)
         log_bold("Built " + image_name)
 
