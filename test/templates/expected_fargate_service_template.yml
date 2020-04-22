@@ -1,16 +1,16 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.4.0", "services": {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh"}}}'
-  DummyEcsServiceName:
-    Description: 'The ECS name which needs to be entered'
-    Value: !GetAtt 'Dummy.Name'
-  DummyRunSidekiqshEcsServiceName:
-    Description: 'The ECS name which needs to be entered'
-    Value: !GetAtt 'DummyRunSidekiqsh.Name'
-  DummyURL:
+    Value: '{"cloudlift_version": "1.4.0", "services": {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "memory_reservation": 512}, "DummyFargateService": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal": false, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}, "memory_reservation": 512}}}'
+  DummyFargateRunSidekiqshEcsServiceName:
+    Description: The ECS name which needs to be entered
+    Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
+  DummyFargateServiceEcsServiceName:
+    Description: The ECS name which needs to be entered
+    Value: !GetAtt 'DummyFargateService.Name'
+  DummyFargateServiceURL:
     Description: The URL at which the service is accessible
-    Value: !Sub 'https://${ALBDummy.DNSName}'
+    Value: !Sub 'https://${ALBDummyFargateService.DNSName}'
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -48,64 +48,37 @@ Parameters:
     Description: ''
     Type: AWS::EC2::VPC::Id
 Resources:
-  ALBDummy:
+  ALBDummyFargateService:
     Properties:
-      Name: DummyStaging
+      Name: DummyFargateServiceStaging
       SecurityGroups:
         - sg-095dbeb511019cfd8
-        - !Ref 'SGstagingDummy'
+        - !Ref 'SGstagingDummyFargateService'
       Subnets:
         - !Ref 'PublicSubnet1'
         - !Ref 'PublicSubnet2'
       Tags:
         - Key: Name
-          Value: DummyStaging
+          Value: DummyFargateServiceStaging
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-  Dummy:
-    DependsOn: SslLoadBalancerListenerDummy
-    Properties:
-      Cluster: cluster-staging
-      DesiredCount: 1
-      LaunchType: 'EC2'
-      LoadBalancers:
-        - ContainerName: DummyContainer
-          ContainerPort: 7003
-          TargetGroupArn: !Ref 'TargetGroupDummy'
-      PlacementStrategies:
-        - Field: attribute:ecs.availability-zone
-          Type: spread
-        - Field: instanceId
-          Type: spread
-      Role: !Ref 'ECSServiceRole'
-      TaskDefinition: !Ref 'DummyTaskDefinition'
-    Type: AWS::ECS::Service
-  DummyRole:
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-    Type: AWS::IAM::Role
-  DummyRunSidekiqsh:
+  DummyFargateRunSidekiqsh:
     Properties:
       Cluster: cluster-staging
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
       DesiredCount: 0
-      LaunchType: 'EC2'
-      PlacementStrategies:
-        - Field: attribute:ecs.availability-zone
-          Type: spread
-        - Field: instanceId
-          Type: spread
-      TaskDefinition: !Ref 'DummyRunSidekiqshTaskDefinition'
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref 'FargateServicestagingDummyFargateRunSidekiqsh'
+          Subnets:
+            - !Ref 'PrivateSubnet1'
+            - !Ref 'PrivateSubnet2'
+      TaskDefinition: !Ref 'DummyFargateRunSidekiqshTaskDefinition'
     Type: AWS::ECS::Service
-  DummyRunSidekiqshRole:
+  DummyFargateRunSidekiqshRole:
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -116,29 +89,7 @@ Resources:
               Service:
                 - ecs-tasks.amazonaws.com
     Type: AWS::IAM::Role
-  DummyRunSidekiqshTaskDefinition:
-    Properties:
-      ContainerDefinitions:
-        - Command:
-            - ./run-sidekiq.sh
-          Cpu: 0
-          Environment:
-            - Name: VAR1
-              Value: val1
-          Essential: 'true'
-          Image: 725827686899.dkr.ecr.ap-south-1.amazonaws.com/dummy-repo:master
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: staging-logs
-              awslogs-region: ap-south-1
-              awslogs-stream-prefix: DummyRunSidekiqsh
-          MemoryReservation: 1000
-          Name: DummyRunSidekiqshContainer
-      Family: DummyRunSidekiqshFamily
-      TaskRoleArn: !Ref 'DummyRunSidekiqshRole'
-    Type: AWS::ECS::TaskDefinition
-  DummyTaskDefinition:
+  DummyFargateRunSidekiqshTaskDefinition:
     Properties:
       ContainerDefinitions:
         - Cpu: 0
@@ -146,19 +97,81 @@ Resources:
             - Name: VAR1
               Value: val1
           Essential: 'true'
-          Image: 725827686899.dkr.ecr.ap-south-1.amazonaws.com/dummy-repo:master
+          Image: 725827686899.dkr.ecr.ap-south-1.amazonaws.com/dummyFargate-repo:master
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: staging-logs
               awslogs-region: ap-south-1
-              awslogs-stream-prefix: Dummy
-          MemoryReservation: 1000
-          Name: DummyContainer
+              awslogs-stream-prefix: DummyFargateRunSidekiqsh
+          MemoryReservation: 512
+          Name: DummyFargateRunSidekiqshContainer
+      Cpu: '256'
+      ExecutionRoleArn: arn:aws:iam::725827686899:role/ecsTaskExecutionRole
+      Family: DummyFargateRunSidekiqshFamily
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: !Ref 'DummyFargateRunSidekiqshRole'
+    Type: AWS::ECS::TaskDefinition
+  DummyFargateService:
+    DependsOn: SslLoadBalancerListenerDummyFargateService
+    Properties:
+      Cluster: cluster-staging
+      DesiredCount: 0
+      LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: DummyFargateServiceContainer
+          ContainerPort: 80
+          TargetGroupArn: !Ref 'TargetGroupDummyFargateService'
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref 'FargateServicestagingDummyFargateService'
+          Subnets:
+            - !Ref 'PrivateSubnet1'
+            - !Ref 'PrivateSubnet2'
+      TaskDefinition: !Ref 'DummyFargateServiceTaskDefinition'
+    Type: AWS::ECS::Service
+  DummyFargateServiceRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
+  DummyFargateServiceTaskDefinition:
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 0
+          Environment:
+            - Name: VAR1
+              Value: val1
+          Essential: 'true'
+          Image: 725827686899.dkr.ecr.ap-south-1.amazonaws.com/dummyFargate-repo:master
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: staging-logs
+              awslogs-region: ap-south-1
+              awslogs-stream-prefix: DummyFargateService
+          MemoryReservation: 512
+          Name: DummyFargateServiceContainer
           PortMappings:
-            - ContainerPort: 7003
-      Family: DummyFamily
-      TaskRoleArn: !Ref 'DummyRole'
+            - ContainerPort: 80
+      Cpu: '256'
+      ExecutionRoleArn: arn:aws:iam::725827686899:role/ecsTaskExecutionRole
+      Family: DummyFargateServiceFamily
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: !Ref 'DummyFargateServiceRole'
     Type: AWS::ECS::TaskDefinition
   ECSServiceRole:
     Properties:
@@ -175,7 +188,7 @@ Resources:
       Path: /
       RoleName: !Sub 'ecs-svc-${AWS::StackName}-${AWS::Region}'
     Type: AWS::IAM::Role
-  EcsHighCPUAlarmDummy:
+  EcsHighCPUAlarmDummyFargateRunSidekiqsh:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -186,7 +199,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'Dummy.Name'
+          Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
       EvaluationPeriods: 1
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -196,7 +209,7 @@ Resources:
       Statistic: Average
       Threshold: '80'
     Type: AWS::CloudWatch::Alarm
-  EcsHighCPUAlarmDummyRunSidekiqsh:
+  EcsHighCPUAlarmDummyFargateService:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -207,7 +220,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+          Value: !GetAtt 'DummyFargateService.Name'
       EvaluationPeriods: 1
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -217,7 +230,7 @@ Resources:
       Statistic: Average
       Threshold: '80'
     Type: AWS::CloudWatch::Alarm
-  EcsHighMemoryAlarmDummy:
+  EcsHighMemoryAlarmDummyFargateRunSidekiqsh:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -228,7 +241,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'Dummy.Name'
+          Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
       EvaluationPeriods: 1
       MetricName: MemoryUtilization
       Namespace: AWS/ECS
@@ -238,7 +251,7 @@ Resources:
       Statistic: Average
       Threshold: '80'
     Type: AWS::CloudWatch::Alarm
-  EcsHighMemoryAlarmDummyRunSidekiqsh:
+  EcsHighMemoryAlarmDummyFargateService:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -249,7 +262,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+          Value: !GetAtt 'DummyFargateService.Name'
       EvaluationPeriods: 1
       MetricName: MemoryUtilization
       Namespace: AWS/ECS
@@ -259,7 +272,7 @@ Resources:
       Statistic: Average
       Threshold: '80'
     Type: AWS::CloudWatch::Alarm
-  EcsNoRunningTasksAlarmDummy:
+  EcsNoRunningTasksAlarmDummyFargateRunSidekiqsh:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -270,7 +283,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'Dummy.Name'
+          Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
       EvaluationPeriods: 1
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -281,7 +294,7 @@ Resources:
       Threshold: '1'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
-  EcsNoRunningTasksAlarmDummyRunSidekiqsh:
+  EcsNoRunningTasksAlarmDummyFargateService:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -292,7 +305,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+          Value: !GetAtt 'DummyFargateService.Name'
       EvaluationPeriods: 1
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -303,7 +316,7 @@ Resources:
       Threshold: '1'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
-  ElbHTTPCodeELB5xxAlarmDummy:
+  ElbHTTPCodeELB5xxAlarmDummyFargateService:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -311,7 +324,7 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
+          Value: !GetAtt 'ALBDummyFargateService.LoadBalancerFullName'
       EvaluationPeriods: 1
       MetricName: HTTPCode_ELB_5XX_Count
       Namespace: AWS/ApplicationELB
@@ -322,7 +335,7 @@ Resources:
       Threshold: '3'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
-  ElbRejectedConnectionsAlarmDummy:
+  ElbRejectedConnectionsAlarmDummyFargateService:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -331,7 +344,7 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
+          Value: !GetAtt 'ALBDummyFargateService.LoadBalancerFullName'
       EvaluationPeriods: 1
       MetricName: RejectedConnectionCount
       Namespace: AWS/ApplicationELB
@@ -342,7 +355,7 @@ Resources:
       Threshold: '1'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
-  ElbUnhealthyHostAlarmDummy:
+  ElbUnhealthyHostAlarmDummyFargateService:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -350,7 +363,7 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
+          Value: !GetAtt 'ALBDummyFargateService.LoadBalancerFullName'
       EvaluationPeriods: 1
       MetricName: UnHealthyHostCount
       Namespace: AWS/ApplicationELB
@@ -361,22 +374,40 @@ Resources:
       Threshold: '1'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
-  LoadBalancerRedirectionListenerDummy:
+  FargateServicestagingDummyFargateRunSidekiqsh:
+    Properties:
+      GroupDescription: FargateServicestagingDummyFargateRunSidekiqsh
+      GroupName: FargateServicestagingDummyFargateRunSidekiqsh
+      SecurityGroupIngress: []
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::SecurityGroup
+  FargateServicestagingDummyFargateService:
+    Properties:
+      GroupDescription: FargateServicestagingDummyFargateService
+      GroupName: FargateServicestagingDummyFargateService
+      SecurityGroupIngress:
+        - FromPort: 80
+          IpProtocol: TCP
+          SourceSecurityGroupId: !Ref 'SGstagingDummyFargateService'
+          ToPort: 80
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::SecurityGroup
+  LoadBalancerRedirectionListenerDummyFargateService:
     Properties:
       DefaultActions:
-          - RedirectConfig:
-              Port: '443'
-              Protocol: HTTPS
-              StatusCode: HTTP_301
-            Type: "redirect"
-      LoadBalancerArn: !Ref 'ALBDummy'
+        - RedirectConfig:
+            Port: '443'
+            Protocol: HTTPS
+            StatusCode: HTTP_301
+          Type: redirect
+      LoadBalancerArn: !Ref 'ALBDummyFargateService'
       Port: 80
       Protocol: HTTP
     Type: AWS::ElasticLoadBalancingV2::Listener
-  SGstagingDummy:
+  SGstagingDummyFargateService:
     Properties:
-      GroupDescription: !Sub 'Dummy-alb-sg'
-      GroupName: staging-Dummy
+      GroupDescription: !Sub 'DummyFargateService-alb-sg'
+      GroupName: staging-DummyFargateService
       SecurityGroupIngress:
         - CidrIp: '0.0.0.0/0'
           FromPort: 80
@@ -388,19 +419,19 @@ Resources:
           ToPort: 443
       VpcId: !Ref 'VPC'
     Type: AWS::EC2::SecurityGroup
-  SslLoadBalancerListenerDummy:
+  SslLoadBalancerListenerDummyFargateService:
     Properties:
       Certificates:
         - CertificateArn: arn:aws:acm:ap-south-1:725827686899:certificate/380232d3-d868-4ce3-a43d-211cdfd39d26
       DefaultActions:
-        - TargetGroupArn: !Ref 'TargetGroupDummy'
+        - TargetGroupArn: !Ref 'TargetGroupDummyFargateService'
           Type: forward
-      LoadBalancerArn: !Ref 'ALBDummy'
+      LoadBalancerArn: !Ref 'ALBDummyFargateService'
       Port: 443
       Protocol: HTTPS
       SslPolicy: ELBSecurityPolicy-FS-1-2-Res-2019-08
     Type: AWS::ElasticLoadBalancingV2::Listener
-  TargetGroupDummy:
+  TargetGroupDummyFargateService:
     Properties:
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /elb-check
@@ -408,11 +439,12 @@ Resources:
       HealthyThresholdCount: 2
       Matcher:
         HttpCode: 200-399
-      Port: 7003
+      Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
+      TargetType: ip
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
