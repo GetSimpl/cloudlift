@@ -2,11 +2,11 @@ import base64
 import multiprocessing
 import os
 import subprocess
-import sys
 import boto3
 from time import sleep
 
 from botocore.exceptions import ClientError
+from cloudlift.exceptions import UnrecoverableException
 from stringcase import spinalcase
 
 from cloudlift.config import get_account_id
@@ -38,8 +38,7 @@ class ServiceUpdater(object):
         log_warning("Deploying to {self.region}".format(**locals()))
         self.init_stack_info()
         if not os.path.exists(self.env_sample_file):
-            log_err('env.sample not found. Exiting.')
-            exit(1)
+            raise UnrecoverableException('env.sample not found. Exiting.')
         log_intent("name: " + self.name + " | environment: " +
                    self.environment + " | version: " + str(self.version))
         log_bold("Checking image in ECR")
@@ -78,7 +77,7 @@ class ServiceUpdater(object):
                 break
 
         if any(exit_codes) != 0:
-            sys.exit(1)
+            raise UnrecoverableException("Deployment failed")
 
     def upload_image(self, additional_tags):
         image_name = spinalcase(self.name) + ':' + self.version
@@ -140,16 +139,14 @@ class ServiceUpdater(object):
             log_intent("Found commit SHA " + commit_sha)
             return commit_sha
         except:
-            log_err("Commit SHA not found. Given version is not a git tag, \
+            raise UnrecoverableException("Commit SHA not found. Given version is not a git tag, \
 branch or commit SHA")
-            exit(1)
 
     def _push_image(self, local_name, ecr_name):
         try:
             subprocess.check_call(["docker", "tag", local_name, ecr_name])
         except:
-            log_err("Local image was not found.")
-            exit(1)
+            raise UnrecoverableException("Local image was not found.")
         self._login_to_ecr()
         subprocess.check_call(["docker", "push", ecr_name])
         subprocess.check_call(["docker", "rmi", ecr_name])
@@ -188,10 +185,9 @@ branch or commit SHA")
             log_intent("Using commit hash " + commit_sha + " to find image")
             image = self._find_image_in_ecr(commit_sha)
             if not image:
-                log_err("Image for given version could not be found.")
                 log_warning("Please build, tag and upload the image for the \
 commit " + commit_sha)
-                exit(1)
+                raise UnrecoverableException("Image for given version could not be found.")
         else:
             dirty = subprocess.check_output(
                 ["git", "status", "--short"]
@@ -267,5 +263,4 @@ version to be " + self.version + " based on current status")
                 log_err(
                     "%s cluster not found. Create the environment cluster using `create_environment` command." % self.environment)
             else:
-                log_err(str(client_error))
-            exit(1)
+                raise UnrecoverableException(str(client_error))

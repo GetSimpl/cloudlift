@@ -1,5 +1,7 @@
 import re
 
+from cloudlift.exceptions import UnrecoverableException
+
 from cloudlift.config import get_client_for
 from cloudlift.config.logging import log_err
 
@@ -94,7 +96,7 @@ class ParameterStore(object):
         if errors:
             for error in errors:
                 log_err(error)
-            exit(1)
+            raise UnrecoverableException("Environment variables validation failed with above errors.")
         return True
 
     def _is_a_valid_parameter_key(self, key):

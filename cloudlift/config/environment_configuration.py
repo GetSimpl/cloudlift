@@ -12,6 +12,7 @@ from click import confirm, edit, prompt
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
+from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import print_json_changes
 # import config.mfa as mfa
@@ -48,11 +49,9 @@ class EnvironmentConfiguration(object):
             )
             return configuration_response['Item']['configuration']
         except ClientError:
-            log_err("Unable to fetch environment configuration from DynamoDB.")
-            exit(1)
+            raise UnrecoverableException("Unable to fetch environment configuration from DynamoDB.")
         except KeyError:
-            log_err("Environment configuration not found. Does this environment exist?")
-            exit(1)
+            raise UnrecoverableException("Environment configuration not found. Does this environment exist?")
 
     def update_config(self):
         if not self._env_config_exists():
@@ -208,8 +207,7 @@ class EnvironmentConfiguration(object):
                     else:
                         log_warning("Changes aborted.")
         except ClientError:
-            log_err("Unable to fetch environment configuration from DynamoDB.")
-            exit(1)
+            raise UnrecoverableException("Unable to fetch environment configuration from DynamoDB.")
 
     def _set_config(self, config):
         '''
@@ -230,8 +228,7 @@ class EnvironmentConfiguration(object):
             )
             return configuration_response
         except ClientError:
-            log_err("Unable to store environment configuration in DynamoDB.")
-            exit(1)
+            raise UnrecoverableException("Unable to store environment configuration in DynamoDB.")
         pass
 
     def _validate_changes(self, configuration):
@@ -384,8 +381,7 @@ class EnvironmentConfiguration(object):
         except ValidationError as validation_error:
             error_path = str(".".join(list(validation_error.relative_path)))
             if error_path:
-                log_err(validation_error.message + " in " + error_path)
+                raise UnrecoverableException(validation_error.message + " in " + error_path)
             else:
-                log_err(validation_error.message)
-            exit(0)
+                raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
