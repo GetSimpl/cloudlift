@@ -1,7 +1,7 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.4.0", "services": {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "memory_reservation": 512}, "DummyFargateService": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal": false, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}, "memory_reservation": 512}}}'
+    Value: '{"cloudlift_version": "1.4.2", "services": {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "memory_reservation": 512}, "DummyFargateService": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal": false, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}, "memory_reservation": 512}}}'
   DummyFargateRunSidekiqshEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
