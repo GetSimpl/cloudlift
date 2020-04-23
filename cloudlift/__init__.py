@@ -13,6 +13,7 @@ from cloudlift.deployment.service_information_fetcher import ServiceInformationF
 from cloudlift.deployment.service_updater import ServiceUpdater
 from cloudlift.session import SessionCreator
 from cloudlift.version import VERSION
+from cloudlift.exceptions import UnrecoverableException
 
 
 def _require_environment(func):
@@ -36,8 +37,16 @@ repo')
         return func(*args, **kwargs)
     return wrapper
 
+class CommandWrapper(click.Group):
+    def __call__(self, *args, **kwargs):
+        try:
+            return self.main(*args, **kwargs)
+        except UnrecoverableException as e:
+            log_err(e.value)
+            exit(1)
 
-@click.group()
+
+@click.group(cls=CommandWrapper)
 @click.version_option(version=VERSION, prog_name="cloudlift")
 def cli():
     """
@@ -97,8 +106,11 @@ def edit_config(name, environment):
 @_require_name
 @click.option('--version', default=None,
               help='local image version tag')
-def deploy_service(name, environment, version):
-    ServiceUpdater(name, environment, None, version).run()
+@click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
+                                                                  "as --build-args. Supports multiple.\
+                                                                   Please leave space between name and value" )
+def deploy_service(name, environment, version, build_arg):
+    ServiceUpdater(name, environment, None, version, dict(build_arg)).run()
 
 
 @cli.command()

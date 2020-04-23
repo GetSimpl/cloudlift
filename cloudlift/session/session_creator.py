@@ -1,5 +1,8 @@
 import functools
 import operator
+
+from cloudlift.exceptions import UnrecoverableException
+
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.config import mfa
 from cloudlift.config.logging import log, log_bold, log_err
@@ -16,13 +19,11 @@ class SessionCreator(object):
     mfa.do_mfa_login(mfa_code, get_region_for_environment(self.environment))
     target_instance = self._get_target_instance()
     self._initiate_session(target_instance)
-    exit(0)
 
   def _get_target_instance(self):
     service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
     if not service_instance_ids:
-      log_err("Couldn't find instances. Exiting.")
-      exit(1)
+      raise UnrecoverableException("Couldn't find instances. Exiting.")
     instance_ids = list(set(functools.reduce(operator.add,service_instance_ids.values())))
     log("Found " + str(len(instance_ids)) + " instances to start session")
     return instance_ids[0]
@@ -33,5 +34,4 @@ class SessionCreator(object):
       driver = create_clidriver()
       driver.main(["ssm", "start-session", "--target", target_instance])
     except:
-      log_err("Failed to start session")
-      exit(1)
+      raise UnrecoverableException("Failed to start session")

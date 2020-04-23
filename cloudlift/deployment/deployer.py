@@ -1,6 +1,7 @@
 import sys
 from time import sleep
 
+from cloudlift.exceptions import UnrecoverableException
 from colorclass import Color
 from terminaltables import SingleTable
 
@@ -56,19 +57,16 @@ def build_config(env_name, service_name, sample_env_file_path):
             env_name).get_existing_config()
     except Exception as err:
         log_intent(str(err))
-        log_err("Cannot find the configuration in parameter store \
+        raise UnrecoverableException("Cannot find the configuration in parameter store \
 [env: %s | service: %s]." % (env_name, service_name))
-        sys.exit(1)
     missing_env_config = set(service_config) - set(environment_config)
     if missing_env_config:
-        log_err('There is no config value for the keys ' +
+        raise UnrecoverableException('There is no config value for the keys ' +
                 str(missing_env_config))
-        sys.exit(1)
     missing_env_sample_config = set(environment_config) - set(service_config)
     if missing_env_sample_config:
-        log_err('There is no config value for the keys in env.sample file ' +
+        raise UnrecoverableException('There is no config value for the keys in env.sample file ' +
                 str(missing_env_sample_config))
-        sys.exit(1)
 
     return make_container_defn_env_conf(service_config, environment_config)
 

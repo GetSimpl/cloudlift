@@ -3,6 +3,7 @@ import os
 import botocore
 from boto3 import client
 from boto3.session import Session
+from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import get_account_id
 from cloudlift.config.logging import log_bold, log_err
@@ -28,8 +29,7 @@ def do_mfa_login(mfa_code=None, region='ap-south-1'):
         os.environ['AWS_DEFAULT_REGION'] = region
         return session_params
     except botocore.exceptions.ClientError as client_error:
-        log_err(str(client_error))
-        exit(1)
+        raise UnrecoverableException(str(client_error))
 
 
 def get_mfa_session(mfa_code=None, region='ap-south-1'):
@@ -53,8 +53,7 @@ def get_mfa_session(mfa_code=None, region='ap-south-1'):
                 region_name=region
         )
     except botocore.exceptions.ClientError as client_error:
-        log_err(str(client_error))
-        exit(1)
+        raise UnrecoverableException(str(client_error))
 
 
 def get_username():

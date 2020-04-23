@@ -8,6 +8,7 @@ import json
 import dictdiffer
 from botocore.exceptions import ClientError
 from click import confirm, edit
+from cloudlift.exceptions import UnrecoverableException
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
@@ -79,8 +80,7 @@ class ServiceConfiguration(object):
                     else:
                         log_warning("Changes aborted.")
         except ClientError:
-            log_err("Unable to fetch service configuration from DynamoDB.")
-            exit(1)
+            raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
 
     def get_config(self):
         '''
@@ -107,8 +107,7 @@ class ServiceConfiguration(object):
             existing_configuration.pop("cloudlift_version", None)
             return existing_configuration
         except ClientError:
-            log_err("Unable to fetch service configuration from DynamoDB.")
-            exit(1)
+            raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
 
     def set_config(self, config):
         '''
@@ -131,8 +130,7 @@ class ServiceConfiguration(object):
             )
             return configuration_response
         except ClientError:
-            log_err("Unable to store service configuration in DynamoDB.")
-            exit(1)
+            raise UnrecoverableException("Unable to store service configuration in DynamoDB.")
 
     def update_cloudlift_version(self):
         '''
@@ -175,7 +173,22 @@ class ServiceConfiguration(object):
                 "memory_reservation": {
                     "type": "number",
                     "minimum": 10,
-                    "maximum": 8000
+                    "maximum": 30000
+                },
+                "fargate": {
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "type": "number",
+                            "minimum": 256,
+                            "maximum": 4096
+                        },
+                        "memory": {
+                            "type": "number",
+                            "minimum": 512,
+                            "maximum": 30720
+                        }
+                    }
                 },
                 "command": {
                     "oneOf": [
@@ -209,9 +222,8 @@ class ServiceConfiguration(object):
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
-            log_err(validation_error.message + " in " +
+            raise UnrecoverableException(validation_error.message + " in " +
                     str(".".join(list(validation_error.relative_path))))
-            exit(0)
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
