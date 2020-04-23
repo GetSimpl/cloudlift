@@ -22,7 +22,7 @@ from troposphere.rds import DBSubnetGroup
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
-from cloudlift.version import VERSION
+from cloudlift.version import __version__
 
 
 class ClusterTemplateGenerator(TemplateGenerator):
@@ -582,7 +582,7 @@ for cluster for 15 minutes.',
             'max_instances': str(self.configuration['cluster']['max_instances']),
             'instance_type': self.configuration['cluster']['instance_type'],
             'key_name': self.configuration['cluster']['key_name'],
-            'cloudlift_version': VERSION
+            'cloudlift_version': __version__
         }
         self.template.add_output(Output(
             "CloudliftOptions",

@@ -12,7 +12,7 @@ from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
 from cloudlift.session import SessionCreator
-from cloudlift.version import VERSION
+from cloudlift.version import __version__
 from cloudlift.exceptions import UnrecoverableException
 
 
@@ -47,7 +47,7 @@ class CommandWrapper(click.Group):
 
 
 @click.group(cls=CommandWrapper)
-@click.version_option(version=VERSION, prog_name="cloudlift")
+@click.version_option(version=__version__, prog_name="cloudlift")
 def cli():
     """
         Cloudlift is built by Simpl developers to make it easier to launch \

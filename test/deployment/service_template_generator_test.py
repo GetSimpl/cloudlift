@@ -7,12 +7,12 @@ from cloudlift.config import ParameterStore
 from cloudlift.config import ServiceConfiguration
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
-from cloudlift.version import VERSION
+from cloudlift.version import __version__
 
 
 def mocked_service_config(cls, *args, **kwargs):
     return {
-        "cloudlift_version": VERSION,
+        "cloudlift_version": __version__,
         "services": {
             "Dummy": {
                 "memory_reservation": 1000,
@@ -33,7 +33,7 @@ def mocked_service_config(cls, *args, **kwargs):
 
 def mocked_fargate_service_config(cls, *args, **kwargs):
     return {
-        "cloudlift_version": VERSION,
+        "cloudlift_version": __version__,
         "services": {
             "DummyFargateRunSidekiqsh": {
                 "command": None,

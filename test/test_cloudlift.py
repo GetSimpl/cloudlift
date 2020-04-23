@@ -7,7 +7,7 @@ import requests
 import urllib3
 from mock import patch
 
-from cloudlift.config import ServiceConfiguration, VERSION
+from cloudlift.config import ServiceConfiguration, __version__
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_updater import ServiceUpdater
 
@@ -21,7 +21,7 @@ def mocked_service_config(cls, *args, **kwargs):
 
 def mocked_fargate_service_config(cls, *args, **kwargs):
     return {
-        "cloudlift_version": VERSION,
+        "cloudlift_version": __version__,
         "services": {
             "DummyFargateService": {
                 "command": None,

@@ -18,7 +18,7 @@ from cloudlift.config import print_json_changes
 # import config.mfa as mfa
 from cloudlift.config import get_resource_for
 from cloudlift.config.logging import log_bold, log_err, log_warning
-from cloudlift.version import VERSION
+from cloudlift.version import __version__
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -113,7 +113,7 @@ class ServiceConfiguration(object):
         '''
             Set configuration in DynamoDB
         '''
-        config['cloudlift_version'] = VERSION
+        config['cloudlift_version'] = __version__
         self._validate_changes(config)
         try:
             configuration_response = self.table.update_item(

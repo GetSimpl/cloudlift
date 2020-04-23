@@ -2,7 +2,7 @@ import boto3
 from moto import mock_dynamodb2
 
 from cloudlift.config import ServiceConfiguration
-from cloudlift.version import VERSION
+from cloudlift.version import __version__
 
 
 class TestServiceConfiguration(object):
@@ -45,7 +45,7 @@ class TestServiceConfiguration(object):
             UpdateExpression='SET configuration = :configuration',
             ExpressionAttributeValues={
                 ':configuration': {
-                    "cloudlift_version": VERSION,
+                    "cloudlift_version": __version__,
                     "services": {
                         "TestService": {
                             "memory_reservation": 1000,

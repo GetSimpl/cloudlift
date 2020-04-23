@@ -1,6 +1,8 @@
 from setuptools import find_packages, setup
 
-from cloudlift.version import VERSION
+version = {}
+with open("./cloudlift/version.py") as fp:
+    exec(fp.read(), version)
 
 requirements = []
 with open('requirements.txt') as f:
@@ -11,7 +13,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='cloudlift',
-    version=VERSION,
+    version=version["__version__"],
     packages=find_packages(),
     install_requires=requirements,
     description="Cloudlift makes it easier to launch dockerized services in AWS ECS",
