@@ -1,6 +1,8 @@
 from setuptools import find_packages, setup
 
-from cloudlift.version import VERSION
+version = {}
+with open("./cloudlift/version/__init__.py") as fp:
+    exec(fp.read())
 
 requirements = []
 with open('requirements.txt') as f:
