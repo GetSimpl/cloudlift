@@ -1,7 +1,7 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.4.3", "services": {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh"}}}'
+    Value: '{"cloudlift_version": "1.4.4", "services": {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh"}}}'
   DummyEcsServiceName:
     Description: 'The ECS name which needs to be entered'
     Value: !GetAtt 'Dummy.Name'
@@ -65,7 +65,7 @@ Resources:
     DependsOn: SslLoadBalancerListenerDummy
     Properties:
       Cluster: cluster-staging
-      DesiredCount: 1
+      DesiredCount: 0
       LaunchType: 'EC2'
       LoadBalancers:
         - ContainerName: DummyContainer
@@ -79,17 +79,6 @@ Resources:
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'DummyTaskDefinition'
     Type: AWS::ECS::Service
-  DummyRole:
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-    Type: AWS::IAM::Role
   DummyRunSidekiqsh:
     Properties:
       Cluster: cluster-staging
@@ -105,17 +94,6 @@ Resources:
           Type: spread
       TaskDefinition: !Ref 'DummyRunSidekiqshTaskDefinition'
     Type: AWS::ECS::Service
-  DummyRunSidekiqshRole:
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-    Type: AWS::IAM::Role
   DummyRunSidekiqshTaskDefinition:
     Properties:
       ContainerDefinitions:
@@ -136,7 +114,7 @@ Resources:
           MemoryReservation: 1000
           Name: DummyRunSidekiqshContainer
       Family: DummyRunSidekiqshFamily
-      TaskRoleArn: !Ref 'DummyRunSidekiqshRole'
+      TaskRoleArn: !Ref 'stagingDummyRunSidekiqshRole'
     Type: AWS::ECS::TaskDefinition
   DummyTaskDefinition:
     Properties:
@@ -158,7 +136,7 @@ Resources:
           PortMappings:
             - ContainerPort: 7003
       Family: DummyFamily
-      TaskRoleArn: !Ref 'DummyRole'
+      TaskRoleArn: !Ref 'stagingDummyRole'
     Type: AWS::ECS::TaskDefinition
   ECSServiceRole:
     Properties:
@@ -416,3 +394,25 @@ Resources:
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  stagingDummyRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
+  stagingDummyRunSidekiqshRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
