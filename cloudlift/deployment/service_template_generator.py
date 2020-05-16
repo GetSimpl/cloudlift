@@ -12,7 +12,7 @@ from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
-                             NetworkConfiguration, PlacementStrategy,
+                             NetworkConfiguration, PlacementStrategy,PlacementConstraint,
                              PortMapping, Service, TaskDefinition)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
@@ -30,6 +30,7 @@ from cloudlift.deployment.ecs import DeployAction, EcsClient
 from cloudlift.config.logging import log, log_bold
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
+from cloudlift.deployment.cluster_template_generator import INSTANCE_PURCHASE_OPTIONS
 
 
 class ServiceTemplateGenerator(TemplateGenerator):
@@ -220,6 +221,15 @@ service is down',
             MinimumHealthyPercent=100,
             MaximumPercent=200
         )
+        log_bold("Interruptable flag: {}".format(str(config['interruptable'])))
+        service_config = {}
+        if 'interruptable' in config and config['interruptable']:
+            desired_ec2_target_lifecycle = 'Spot'
+        else:
+            desired_ec2_target_lifecycle = 'Ondemand'
+        service_config['PlacementConstraints']=[PlacementConstraint(Type='memberOf', Expression='attribute:instance-purchase-option == {}'.format(desired_ec2_target_lifecycle))]
+
+
         if 'http_interface' in config:
             alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
 
@@ -256,7 +266,8 @@ service is down',
             else:
                 launch_type_svc = {
                     'Role': Ref(self.ecs_service_role),
-                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                    'PlacementStrategies': self.PLACEMENT_STRATEGIES,
+                    **service_config
                 }
             svc = Service(
                 service_name,
@@ -312,6 +323,7 @@ service is down',
             else:
                 launch_type_svc = {
                     'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                    **service_config
                 }
             svc = Service(
                 service_name,
@@ -396,11 +408,12 @@ service is down',
             )
 
         self.template.add_resource(alb)
-
-        target_group_name = "TargetGroup" + service_name
-        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
-        if config['http_interface']['internal']:
-            target_group_name = target_group_name + 'Internal'
+        for asg_name in INSTANCE_PURCHASE_OPTIONS:
+            target_group_name = "TargetGroup" + asg_name + service_name
+            health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config[
+                'http_interface'] else "/elb-check"
+            if config['http_interface']['internal']:
+                target_group_name = target_group_name + 'Internal'
 
         target_group_config = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
@@ -446,7 +459,7 @@ service is down',
             config['http_interface']['internal']
         )
         self._add_alb_alarms(service_name, alb)
-        return alb, lb, service_listener, svc_alb_sg
+        return alb, lb, service_listener, svc_alb_sg #TODO check against git history
 
     def _add_service_listener(self, service_name, target_group_action,
                               alb, internal):

@@ -106,6 +106,20 @@ class EnvironmentConfiguration(object):
         )
         return response.get('Item') is not None
 
+    def _allocate_eip(self):
+        client = boto3.client('ec2')
+        try:
+            # try to get an unassociated ip address first
+            allocated_addresses = client.describe_addresses()
+            response = list(filter(lambda x: 'AssociationId' not in x, allocated_addresses['Addresses']))[0]
+        except (KeyError, IndexError):
+            # Allocate a new ip address
+            response = client.allocate_address(
+                Domain='vpc'
+            )
+        return response['AllocationId']
+
+
     def _create_config(self):
         log_warning(
             "\nConfiguration for this environment was not found in DynamoDB.\
@@ -115,8 +129,12 @@ class EnvironmentConfiguration(object):
             \nthe same configuration.\n"
         )
         region = prompt("AWS region for environment", default='ap-south-1')
-        vpc_cidr = ipaddress.IPv4Network(prompt("VPC CIDR", default='10.10.10.10/16'))
-        nat_eip = prompt("Allocation ID Elastic IP for NAT")
+        vpc_cidr = ipaddress.IPv4Network(prompt("VPC CIDR", default='10.5.0.0/16'))
+
+        nat_eip = prompt("Allocation ID Elastic IP for NAT (Enter existing EIP Allocation Id or \
+         press enter to create a new one, if none are available", default='')
+        if not nat_eip:
+            nat_eip = self._allocate_eip()
         public_subnet_1_cidr = prompt(
             "Public Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[0])
         public_subnet_2_cidr = prompt(
@@ -127,10 +145,10 @@ class EnvironmentConfiguration(object):
             "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
-        cluster_instance_type = prompt("Instance type", default='m5.xlarge')
-        key_name = prompt("SSH key name")
-        notifications_arn = prompt("Notification SNS ARN")
-        ssl_certificate_arn = prompt("SSL certificate ARN")
+        cluster_instance_type = prompt("Instance type", default='t2.micro')
+        key_name = prompt("SSH key name", default='shoan')
+        notifications_arn = prompt("Notification SNS ARN", default='arn:aws:sns:ap-south-1:259042324395:shoan')
+        ssl_certificate_arn = prompt("SSL certificate ARN", default='arn:aws:acm:ap-south-1:259042324395:certificate/09d771d0-24d3-45d2-8e40-2237f12bea6a')
         environment_configuration = {
             self.environment: {
                 "region": region,
