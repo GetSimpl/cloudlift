@@ -3,6 +3,10 @@ from moto import mock_dynamodb2
 
 from cloudlift.config import ServiceConfiguration
 from cloudlift.version import VERSION
+from cloudlift.exceptions import UnrecoverableException
+
+from unittest import TestCase
+from unittest.mock import patch, MagicMock
 
 
 class TestServiceConfiguration(object):
@@ -140,3 +144,45 @@ class TestServiceConfiguration(object):
                         }
                     }
                 }
+
+
+class TestServiceConfigurationValidation(TestCase):
+    @patch("cloudlift.config.service_configuration.get_resource_for")
+    def test_set_config_system_controls(self, mock_get_resource_for):
+        mock_get_resource_for.return_value = MagicMock()
+
+        service = ServiceConfiguration('test-service', 'test')
+
+        try:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'system_controls': [
+                            {
+                                'namespace': 'ns',
+                                'value': 'val'
+                            }
+                        ]
+                    }
+                }
+            })
+        except UnrecoverableException as e:
+            self.fail('Exception thrown: {}'.format(e))
+
+        try:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'system_controls': "invalid"
+                    }
+                }
+            })
+            self.fail('Validation error expected but validation passed')
+        except UnrecoverableException as e:
+            self.assertTrue("'invalid' is not of type 'array'" in str(e))

@@ -198,6 +198,20 @@ class ServiceConfiguration(object):
                 },
                 "stop_timeout": {
                     "type": "number"
+                },
+                "system_controls": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "namespace": {
+                                "type": "string"
+                            },
+                            "value": {
+                                "type": "string"
+                            }
+                        }
+                    },
                 }
             },
             "required": ["memory_reservation", "command"]
@@ -239,6 +253,7 @@ class ServiceConfiguration(object):
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
                     },
+                    u'system_controls': [],
                     u'memory_reservation': 1000,
                     u'command': None
                 }
