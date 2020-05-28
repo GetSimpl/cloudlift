@@ -236,6 +236,7 @@ class ServiceConfiguration(object):
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
                     },
+                    u'system_controls': [],
                     u'memory_reservation': 1000,
                     u'command': None
                 }
