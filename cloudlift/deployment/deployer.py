@@ -12,7 +12,7 @@ from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_col
 
 def deploy_new_version(client, cluster_name, ecs_service_name,
                        deploy_version_tag, service_name, sample_env_file_path,
-                       env_name, color='white', complete_image_uri=None):
+                       env_name, region, account_id, color='white', complete_image_uri=None):
     env_config = build_config(env_name, service_name, sample_env_file_path)
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     if deployment.service.desired_count == 0:
@@ -32,7 +32,8 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
     else:
         task_definition.set_images(deploy_version_tag)
     for container in task_definition.containers:
-        task_definition.apply_container_environment(container, env_config)
+        task_definition.apply_container_environment(
+            container, region, account_id, service_name, env_config)
     print_task_diff(ecs_service_name, task_definition.diff, color)
     new_task_definition = deployment.update_task_definition(task_definition)
     response = deploy_and_wait(deployment, new_task_definition, color)

@@ -63,6 +63,8 @@ class ServiceUpdater(object):
                     self.name,
                     self.env_sample_file,
                     self.environment,
+                    self.region,
+                    self.account_id,
                     color,
                     image_url
                 )

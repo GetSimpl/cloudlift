@@ -283,7 +283,7 @@ class EcsTaskDefinition(dict):
                 self._diff.append(diff)
                 container[u'command'] = [new_command]
 
-    def apply_container_environment(self, container, new_environment):
+    def apply_container_environment(self, container, region, account_id, service_name, new_environment):
         old_environment = {
             env['name']: env['value'] for env in container.get(
                 'environment',
@@ -300,10 +300,11 @@ class EcsTaskDefinition(dict):
         )
         self._diff.append(diff)
 
-        container[u'environment'] = [
+        container[u'environment'] = []
+        container[u'secrets'] = [
             {
                 "name": e,
-                "value": merged_environment[e]
+                "valueFrom": 'arn:aws:ssm:{}:{}:{}/{}'.format(region, account_id, service_name, e)
             } for e in merged_environment
         ]
 
