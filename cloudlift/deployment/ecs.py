@@ -283,21 +283,6 @@ class EcsTaskDefinition(dict):
                 self._diff.append(diff)
                 container[u'command'] = [new_command]
 
-    def set_environment(self, environment_list):
-        environment = {}
-
-        for env in environment_list:
-            environment.setdefault(env[0], {})
-            environment[env[0]][env[1]] = env[2]
-
-        self.validate_container_options(**environment)
-        for container in self.containers:
-            if container[u'name'] in environment:
-                self.apply_container_environment(
-                    container=container,
-                    new_environment=environment[container[u'name']]
-                )
-
     def apply_container_environment(self, container, new_environment):
         old_environment = {
             env['name']: env['value'] for env in container.get(
