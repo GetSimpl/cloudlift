@@ -284,8 +284,10 @@ class EcsTaskDefinition(dict):
                 container[u'command'] = [new_command]
 
     def apply_container_environment(self, container, region, account_id, service_name, new_secrets):
-        old_keys = {data['name']: '' for data in container.get('secrets', {})}
-        new_keys = {data[0]: '****' for data in new_secrets}
+        masked_password = '****'
+        old_keys = {
+            data['name']: masked_password for data in container.get('secrets', {})}
+        new_keys = {data[0]: masked_password for data in new_secrets}
 
         self._diff.append(EcsTaskDefinitionDiff(
             container[u'name'],
