@@ -4,6 +4,7 @@ import re
 import boto3
 from awacs.aws import PolicyDocument, Statement, Allow, Principal
 from awacs.sts import AssumeRole
+from awacs.ssm import GetParameters
 from cfn_flip import to_yaml
 from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub
@@ -19,7 +20,7 @@ from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
-from troposphere.iam import Role
+from troposphere.iam import Role, Policy
 
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
@@ -196,6 +197,36 @@ service is down',
             )
         ))
 
+        execution_role = self.template.add_resource(Role(
+            "ExecutionRole",
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Action=[AssumeRole],
+                        Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
+                    )
+                ]
+            ),
+            ManagedPolicyArns=[
+                'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+            ],
+            Policies=[
+                Policy(
+                    PolicyName=self.env + service_name + "ExecutionPolicy",
+                    PolicyDocument=PolicyDocument(
+                        Statement=[
+                            Statement(
+                                Effect=Allow,
+                                Action=[GetParameters],
+                                Resource=['arn:aws:ssm:{}:{}:parameter/{}/{}/*'.format(self.region, self.account_id, self.env, self.application_name)]
+                            )
+                        ]
+                    )
+                )
+            ]
+        ))
+
         launch_type_td = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
             launch_type_td = {
@@ -211,6 +242,7 @@ service is down',
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
+            ExecutionRoleArn=Ref(execution_role),
             **launch_type_td
         )
 

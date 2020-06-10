@@ -325,10 +325,6 @@ class EcsTaskDefinition(dict):
             self[u'taskRoleArn'] = role_arn
             self._diff.append(diff)
 
-    def set_execution_role_arn(self, account_id):
-        self[u'executionRoleArn'] = 'arn:aws:iam::{}:role/ecsTaskExecutionRole'.format(account_id)
-
-
 class EcsTaskDefinitionDiff(object):
     def __init__(self, container, field, value, old_value):
         self.container = container

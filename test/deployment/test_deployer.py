@@ -22,6 +22,7 @@ class TestDeployNewVersion(unittest.TestCase):
             'unmodified-key': 'value1', 'added-key': 'value2'}
 
         task_definition = EcsTaskDefinition({
+            'executionRoleArn': 'arn:aws:iam::1234:role/test-service-executionRole',
             'containerDefinitions': [
                 {
                     'name': 'test-service',
@@ -39,7 +40,7 @@ class TestDeployNewVersion(unittest.TestCase):
         })
 
         expected_task_definition = EcsTaskDefinition({
-            'executionRoleArn': 'arn:aws:iam::1234:role/ecsTaskExecutionRole',
+            'executionRoleArn': 'arn:aws:iam::1234:role/test-service-executionRole',
             'containerDefinitions': [
                 {
                     'name': 'test-service',

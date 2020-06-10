@@ -32,8 +32,6 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
     else:
         task_definition.set_images(deploy_version_tag)
 
-    task_definition.set_execution_role_arn(account_id)
-
     for container in task_definition.containers:
         task_definition.apply_container_environment(
             container, region, account_id, env_name, service_name, env_config)
