@@ -15,6 +15,10 @@ class TestEcsTaskDefinition(unittest.TestCase):
                 'environment': [
                     {'name': 'username', 'value': 'oldUser'},
                 ],
+                'secrets': [
+                    {'name': 'existing-key',
+                        'valueFrom': 'arn:aws:ssm:region-1:1234:test-service/existing-key'},
+                ]
             }
         ]})
 

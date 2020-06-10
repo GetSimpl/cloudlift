@@ -283,29 +283,23 @@ class EcsTaskDefinition(dict):
                 self._diff.append(diff)
                 container[u'command'] = [new_command]
 
-    def apply_container_environment(self, container, region, account_id, service_name, new_environment):
-        old_environment = {
-            env['name']: env['value'] for env in container.get(
-                'environment',
-                {}
-            )
-        }
-        merged_environment = {var[0]: var[1] for var in new_environment}
+    def apply_container_environment(self, container, region, account_id, service_name, new_secrets):
+        old_keys = {data['name']: '' for data in container.get('secrets', {})}
+        new_keys = {data[0]: '****' for data in new_secrets}
 
-        diff = EcsTaskDefinitionDiff(
+        self._diff.append(EcsTaskDefinitionDiff(
             container[u'name'],
             u'environment',
-            merged_environment,
-            old_environment
-        )
-        self._diff.append(diff)
+            new_keys,
+            old_keys,
+        ))
 
         container[u'environment'] = []
         container[u'secrets'] = [
             {
-                "name": e,
-                "valueFrom": 'arn:aws:ssm:{}:{}:{}/{}'.format(region, account_id, service_name, e)
-            } for e in merged_environment
+                "name": e[0],
+                "valueFrom": 'arn:aws:ssm:{}:{}:{}/{}'.format(region, account_id, service_name, e[0])
+            } for e in new_secrets
         ]
 
     def validate_container_options(self, **container_options):

@@ -25,7 +25,11 @@ class TestDeployNewVersion(unittest.TestCase):
             'containerDefinitions': [
                 {
                     'name': 'test-service',
-                    'image': 'test-service:sha0'
+                    'image': 'test-service:sha0',
+                    'secrets': [
+                        {'name': 'existing-key',
+                            'valueFrom': 'arn:aws:ssm:region-a:1234:test-service/existing-key'},
+                    ],
                 }
             ]
         })
