@@ -31,9 +31,13 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
         )
     else:
         task_definition.set_images(deploy_version_tag)
+
+    task_definition.set_execution_role_arn(account_id)
+
     for container in task_definition.containers:
         task_definition.apply_container_environment(
-            container, region, account_id, service_name, env_config)
+            container, region, account_id, env_name, service_name, env_config)
+
     print_task_diff(ecs_service_name, task_definition.diff, color)
     new_task_definition = deployment.update_task_definition(task_definition)
     response = deploy_and_wait(deployment, new_task_definition, color)

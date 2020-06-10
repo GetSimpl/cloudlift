@@ -53,12 +53,11 @@ class EcsClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
-    def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
+    def register_task_definition(self, family, containers, volumes, role_arn, execution_role_arn, cpu=False, memory=False,
                                  requires_compatibilities=[], network_mode='bridge'):
         fargate_td = {}
         if 'FARGATE' in requires_compatibilities:
             fargate_td = {
-                'executionRoleArn': execution_role_arn or u'',
                 'requiresCompatibilities': requires_compatibilities or [],
                 'networkMode': network_mode or u'',
                 'cpu': cpu,
@@ -69,6 +68,7 @@ class EcsClient(object):
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn or u'',
+            executionRoleArn=execution_role_arn,
             **fargate_td
         )
 
@@ -216,6 +216,10 @@ class EcsTaskDefinition(dict):
         return self.get(u'revision')
 
     @property
+    def execution_role_arn(self):
+        return self.get(u'executionRoleArn')
+
+    @property
     def family_revision(self):
         return '%s:%d' % (self.get(u'family'), self.get(u'revision'))
 
@@ -283,10 +287,9 @@ class EcsTaskDefinition(dict):
                 self._diff.append(diff)
                 container[u'command'] = [new_command]
 
-    def apply_container_environment(self, container, region, account_id, service_name, new_secrets):
+    def apply_container_environment(self, container, region, account_id, environment, service_name, new_secrets):
         masked_password = '****'
-        old_keys = {
-            data['name']: masked_password for data in container.get('secrets', {})}
+        old_keys = {data['name']: masked_password for data in container.get('secrets', {})}
         new_keys = {data[0]: masked_password for data in new_secrets}
 
         self._diff.append(EcsTaskDefinitionDiff(
@@ -300,7 +303,7 @@ class EcsTaskDefinition(dict):
         container[u'secrets'] = [
             {
                 "name": e[0],
-                "valueFrom": 'arn:aws:ssm:{}:{}:{}/{}'.format(region, account_id, service_name, e[0])
+                "valueFrom": 'arn:aws:ssm:{}:{}:parameter/{}/{}/{}'.format(region, account_id, environment, service_name, e[0])
             } for e in new_secrets
         ]
 
@@ -321,6 +324,9 @@ class EcsTaskDefinition(dict):
             )
             self[u'taskRoleArn'] = role_arn
             self._diff.append(diff)
+
+    def set_execution_role_arn(self, account_id):
+        self[u'executionRoleArn'] = 'arn:aws:iam::{}:role/ecsTaskExecutionRole'.format(account_id)
 
 
 class EcsTaskDefinitionDiff(object):
@@ -401,7 +407,6 @@ class EcsAction(object):
         if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
 
             fargate_td = {
-                'execution_role_arn': task_definition.execution_role_arn or u'',
                 'requires_compatibilities': task_definition.requires_compatibilities or [],
                 'network_mode': task_definition.network_mode or u'',
                 'cpu' : task_definition.cpu or u'',
@@ -413,6 +418,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
+            execution_role_arn=task_definition.execution_role_arn,
 
             **fargate_td
         )

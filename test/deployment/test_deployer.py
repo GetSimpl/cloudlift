@@ -26,25 +26,29 @@ class TestDeployNewVersion(unittest.TestCase):
                 {
                     'name': 'test-service',
                     'image': 'test-service:sha0',
+                    'environment': [
+                        { 'name': 'key1', 'value': 'value1' }
+                    ],
                     'secrets': [
                         {'name': 'deleted-key',
-                            'valueFrom': 'arn:aws:ssm:region-a:1234:test-service/deleted-key'},
-                        {'name': 'unmodified-key', 'valueFrom': 'arn:aws:ssm:region-a:1234:test-service/unmodified-key'},
+                            'valueFrom': 'arn:aws:ssm:region-a:1234:parameter/test/test-service/deleted-key'},
+                        {'name': 'unmodified-key', 'valueFrom': 'arn:aws:ssm:region-a:1234:parameter/test/test-service/unmodified-key'},
                     ],
                 }
             ]
         })
 
         expected_task_definition = EcsTaskDefinition({
+            'executionRoleArn': 'arn:aws:iam::1234:role/ecsTaskExecutionRole',
             'containerDefinitions': [
                 {
                     'name': 'test-service',
                     'image': 'test-service:sha1',
                     'environment': [],
                     'secrets': [
-                        {'name': 'unmodified-key', 'valueFrom': 'arn:aws:ssm:region-a:1234:test-service/unmodified-key'},
+                        {'name': 'unmodified-key', 'valueFrom': 'arn:aws:ssm:region-a:1234:parameter/test/test-service/unmodified-key'},
                         {'name': 'added-key',
-                            'valueFrom': 'arn:aws:ssm:region-a:1234:test-service/added-key'}
+                            'valueFrom': 'arn:aws:ssm:region-a:1234:parameter/test/test-service/added-key'}
                     ],
                 }
             ]

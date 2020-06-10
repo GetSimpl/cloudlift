@@ -8,6 +8,7 @@ class TestEcsTaskDefinition(unittest.TestCase):
         region = 'region-1'
         account_id = '1234'
         service_name = 'test-service'
+        environment = 'test'
 
         td = EcsTaskDefinition({'containerDefinitions': [
             {
@@ -26,19 +27,20 @@ class TestEcsTaskDefinition(unittest.TestCase):
 
         # Method call with a side-effect and no return-value.
         # Assertion has to be done on the side-effect
-        td.apply_container_environment(container, region, account_id, service_name, [
+        td.apply_container_environment(container, region, account_id, environment, service_name, [
             ('username', 'adminUser'), ('password', 'superSeretPassword'),
         ])
 
-        expected_task_definition = EcsTaskDefinition({'containerDefinitions': [
+        expected_task_definition = EcsTaskDefinition({
+            'containerDefinitions': [
             {
                 'name': 'hello-world',
                 'environment': [],
                 'secrets': [
                     {'name': 'username',
-                        'valueFrom': 'arn:aws:ssm:region-1:1234:test-service/username'},
+                        'valueFrom': 'arn:aws:ssm:region-1:1234:parameter/test/test-service/username'},
                     {'name': 'password',
-                        'valueFrom': 'arn:aws:ssm:region-1:1234:test-service/password'},
+                        'valueFrom': 'arn:aws:ssm:region-1:1234:parameter/test/test-service/password'},
                 ],
             }
         ]})
