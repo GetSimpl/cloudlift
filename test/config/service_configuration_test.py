@@ -113,3 +113,30 @@ class TestServiceConfiguration(object):
                         }
                     }
                 }
+
+
+    @mock_dynamodb2
+    def test_set_config_stop_timeout(self):
+        self.setup_existing_params()
+
+        store_object = ServiceConfiguration('test-service', 'dummy-staging')
+        get_response = store_object.get_config()
+
+        get_response["services"]["TestService"]["stop_timeout"] = 120
+        store_object.set_config(get_response)
+        update_response = store_object.get_config()
+
+        assert update_response == {
+                    "services": {
+                        "TestService": {
+                            "memory_reservation": 1000,
+                            "command": None,
+                            "http_interface": {
+                                "internal": True,
+                                "container_port": 80,
+                                "restrict_access_to": [u'0.0.0.0/0']
+                            },
+                            "stop_timeout": 120
+                        }
+                    }
+                }
