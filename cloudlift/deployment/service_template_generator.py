@@ -178,6 +178,9 @@ service is down',
                 )
             ]
 
+        if 'stop_timeout' in config:
+            container_definition_arguments['StopTimeout'] = int(config['stop_timeout'])
+
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
 

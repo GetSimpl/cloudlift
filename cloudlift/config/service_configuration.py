@@ -195,6 +195,9 @@ class ServiceConfiguration(object):
                         {"type": "string"},
                         {"type": "null"}
                     ]
+                },
+                "stop_timeout": {
+                    "type": "number"
                 }
             },
             "required": ["memory_reservation", "command"]
