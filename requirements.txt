@@ -19,5 +19,5 @@ requests>=2.20.0
 six==1.10.0
 stringcase==1.0.6
 terminaltables==3.1.0
-troposphere>=2.4.1
+troposphere>=2.4.7
 awacs==0.9.6
