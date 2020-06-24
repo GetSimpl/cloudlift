@@ -13,7 +13,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition, SystemControl)
+                             PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -228,6 +228,13 @@ service is down',
             MinimumHealthyPercent=100,
             MaximumPercent=200
         )
+
+        placement_constraints = [
+            PlacementConstraint(
+                Type=constraint['type'], Expression=constraint['expression'])
+            for constraint in config['placement_constraints']
+        ] if 'placement_constraints' in config else []
+
         if 'http_interface' in config:
             alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
 
@@ -274,6 +281,7 @@ service is down',
                 DesiredCount=desired_count,
                 DependsOn=service_listener.title,
                 LaunchType=launch_type,
+                PlacementConstraints=placement_constraints,
                 **launch_type_svc,
             )
             self.template.add_output(
@@ -328,6 +336,7 @@ service is down',
                 DesiredCount=desired_count,
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
+                PlacementConstraints=placement_constraints,
                 **launch_type_svc
             )
             self.template.add_output(

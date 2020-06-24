@@ -147,6 +147,50 @@ class TestServiceConfiguration(object):
 
 
 class TestServiceConfigurationValidation(TestCase):
+
+    @patch("cloudlift.config.service_configuration.get_resource_for")
+    def test_set_config_placement_constraints(self, mock_get_resource_for):
+        mock_get_resource_for.return_value = MagicMock()
+
+        service = ServiceConfiguration('test-service', 'test')
+
+        try:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'placement_constraints': [
+                            {
+                                'type': 'memberOf',
+                                'expression': 'expr'
+                            }
+                        ]
+                    }
+                }
+            })
+        except UnrecoverableException as e:
+            self.fail('Exception thrown: {}'.format(e))
+
+        try:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'placement_constraints': [{
+                            'type': 'invalid'
+                        }]
+                    }
+                }
+            })
+            self.fail('Validation error expected but validation passed')
+        except UnrecoverableException as e:
+            self.assertTrue("'invalid' is not one of ['memberOf', 'distinctInstance']" in str(e))
+
+
     @patch("cloudlift.config.service_configuration.get_resource_for")
     def test_set_config_system_controls(self, mock_get_resource_for):
         mock_get_resource_for.return_value = MagicMock()

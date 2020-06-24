@@ -51,12 +51,13 @@ class ServiceConfiguration(object):
             current_configuration = self.get_config()
 
             updated_configuration = edit(
-                json.dumps(
+                text=json.dumps(
                     current_configuration,
                     indent=4,
                     sort_keys=True,
                     cls=DecimalEncoder
-                )
+                ),
+                extension=".json"
             )
 
             if updated_configuration is None:
@@ -199,6 +200,22 @@ class ServiceConfiguration(object):
                 "stop_timeout": {
                     "type": "number"
                 },
+                "placement_constraints": {
+                    "type": "array",
+                    "items": {
+                        "required": ["type"],
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["memberOf", "distinctInstance"],
+                            },
+                            "expression": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                },
                 "system_controls": {
                     "type": "array",
                     "items": {
@@ -239,8 +256,9 @@ class ServiceConfiguration(object):
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
+            errors = [str(i) for i in validation_error.relative_path]
             raise UnrecoverableException(validation_error.message + " in " +
-                    str(".".join(list(validation_error.relative_path))))
+                                         str(".".join(list(errors))))
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
