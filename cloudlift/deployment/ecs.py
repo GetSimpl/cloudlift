@@ -54,7 +54,7 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
-                                 requires_compatibilities=[], network_mode='bridge'):
+                                 requires_compatibilities=[], network_mode='bridge', placement_constraints=[]):
         fargate_td = {}
         if 'FARGATE' in requires_compatibilities:
             fargate_td = {
@@ -69,6 +69,7 @@ class EcsClient(object):
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn or u'',
+            placementConstraints=placement_constraints,
             **fargate_td
         )
 
@@ -222,6 +223,10 @@ class EcsTaskDefinition(dict):
     @property
     def diff(self):
         return self._diff
+
+    @property
+    def placement_constraints(self):
+        return self.get(u'placementConstraints')
 
     def get_overrides(self):
         override = dict()
@@ -431,7 +436,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
-
+            placement_constraints=task_definition.placement_constraints,
             **fargate_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
