@@ -627,6 +627,11 @@ for cluster for 15 minutes.',
             Value=Ref('SecurityGroupAlb'))
         )
         self.template.add_output(Output(
+            "SecurityGroupEc2Hosts",
+            Description="Security group ID for ECS Hosts",
+            Value=Ref('SecurityGroupEc2Hosts'))
+        )
+        self.template.add_output(Output(
             "MinInstances",
             Description="Minimum instances in cluster",
             Value=str(self.configuration['cluster']['min_instances']))
