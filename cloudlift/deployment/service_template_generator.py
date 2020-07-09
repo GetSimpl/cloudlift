@@ -15,8 +15,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
-from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
-from troposphere.elasticloadbalancingv2 import LoadBalancer as NLBLoadBalancer
+from troposphere.elasticloadbalancingv2 import LoadBalancer as ELBv2
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
@@ -406,169 +405,55 @@ service is down',
             }
         )
 
-    def _add_nlb(self, cd, service_name, config, launch_type):
-        sg_name = 'SG' + self.env + service_name
-        svc_nlb_sg = SecurityGroup(
-            re.sub(r'\W+', '', sg_name),
-            GroupName=self.env + '-' + service_name,
-            SecurityGroupIngress=self._generate_nlb_security_group_ingress(
-                config
-            ),
-            VpcId=Ref(self.vpc),
-            GroupDescription=Sub(service_name + "-nlb-sg")
-        )
-        self.template.add_resource(svc_nlb_sg)
-        nlb_name = service_name + pascalcase(self.env)
-        if config['udp_interface']['internal']:
-            nlb_subnets = [
-                Ref(self.private_subnet1),
-                Ref(self.private_subnet2)
-            ]
-            scheme = "internal"
-            nlb_name += 'Internal'
-            nlb_name = nlb_name[:32]
-            nlb = NLBLoadBalancer(
-                'NLB' + service_name,
-                Subnets=nlb_subnets,
-                SecurityGroups=[
-                    self.nlb_security_group,
-                    Ref(svc_nlb_sg)
-                ],
-                Name=nlb_name,
-                Tags=[
-                    {'Value': nlb_name, 'Key': 'Name'}
-                ],
-                Scheme=scheme,
-                Type="network"
-            )
-        else:
-            nlb_subnets = [
-                Ref(self.public_subnet1),
-                Ref(self.public_subnet2)
-            ]
-            nlb_name = nlb_name[:32]
-            nlb = NLBLoadBalancer(
-                'NLB' + service_name,
-                Subnets=nlb_subnets,
-                SecurityGroups=[
-                    self.nlb_security_group,
-                    Ref(svc_nlb_sg)
-                ],
-                Name=nlb_name,
-                Tags=[
-                    {'Value': nlb_name, 'Key': 'Name'}
-                ],
-                Type="network"
-            )
-
-        self.template.add_resource(nlb)
-
-        target_group_name = "TargetGroup" + service_name
-        if config['udp_interface']['internal']:
-            target_group_name = target_group_name + 'Internal'
-
-        target_group_config = {}
-        if launch_type == self.LAUNCH_TYPE_FARGATE:
-            target_group_config['TargetType'] = 'ip'
-
-        service_target_group = TargetGroup(
-            target_group_name,
-            HealthyThresholdCount=2,
-            HealthCheckIntervalSeconds=30,
-            TargetGroupAttributes=[
-                TargetGroupAttribute(
-                    Key='deregistration_delay.timeout_seconds',
-                    Value='30'
-                )
-            ],
-            VpcId=Ref(self.vpc),
-            Protocol="UDP",
-            Port=int(config['udp_interface']['container_port']),
-            HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
-            **target_group_config
-        )
-
-        self.template.add_resource(service_target_group)
-        # Note: This is a ECS Loadbalancer definition. Not an NLB.
-        # Defining this causes the target group to add a target to the correct
-        # port in correct ECS cluster instance for the service container.
-        lb = LoadBalancer(
-            ContainerName=cd.Name,
-            TargetGroupArn=Ref(service_target_group),
-            ContainerPort=int(config['udp_interface']['container_port'])
-        )
-        target_group_action = Action(
-            TargetGroupArn=Ref(target_group_name),
-            Type="forward"
-        )
-        service_listener = self._add_service_listener(
-            service_name,
-            target_group_action,
-            nlb,
-            config['udp_interface']['internal']
-        )
-        self._add_nlb_alarms(service_name, nlb)
-        return nlb, lb, service_listener, svc_nlb_sg
 
     def _add_alb(self, cd, service_name, config, launch_type):
         sg_name = 'SG' + self.env + service_name
+        protocol = 'http' if 'http_interface' in config else 'udp'
+        elb_config = config[f'{protocol}_interface']
         svc_alb_sg = SecurityGroup(
             re.sub(r'\W+', '', sg_name),
             GroupName=self.env + '-' + service_name,
             SecurityGroupIngress=self._generate_alb_security_group_ingress(
-                config
-            ),
+                elb_config, protocol),
             VpcId=Ref(self.vpc),
             GroupDescription=Sub(service_name + "-alb-sg")
         )
         self.template.add_resource(svc_alb_sg)
         alb_name = service_name + pascalcase(self.env)
-        if config['http_interface']['internal']:
+        if elb_config['internal']:
             alb_subnets = [
                 Ref(self.private_subnet1),
                 Ref(self.private_subnet2)
             ]
             scheme = "internal"
             alb_name += 'Internal'
-            alb_name = alb_name[:32]
-            alb = ALBLoadBalancer(
-                'ALB' + service_name,
-                Subnets=alb_subnets,
-                SecurityGroups=[
-                    self.alb_security_group,
-                    Ref(svc_alb_sg)
-                ],
-                Name=alb_name,
-                Tags=[
-                    {'Value': alb_name, 'Key': 'Name'}
-                ],
-                Scheme=scheme
-            )
         else:
+            scheme = 'internet-facing'
             alb_subnets = [
                 Ref(self.public_subnet1),
                 Ref(self.public_subnet2)
             ]
-            alb_name = alb_name[:32]
-            alb = ALBLoadBalancer(
-                'ALB' + service_name,
-                Subnets=alb_subnets,
-                SecurityGroups=[
-                    self.alb_security_group,
-                    Ref(svc_alb_sg)
-                ],
-                Name=alb_name,
-                Tags=[
-                    {'Value': alb_name, 'Key': 'Name'}
-                ]
-            )
+        alb_name = alb_name[:32]
+        elb = ELBv2(
+            'ALB' + service_name,
+            Subnets=alb_subnets,
+            SecurityGroups=[
+                self.alb_security_group,
+                Ref(svc_alb_sg)
+            ],
+            Name=alb_name,
+            Tags=[
+                {'Value': alb_name, 'Key': 'Name'}
+            ],
+            Scheme=scheme,
+            Type='application' if 'http_interface' in config else 'network'
+        )
 
-        self.template.add_resource(alb)
+        self.template.add_resource(elb)
 
         target_group_name = "TargetGroup" + service_name
-        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
-        if config['http_interface']['internal']:
+        health_check_path = elb_config['health_check_path'] if 'health_check_path' in elb_config else "/elb-check"
+        if elb_config['internal']:
             target_group_name = target_group_name + 'Internal'
 
         target_group_config = {}
@@ -589,7 +474,7 @@ service is down',
             VpcId=Ref(self.vpc),
             Protocol="HTTP",
             Matcher=Matcher(HttpCode="200-399"),
-            Port=int(config['http_interface']['container_port']),
+            Port=int(elb_config['container_port']),
             HealthCheckTimeoutSeconds=10,
             UnhealthyThresholdCount=3,
             **target_group_config
@@ -602,7 +487,7 @@ service is down',
         lb = LoadBalancer(
             ContainerName=cd.Name,
             TargetGroupArn=Ref(service_target_group),
-            ContainerPort=int(config['http_interface']['container_port'])
+            ContainerPort=int(elb_config['container_port'])
         )
         target_group_action = Action(
             TargetGroupArn=Ref(target_group_name),
@@ -611,11 +496,11 @@ service is down',
         service_listener = self._add_service_listener(
             service_name,
             target_group_action,
-            alb,
-            config['http_interface']['internal']
+            elb,
+            elb_config['internal']
         )
-        self._add_alb_alarms(service_name, alb)
-        return alb, lb, service_listener, svc_alb_sg
+        self._add_elb_alarms(service_name, elb)
+        return elb, lb, service_listener, svc_alb_sg
 
     def _add_service_listener(self, service_name, target_group_action,
                               alb, internal):
@@ -661,14 +546,14 @@ service is down',
             self.template.add_resource(http_redirection_listener)
         return service_listener
 
-    def _add_nlb_alarms(self, service_name, nlb):
+    def _add_elb_alarms(self, service_name, elb_v2):
         unhealthy_alarm = Alarm(
             'ElbUnhealthyHostAlarm' + service_name,
             EvaluationPeriods=1,
             Dimensions=[
                 MetricDimension(
                     Name='LoadBalancer',
-                    Value=GetAtt(nlb, 'LoadBalancerFullName')
+                    Value=GetAtt(elb_v2, 'LoadBalancerFullName')
                 )
             ],
             AlarmActions=[Ref(self.notification_sns_arn)],
@@ -689,7 +574,7 @@ service is down',
             Dimensions=[
                 MetricDimension(
                     Name='LoadBalancer',
-                    Value=GetAtt(nlb, 'LoadBalancerFullName')
+                    Value=GetAtt(elb_v2, 'LoadBalancerFullName')
                 )
             ],
             AlarmActions=[Ref(self.notification_sns_arn)],
@@ -705,107 +590,65 @@ had reached its maximum number of connections.',
             MetricName='RejectedConnectionCount',
             TreatMissingData='notBreaching'
         )
-        self.template.add_resource(rejected_connections_alarm)
-
-    def _add_alb_alarms(self, service_name, alb):
-        unhealthy_alarm = Alarm(
-            'ElbUnhealthyHostAlarm' + service_name,
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(
-                    Name='LoadBalancer',
-                    Value=GetAtt(alb, 'LoadBalancerFullName')
-                )
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            OKActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Triggers if any host is marked unhealthy',
-            Namespace='AWS/ApplicationELB',
-            Period=60,
-            ComparisonOperator='GreaterThanOrEqualToThreshold',
-            Statistic='Sum',
-            Threshold='1',
-            MetricName='UnHealthyHostCount',
-            TreatMissingData='notBreaching'
-        )
-        self.template.add_resource(unhealthy_alarm)
-        rejected_connections_alarm = Alarm(
-            'ElbRejectedConnectionsAlarm' + service_name,
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(
-                    Name='LoadBalancer',
-                    Value=GetAtt(alb, 'LoadBalancerFullName')
-                )
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            OKActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Triggers if load balancer has \
-rejected connections because the load balancer \
-had reached its maximum number of connections.',
-            Namespace='AWS/ApplicationELB',
-            Period=60,
-            ComparisonOperator='GreaterThanOrEqualToThreshold',
-            Statistic='Sum',
-            Threshold='1',
-            MetricName='RejectedConnectionCount',
-            TreatMissingData='notBreaching'
-        )
-        self.template.add_resource(rejected_connections_alarm)
-        http_code_elb5xx_alarm = Alarm(
-            'ElbHTTPCodeELB5xxAlarm' + service_name,
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(
-                    Name='LoadBalancer',
-                    Value=GetAtt(alb, 'LoadBalancerFullName')
-                )
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            OKActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Triggers if 5xx response originated \
-from load balancer',
-            Namespace='AWS/ApplicationELB',
-            Period=60,
-            ComparisonOperator='GreaterThanOrEqualToThreshold',
-            Statistic='Sum',
-            Threshold='3',
-            MetricName='HTTPCode_ELB_5XX_Count',
-            TreatMissingData='notBreaching'
-        )
-        self.template.add_resource(http_code_elb5xx_alarm)
+        if elb_v2.Type == "network":
+            self.template.add_resource(rejected_connections_alarm)
+            http_code_elb5xx_alarm = Alarm(
+                'ElbHTTPCodeELB5xxAlarm' + service_name,
+                EvaluationPeriods=1,
+                Dimensions=[
+                    MetricDimension(
+                        Name='LoadBalancer',
+                        Value=GetAtt(elb_v2, 'LoadBalancerFullName')
+                    )
+                ],
+                AlarmActions=[Ref(self.notification_sns_arn)],
+                OKActions=[Ref(self.notification_sns_arn)],
+                AlarmDescription='Triggers if 5xx response originated \
+    from load balancer',
+                Namespace='AWS/ApplicationELB',
+                Period=60,
+                ComparisonOperator='GreaterThanOrEqualToThreshold',
+                Statistic='Sum',
+                Threshold='3',
+                MetricName='HTTPCode_ELB_5XX_Count',
+                TreatMissingData='notBreaching'
+            )
+            self.template.add_resource(http_code_elb5xx_alarm)
 
     def _generate_nlb_security_group_ingress(self, config):
         ingress_rules = []
         for access_ip in config['udp_interface']['restrict_access_to']:
             if access_ip.find('/') == -1:
                 access_ip = access_ip + '/32'
-            port = config['udp_interface']['restrict_access_to']['container_port']
-            ingress_rules.append({
-                'ToPort': port,
-                'IpProtocol': 'UDP',
-                'FromPort': port,
-                'CidrIp': access_ip
-            })
+
         return ingress_rules
 
-    def _generate_alb_security_group_ingress(self, config):
+    def _generate_alb_security_group_ingress(self, config, protocol='http'):
         ingress_rules = []
-        for access_ip in config['http_interface']['restrict_access_to']:
+        for access_ip in config['restrict_access_to']:
             if access_ip.find('/') == -1:
                 access_ip = access_ip + '/32'
-            ingress_rules.append({
-                'ToPort': 80,
-                'IpProtocol': 'TCP',
-                'FromPort': 80,
-                'CidrIp': access_ip
-            })
-            ingress_rules.append({
-                'ToPort': 443,
-                'IpProtocol': 'TCP',
-                'FromPort': 443,
-                'CidrIp': access_ip
-            })
+            if protocol=='http':
+                ingress_rules.append({
+                    'ToPort': 80,
+                    'IpProtocol': 'TCP',
+                    'FromPort': 80,
+                    'CidrIp': access_ip
+                })
+                ingress_rules.append({
+                    'ToPort': 443,
+                    'IpProtocol': 'TCP',
+                    'FromPort': 443,
+                    'CidrIp': access_ip
+                })
+            else:
+                port = config['restrict_access_to']['container_port']
+                ingress_rules.append({
+                    'ToPort': port,
+                    'IpProtocol': 'UDP',
+                    'FromPort': port,
+                    'CidrIp': access_ip
+                })
         return ingress_rules
 
     def _add_ecs_service_iam_role(self):
