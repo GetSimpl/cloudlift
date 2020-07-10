@@ -169,11 +169,12 @@ service is down',
             "Cpu": 0
         }
 
-        if 'http_interface' in config:
+        if 'http_interface' in config or 'udp_interface' in config:
             container_definition_arguments['PortMappings'] = [
                 PortMapping(
                     ContainerPort=int(
-                        config['http_interface']['container_port']
+                        config['http_interface']['container_port'] if 'http_interface' in config else
+                        config['udp_interface']['container_port']
                     )
                 )
             ]
@@ -405,7 +406,6 @@ service is down',
             }
         )
 
-
     def _add_alb(self, cd, service_name, config, launch_type):
         sg_name = 'SG' + self.env + service_name
         protocol = 'http' if 'http_interface' in config else 'udp'
@@ -440,7 +440,7 @@ service is down',
             SecurityGroups=[
                 self.alb_security_group,
                 Ref(svc_alb_sg)
-            ],
+            ] if protocol == 'http' else [],
             Name=alb_name,
             Tags=[
                 {'Value': alb_name, 'Key': 'Name'}
@@ -459,10 +459,12 @@ service is down',
         target_group_config = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
             target_group_config['TargetType'] = 'ip'
+        if protocol == 'http':
+            target_group_config['Matcher'] = Matcher(HttpCode="200-399")
+            target_group_config['HealthCheckPath'] = health_check_path
 
         service_target_group = TargetGroup(
             target_group_name,
-            HealthCheckPath=health_check_path,
             HealthyThresholdCount=2,
             HealthCheckIntervalSeconds=30,
             TargetGroupAttributes=[
@@ -472,11 +474,10 @@ service is down',
                 )
             ],
             VpcId=Ref(self.vpc),
-            Protocol="HTTP",
-            Matcher=Matcher(HttpCode="200-399"),
+            Protocol=protocol.upper(),
             Port=int(elb_config['container_port']),
             HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
+            UnhealthyThresholdCount=2,
             **target_group_config
         )
 
@@ -493,12 +494,25 @@ service is down',
             TargetGroupArn=Ref(target_group_name),
             Type="forward"
         )
-        service_listener = self._add_service_listener(
-            service_name,
-            target_group_action,
-            elb,
-            elb_config['internal']
-        )
+
+        if protocol == 'http':
+            service_listener = self._add_service_listener(
+                service_name,
+                target_group_action,
+                elb,
+                elb_config['internal'],
+                protocol
+            )
+        elif protocol == 'udp':
+            service_listener = Listener(
+                "LoadBalancerListener" + service_name,
+                Protocol="UDP",
+                DefaultActions=[target_group_action],
+                LoadBalancerArn=Ref(elb),
+                Port=int(config['udp_interface']['container_port']),
+            )
+            self.template.add_resource(service_listener)
+
         self._add_elb_alarms(service_name, elb)
         return elb, lb, service_listener, svc_alb_sg
 
@@ -615,20 +629,12 @@ had reached its maximum number of connections.',
             )
             self.template.add_resource(http_code_elb5xx_alarm)
 
-    def _generate_nlb_security_group_ingress(self, config):
-        ingress_rules = []
-        for access_ip in config['udp_interface']['restrict_access_to']:
-            if access_ip.find('/') == -1:
-                access_ip = access_ip + '/32'
-
-        return ingress_rules
-
     def _generate_alb_security_group_ingress(self, config, protocol='http'):
         ingress_rules = []
         for access_ip in config['restrict_access_to']:
             if access_ip.find('/') == -1:
                 access_ip = access_ip + '/32'
-            if protocol=='http':
+            if protocol == 'http':
                 ingress_rules.append({
                     'ToPort': 80,
                     'IpProtocol': 'TCP',
@@ -642,11 +648,11 @@ had reached its maximum number of connections.',
                     'CidrIp': access_ip
                 })
             else:
-                port = config['restrict_access_to']['container_port']
+                port = config['container_port']
                 ingress_rules.append({
-                    'ToPort': port,
+                    'ToPort': int(port),
                     'IpProtocol': 'UDP',
-                    'FromPort': port,
+                    'FromPort': int(port),
                     'CidrIp': access_ip
                 })
         return ingress_rules
