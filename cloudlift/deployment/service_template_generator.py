@@ -221,7 +221,7 @@ service is down',
             MaximumPercent=200
         )
         if 'udp_interface' in config:
-            nlb, lb, service_listener, nlb_sg = self._add_nlb(cd, service_name, config, launch_type)
+            nlb, lb, service_listener, nlb_sg = self._add_alb(cd, service_name, config, launch_type)
 
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
