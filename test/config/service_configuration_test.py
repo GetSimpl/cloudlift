@@ -57,7 +57,8 @@ class TestServiceConfiguration(object):
                             "http_interface": {
                                 "internal": True,
                                 "container_port": 80,
-                                "restrict_access_to": ["0.0.0.0/0"]
+                                "restrict_access_to": ["0.0.0.0/0"],
+                                "alb_enabled": True,
                             }
                         }
                     }
@@ -87,7 +88,8 @@ class TestServiceConfiguration(object):
                             "http_interface": {
                                 "internal": True,
                                 "container_port": 80,
-                                "restrict_access_to": [u'0.0.0.0/0']
+                                "restrict_access_to": [u'0.0.0.0/0'],
+                                "alb_enabled": True,
                             }
                         }
                     }
@@ -112,7 +114,8 @@ class TestServiceConfiguration(object):
                             "http_interface": {
                                 "internal": True,
                                 "container_port": 80,
-                                "restrict_access_to": [u"123.123.123.123/32"]
+                                "restrict_access_to": [u"123.123.123.123/32"],
+                                "alb_enabled": True,
                             }
                         }
                     }
@@ -138,7 +141,8 @@ class TestServiceConfiguration(object):
                             "http_interface": {
                                 "internal": True,
                                 "container_port": 80,
-                                "restrict_access_to": [u'0.0.0.0/0']
+                                "restrict_access_to": [u'0.0.0.0/0'],
+                                "alb_enabled": True,
                             },
                             "stop_timeout": 120
                         }
@@ -190,7 +194,6 @@ class TestServiceConfigurationValidation(TestCase):
         except UnrecoverableException as e:
             self.assertTrue("'invalid' is not one of ['memberOf', 'distinctInstance']" in str(e))
 
-
     @patch("cloudlift.config.service_configuration.get_resource_for")
     def test_set_config_system_controls(self, mock_get_resource_for):
         mock_get_resource_for.return_value = MagicMock()
@@ -230,3 +233,28 @@ class TestServiceConfigurationValidation(TestCase):
             self.fail('Validation error expected but validation passed')
         except UnrecoverableException as e:
             self.assertTrue("'invalid' is not of type 'array'" in str(e))
+
+    @patch("cloudlift.config.service_configuration.get_resource_for")
+    def test_set_config_http_interface(self, mock_get_resource_for):
+        mock_get_resource_for.return_value = MagicMock()
+
+        service = ServiceConfiguration('test-service', 'test')
+
+        try:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'http_interface': {
+                            'internal': True,
+                            'container_port': 8080,
+                            'restrict_access_to': ['0.0.0.0/0'],
+                            'alb_enabled': True
+                        }
+                    }
+                }
+            })
+        except UnrecoverableException as e:
+            self.fail('Exception thrown: {}'.format(e))

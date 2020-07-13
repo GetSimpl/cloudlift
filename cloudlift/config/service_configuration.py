@@ -151,6 +151,9 @@ class ServiceConfiguration(object):
                         "internal": {
                             "type": "boolean"
                         },
+                        "alb_enabled": {
+                            "type": "boolean",
+                        },
                         "restrict_access_to": {
                             "type": "array",
                             "items": {
@@ -168,7 +171,8 @@ class ServiceConfiguration(object):
                     "required": [
                         "internal",
                         "restrict_access_to",
-                        "container_port"
+                        "container_port",
+                        "alb_enabled"
                     ]
                 },
                 "memory_reservation": {
@@ -267,6 +271,7 @@ class ServiceConfiguration(object):
                 pascalcase(self.service_name): {
                     u'http_interface': {
                         u'internal': False,
+                        u'alb_enabled': True,
                         u'restrict_access_to': [u'0.0.0.0/0'],
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
