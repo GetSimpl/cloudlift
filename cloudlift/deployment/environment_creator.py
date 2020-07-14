@@ -11,6 +11,7 @@ from cloudlift.deployment.changesets import create_change_set
 from cloudlift.deployment.cluster_template_generator import ClusterTemplateGenerator
 from cloudlift.config.logging import log, log_bold, log_err
 from cloudlift.deployment.progress import get_stack_events, print_new_events
+from cloudlift.deployment.cloud_formation_stack import prepare_stack_options_for_template
 
 
 class EnvironmentCreator(object):
@@ -49,9 +50,10 @@ class EnvironmentCreator(object):
                 self.client,
                 self.cluster_name
             )
+            options = prepare_stack_options_for_template(
+                environment_stack_template_body, self.environment, self.cluster_name)
             environment_stack = self.client.create_stack(
                 StackName=self.cluster_name,
-                TemplateBody=environment_stack_template_body,
                 Parameters=[
                     {
                         'ParameterKey': 'KeyPair',
@@ -64,10 +66,11 @@ class EnvironmentCreator(object):
                 ],
                 OnFailure='DO_NOTHING',
                 Capabilities=['CAPABILITY_NAMED_IAM'],
+                **options,
             )
             log_bold("Submitted to cloudformation. Checking progress...")
             self.__print_progress()
-            log_bold(self.cluster_name+" stack created. ID: " +
+            log_bold(self.cluster_name + " stack created. ID: " +
                      environment_stack['StackId'])
 
     def run_update(self, update_ecs_agents):
