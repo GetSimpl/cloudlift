@@ -15,6 +15,7 @@ from cloudlift.deployment.changesets import create_change_set
 from cloudlift.config.logging import log, log_bold, log_err
 from cloudlift.deployment.progress import get_stack_events, print_new_events
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
+from cloudlift.deployment.cloud_formation_stack import prepare_stack_options_for_template
 
 
 class ServiceCreator(object):
@@ -50,15 +51,17 @@ class ServiceCreator(object):
         service_template_body = template_generator.generate_service()
 
         try:
+            options = prepare_stack_options_for_template(
+                service_template_body, self.environment, self.stack_name)
             self.client.create_stack(
                 StackName=self.stack_name,
-                TemplateBody=service_template_body,
                 Parameters=[{
                     'ParameterKey': 'Environment',
                     'ParameterValue': self.environment,
                 }],
                 OnFailure='DO_NOTHING',
                 Capabilities=['CAPABILITY_NAMED_IAM'],
+                **options,
             )
             log_bold("Submitted to cloudformation. Checking progress...")
             self._print_progress()

@@ -5,6 +5,7 @@ from time import sleep
 import click
 
 from cloudlift.config.logging import log, log_bold, log_err
+from cloudlift.deployment.cloud_formation_stack import prepare_stack_options_for_template
 
 
 def create_change_set(client, service_template_body, stack_name,
@@ -17,13 +18,14 @@ def create_change_set(client, service_template_body, stack_name,
             'ParameterKey': 'KeyPair',
             'ParameterValue': key_name
         })
+    options = prepare_stack_options_for_template(service_template_body, environment, stack_name)
     create_change_set_res = client.create_change_set(
         StackName=stack_name,
         ChangeSetName="cg"+uuid.uuid4().hex,
-        TemplateBody=service_template_body,
         Parameters=change_set_parameters,
         Capabilities=['CAPABILITY_NAMED_IAM'],
-        ChangeSetType='UPDATE'
+        ChangeSetType='UPDATE',
+        **options,
     )
     log("Changeset creation initiated. Checking the progress...")
     change_set = client.describe_change_set(

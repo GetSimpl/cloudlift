@@ -237,20 +237,26 @@ service is down',
         )
 
         if 'http_interface' in config:
-            alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
+            lb, target_group_name = self._add_ecs_lb(cd, service_name, config, launch_type)
+            alb_enabled = 'alb_enabled' in config['http_interface'] and config['http_interface']['alb_enabled']
+            if alb_enabled:
+                alb, service_listener, alb_sg = self._add_alb(service_name, config, target_group_name)
 
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
+                security_group_ingress = {
+                    'IpProtocol': 'TCP',
+                    'ToPort': int(config['http_interface']['container_port']),
+                    'FromPort': int(config['http_interface']['container_port']),
+                }
+                if alb_enabled:
+                    security_group_ingress['SourceSecurityGroupId'] = Ref(alb_sg)
+
                 service_security_group = SecurityGroup(
                     pascalcase("FargateService" + self.env + service_name),
                     GroupName=pascalcase("FargateService" + self.env + service_name),
-                    SecurityGroupIngress=[{
-                        'IpProtocol': 'TCP',
-                        'SourceSecurityGroupId': Ref(alb_sg),
-                        'ToPort': int(config['http_interface']['container_port']),
-                        'FromPort': int(config['http_interface']['container_port']),
-                    }],
+                    SecurityGroupIngress=[security_group_ingress],
                     VpcId=Ref(self.vpc),
                     GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
@@ -274,16 +280,21 @@ service is down',
                     'Role': Ref(self.ecs_service_role),
                     'PlacementStrategies': self.PLACEMENT_STRATEGIES
                 }
+
+            if alb_enabled:
+                print(service_listener.title)
+                launch_type_svc['DependsOn'] = service_listener.title
+
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
-                DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
+
             self.template.add_output(
                 Output(
                     service_name + 'EcsServiceName',
@@ -291,14 +302,17 @@ service is down',
                     Value=GetAtt(svc, 'Name')
                 )
             )
-            self.template.add_output(
-                Output(
-                    service_name + "URL",
-                    Description="The URL at which the service is accessible",
-                    Value=Sub("https://${" + alb.name + ".DNSName}")
-                )
-            )
+
             self.template.add_resource(svc)
+
+            if alb_enabled:
+                self.template.add_output(
+                    Output(
+                        service_name + "URL",
+                        Description="The URL at which the service is accessible",
+                        Value=Sub("https://${" + alb.name + ".DNSName}")
+                    )
+                )
         else:
             launch_type_svc = {}
             if launch_type == self.LAUNCH_TYPE_FARGATE:
@@ -358,7 +372,48 @@ service is down',
             }
         )
 
-    def _add_alb(self, cd, service_name, config, launch_type):
+    def _add_ecs_lb(self, cd, service_name, config, launch_type):
+        target_group_name = "TargetGroup" + service_name
+        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config[
+            'http_interface'] else "/elb-check"
+        if config['http_interface']['internal']:
+            target_group_name = target_group_name + 'Internal'
+
+        target_group_config = {}
+        if launch_type == self.LAUNCH_TYPE_FARGATE:
+            target_group_config['TargetType'] = 'ip'
+
+        service_target_group = TargetGroup(
+            target_group_name,
+            HealthCheckPath=health_check_path,
+            HealthyThresholdCount=2,
+            HealthCheckIntervalSeconds=30,
+            TargetGroupAttributes=[
+                TargetGroupAttribute(
+                    Key='deregistration_delay.timeout_seconds',
+                    Value='30'
+                )
+            ],
+            VpcId=Ref(self.vpc),
+            Protocol="HTTP",
+            Matcher=Matcher(HttpCode="200-399"),
+            Port=int(config['http_interface']['container_port']),
+            HealthCheckTimeoutSeconds=10,
+            UnhealthyThresholdCount=3,
+            **target_group_config
+        )
+
+        self.template.add_resource(service_target_group)
+
+        lb = LoadBalancer(
+            ContainerName=cd.Name,
+            TargetGroupArn=Ref(service_target_group),
+            ContainerPort=int(config['http_interface']['container_port'])
+        )
+
+        return lb, target_group_name
+
+    def _add_alb(self, service_name, config, target_group_name):
         sg_name = 'SG' + self.env + service_name
         svc_alb_sg = SecurityGroup(
             re.sub(r'\W+', '', sg_name),
@@ -370,6 +425,7 @@ service is down',
             GroupDescription=Sub(service_name + "-alb-sg")
         )
         self.template.add_resource(svc_alb_sg)
+
         alb_name = service_name + pascalcase(self.env)
         if config['http_interface']['internal']:
             alb_subnets = [
@@ -413,44 +469,6 @@ service is down',
 
         self.template.add_resource(alb)
 
-        target_group_name = "TargetGroup" + service_name
-        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
-        if config['http_interface']['internal']:
-            target_group_name = target_group_name + 'Internal'
-
-        target_group_config = {}
-        if launch_type == self.LAUNCH_TYPE_FARGATE:
-            target_group_config['TargetType'] = 'ip'
-
-        service_target_group = TargetGroup(
-            target_group_name,
-            HealthCheckPath=health_check_path,
-            HealthyThresholdCount=2,
-            HealthCheckIntervalSeconds=30,
-            TargetGroupAttributes=[
-                TargetGroupAttribute(
-                    Key='deregistration_delay.timeout_seconds',
-                    Value='30'
-                )
-            ],
-            VpcId=Ref(self.vpc),
-            Protocol="HTTP",
-            Matcher=Matcher(HttpCode="200-399"),
-            Port=int(config['http_interface']['container_port']),
-            HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
-            **target_group_config
-        )
-
-        self.template.add_resource(service_target_group)
-        # Note: This is a ECS Loadbalancer definition. Not an ALB.
-        # Defining this causes the target group to add a target to the correct
-        # port in correct ECS cluster instance for the service container.
-        lb = LoadBalancer(
-            ContainerName=cd.Name,
-            TargetGroupArn=Ref(service_target_group),
-            ContainerPort=int(config['http_interface']['container_port'])
-        )
         target_group_action = Action(
             TargetGroupArn=Ref(target_group_name),
             Type="forward"
@@ -462,7 +480,7 @@ service is down',
             config['http_interface']['internal']
         )
         self._add_alb_alarms(service_name, alb)
-        return alb, lb, service_listener, svc_alb_sg
+        return alb, service_listener, svc_alb_sg
 
     def _add_service_listener(self, service_name, target_group_action,
                               alb, internal):

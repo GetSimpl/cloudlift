@@ -2,15 +2,35 @@ import boto3
 from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import EnvironmentConfiguration
-from cloudlift.config.logging import log_err
+
+local_cache = {}
+
 
 def get_region_for_environment(environment):
-    if environment:
-        return EnvironmentConfiguration(environment).get_config()[environment]['region']
-    else:
-        # Get the region from the AWS credentials used to execute cloudlift
-        aws_session = boto3.session.Session()
-        return aws_session.region_name
+    global local_cache
+    if 'region' not in local_cache:
+        if environment:
+            local_cache['region'] = EnvironmentConfiguration(environment).get_config()[environment]['region']
+        else:
+            # Get the region from the AWS credentials used to execute cloudlift
+            aws_session = boto3.session.Session()
+            local_cache['region'] = aws_session.region_name
+
+    return local_cache['region']
+
+
+def get_service_templates_bucket_for_environment(environment):
+    global local_cache
+
+    if 'bucket' not in local_cache:
+        config = EnvironmentConfiguration(environment).get_config()
+
+        if 'service_templates_bucket' not in config[environment]:
+            return None
+
+        local_cache['bucket'] = config[environment]['service_templates_bucket']
+
+    return local_cache['bucket']
 
 
 def get_client_for(resource, environment):
