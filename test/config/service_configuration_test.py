@@ -258,3 +258,23 @@ class TestServiceConfigurationValidation(TestCase):
             })
         except UnrecoverableException as e:
             self.fail('Exception thrown: {}'.format(e))
+
+    @patch("cloudlift.config.service_configuration.get_resource_for")
+    def test_log_group_name_to_contain_logs_valid(self, mock_get_resource_for):
+        mock_get_resource_for.return_value = MagicMock()
+
+        service = ServiceConfiguration('test-service', 'test')
+
+        try:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'use_service_specific_log_group': True
+                    }
+                }
+            })
+        except UnrecoverableException as e:
+            self.fail('Exception thrown: {}'.format(e))

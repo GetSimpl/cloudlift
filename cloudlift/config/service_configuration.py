@@ -233,7 +233,10 @@ class ServiceConfiguration(object):
                             }
                         }
                     },
-                }
+                },
+                "use_service_specific_log_group":{
+                    "type": "boolean",
+                },
             },
             "required": ["memory_reservation", "command"]
         }

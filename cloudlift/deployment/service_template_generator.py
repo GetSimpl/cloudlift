@@ -5,7 +5,7 @@ import boto3
 from awacs.aws import PolicyDocument, Statement, Allow, Principal
 from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
-from stringcase import pascalcase
+from stringcase import pascalcase, spinalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
@@ -20,7 +20,7 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
 from troposphere.iam import Role
-
+from troposphere.logs import LogGroup
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
 from cloudlift.config import DecimalEncoder
@@ -29,7 +29,7 @@ from cloudlift.deployment.deployer import build_config
 from cloudlift.deployment.ecs import DeployAction, EcsClient
 from cloudlift.config.logging import log, log_bold
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
-from cloudlift.deployment.template_generator import TemplateGenerator
+from cloudlift.deployment.template_generator import TemplateGenerator, LOG_RETENTION_DAYS
 
 
 class ServiceTemplateGenerator(TemplateGenerator):
@@ -363,11 +363,20 @@ service is down',
         self._add_service_alarms(svc)
 
     def _gen_log_config(self, service_name):
+        current_service_config = self.configuration['services'][service_name]
+        log_group_name = '-'.join([self.env, 'logs'])
+        if current_service_config.get('use_service_specific_log_group', False):
+            log_group_name = '-'.join([spinalcase(service_name), 'logs'])
+            self.template.add_resource(LogGroup(
+                pascalcase(f"{service_name}LogGroup"),
+                LogGroupName=log_group_name,
+                RetentionInDays=LOG_RETENTION_DAYS
+            ))
         return LogConfiguration(
             LogDriver="awslogs",
             Options={
                 'awslogs-stream-prefix': service_name,
-                'awslogs-group': '-'.join([self.env, 'logs']),
+                'awslogs-group': log_group_name,
                 'awslogs-region': self.region
             }
         )

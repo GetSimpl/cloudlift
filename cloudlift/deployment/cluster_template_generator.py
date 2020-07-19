@@ -21,7 +21,7 @@ from troposphere.rds import DBSubnetGroup
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
-from cloudlift.deployment.template_generator import TemplateGenerator
+from cloudlift.deployment.template_generator import TemplateGenerator, LOG_RETENTION_DAYS
 from cloudlift.version import VERSION
 
 
@@ -254,7 +254,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         log_group = LogGroup(
             camelcase("{self.env}LogGroup".format(**locals())),
             LogGroupName="{self.env}-logs".format(**locals()),
-            RetentionInDays=365
+            RetentionInDays=LOG_RETENTION_DAYS
         )
         self.template.add_resource(log_group)
         return None

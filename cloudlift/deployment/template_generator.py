@@ -3,6 +3,7 @@ from troposphere import Output, Ref, Template
 from cloudlift.config import region as region_service
 from cloudlift.config import get_cluster_name
 
+LOG_RETENTION_DAYS=365
 
 class TemplateGenerator(object):
     """This is the base class for all templates"""
