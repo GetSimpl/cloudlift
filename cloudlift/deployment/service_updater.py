@@ -22,7 +22,7 @@ DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 
 class ServiceUpdater(object):
     def __init__(self, name, environment, env_sample_file, version=None,
-                 build_args=None, working_dir='.'):
+                 build_args=None, dockerfile=None, working_dir='.'):
         self.name = name
         self.environment = environment
         if env_sample_file is not None:
@@ -32,8 +32,9 @@ class ServiceUpdater(object):
         self.version = version
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
         self.cluster_name = get_cluster_name(environment)
-        self.working_dir = working_dir
         self.build_args = build_args
+        self.dockerfile = dockerfile
+        self.working_dir = working_dir
 
     def run(self):
         log_warning("Deploying to {self.region}".format(**locals()))
@@ -90,19 +91,24 @@ class ServiceUpdater(object):
             self._add_image_tag(self.version, new_tag)
 
     def _build_image(self, image_name):
-        log_bold("Building docker image " + image_name)
+        log_bold(f'Building docker image {image_name} using {"default Dockerfile" if self.dockerfile is None else self.dockerfile}')
         command = self._build_command(image_name)
         subprocess.check_call(command, shell=True)
         log_bold("Built " + image_name)
 
     def _build_command(self, image_name):
+        dockerfile_opt = '' if self.dockerfile is None else f'-f {self.dockerfile}'
+        build_args_opts = self._build_args_opts()
+        return " ".join(filter(None, ['docker', 'build', dockerfile_opt, '-t', image_name, *build_args_opts, self.working_dir]))
+
+    def _build_args_opts(self):
         if self.build_args is None:
-            return f'docker build -t {image_name} {self.working_dir}'
+            return []
         else:
             build_args_command_fragment = []
             for k, v in self.build_args.items():
-                build_args_command_fragment.append(" --build-arg "+"=".join((k, v)))
-            return f'docker build -t {image_name}{"".join(build_args_command_fragment)} {self.working_dir}'
+                build_args_command_fragment.append("--build-arg "+"=".join((k, v)))
+            return build_args_command_fragment
 
     def upload_artefacts(self):
         self.ensure_repository()
