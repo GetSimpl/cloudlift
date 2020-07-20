@@ -94,7 +94,8 @@ indicating instance is down',
             ComparisonOperator='GreaterThanThreshold',
             Statistic='Average',
             Threshold='80',
-            MetricName='CPUUtilization'
+            MetricName='CPUUtilization',
+            TreatMissingData='breaching'
         )
         self.template.add_resource(ecs_high_cpu_alarm)
         ecs_high_memory_alarm = Alarm(
@@ -119,7 +120,8 @@ disappears indicating instance is down',
             ComparisonOperator='GreaterThanThreshold',
             Statistic='Average',
             Threshold='80',
-            MetricName='MemoryUtilization'
+            MetricName='MemoryUtilization',
+            TreatMissingData='breaching'
         )
         self.template.add_resource(ecs_high_memory_alarm)
         # How to add service task count alarm
