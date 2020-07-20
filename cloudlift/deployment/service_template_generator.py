@@ -13,7 +13,8 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl)
+                             PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl,
+                             HealthCheck)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -188,6 +189,21 @@ service is down',
 
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
+
+        if 'container_health_check' in config:
+            configured_health_check = config['container_health_check']
+            ecs_health_check =  {'Command': ['CMD-SHELL', configured_health_check['command']]}
+            if 'start_period' in configured_health_check:
+                ecs_health_check['StartPeriod'] = int(configured_health_check['start_period'])
+            if 'retries' in configured_health_check:
+                ecs_health_check['Retries'] = int(configured_health_check['retries'])
+            if 'interval' in configured_health_check:
+                ecs_health_check['Interval'] = int(configured_health_check['interval'])
+            if 'timeout' in configured_health_check:
+                ecs_health_check['Timeout'] = int(configured_health_check['timeout'])
+            container_definition_arguments['HealthCheck'] = HealthCheck(
+                **ecs_health_check
+            )
 
         cd = ContainerDefinition(**container_definition_arguments)
 

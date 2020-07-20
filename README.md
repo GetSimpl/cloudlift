@@ -161,6 +161,29 @@ only within the VPC
 limit, i.e. at least this much memory will be available, and upto whatever
 memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 
+`container_health_check` can be used to specify docker container health and maps to `healthCheck`
+in ECS container definition. For more information, check [here](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html)
+
+An example service using `container_health_check`
+
+```json
+{
+  "services": {
+    "Test123": {
+      "command": null,
+      "container_health_check": {
+        "command": "curl http://localhost/health",
+        "start_delay": 30,
+        "retries": 10,
+        "interval": 10,
+        "timeout": 5
+      },
+      "memory_reservation": 100
+    }
+  }
+}
+```
+
 #### 3. Deploy service
 
 This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS 
