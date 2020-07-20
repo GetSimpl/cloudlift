@@ -260,7 +260,10 @@ class ServiceConfiguration(object):
                             }
                         }
                     },
-                }
+                },
+                "log_group":{
+                    "type": "string",
+                },
             },
             "required": ["memory_reservation", "command"]
         }

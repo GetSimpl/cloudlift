@@ -21,7 +21,7 @@ def _require_environment(func):
                   help='environment')
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        if kwargs['environment'] == 'production':
+        if kwargs['environment'] == 'production' or kwargs['environment'] == 'prod':
             highlight_production()
         return func(*args, **kwargs)
     return wrapper

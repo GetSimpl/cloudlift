@@ -21,7 +21,6 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
 from troposphere.iam import Role
-
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
 from cloudlift.config import DecimalEncoder
@@ -381,11 +380,13 @@ service is down',
         self._add_service_alarms(svc)
 
     def _gen_log_config(self, service_name):
+        current_service_config = self.configuration['services'][service_name]
+        env_log_group = '-'.join([self.env, 'logs'])
         return LogConfiguration(
             LogDriver="awslogs",
             Options={
                 'awslogs-stream-prefix': service_name,
-                'awslogs-group': '-'.join([self.env, 'logs']),
+                'awslogs-group': current_service_config.get('log_group', env_log_group),
                 'awslogs-region': self.region
             }
         )
