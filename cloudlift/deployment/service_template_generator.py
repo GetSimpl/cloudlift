@@ -15,7 +15,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
-from troposphere.elasticloadbalancingv2 import LoadBalancer as LoadBalancerV2
+from troposphere.elasticloadbalancingv2 import LoadBalancer as ELBv2
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
@@ -150,6 +150,11 @@ service is down',
         )
         self.template.add_resource(ecs_no_running_tasks_alarm)
 
+    def _lb_settings(self, interface):
+        protocol = interface.split('_')[0].upper()  # <protocol>_interace
+        lb_type = 'alb' if protocol in ['HTTP'] else 'nlb'  # TCP, UDP
+        return protocol, lb_type
+
     def _add_service(self, service_name, config):
         launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
         env_config = build_config(
@@ -169,39 +174,42 @@ service is down',
             "Cpu": 0
         }
 
-        if 'http_interface' in config:
-            container_definition_arguments['PortMappings'] = [
-                PortMapping(
-                    ContainerPort=int(
-                        config['http_interface']['container_port']
+        interface_configs = { k: v for k, v in config.items() if k.split('_')[-1] == 'interface'}
+        for interface, interface_config in interface_configs.items():
+            protocol, lb_type = self._lb_settings(interface)
+            if protocol in ['HTTP', 'TCP']:  # Use dynamic host ports
+                container_definition_arguments['PortMappings'] = [
+                    PortMapping(
+                        ContainerPort=int(
+                            interface_config['container_port']
+                        )
                     )
-                )
-            ]
-        elif 'udp_interface' in config:
-            container_definition_arguments['PortMappings'] = [
-                PortMapping(
-                    ContainerPort=int(
-                        config['udp_interface']['container_port']
+                ]
+            elif protocol in ['UDP']:  # Use hard-coded host ports
+                container_definition_arguments['PortMappings'] = [
+                    PortMapping(
+                        ContainerPort=int(
+                            interface_config['container_port']
+                        ),
+                        HostPort=int(
+                            interface_config['container_port']
+                        ),
+                        Protocol="udp"
                     ),
-                    HostPort=int(
-                        config['udp_interface']['container_port']
+                    PortMapping(
+                        ContainerPort=(int(
+                            interface_config['container_port']
+                        ) + 1),
+                        HostPort=(int(
+                            interface_config['container_port']
+                        ) + 1),
+                        Protocol="tcp"
                     ),
-                    Protocol="udp"
-                ),
-                PortMapping(
-                    ContainerPort=(int(
-                        config['udp_interface']['container_port']
-                    ) + 1),
-                    HostPort=(int(
-                        config['udp_interface']['container_port']
-                    ) + 1),
-                    Protocol="tcp"
-                ),
-            ]
-
+                ]
+    
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
-
+        
         cd = ContainerDefinition(**container_definition_arguments)
 
         task_role = self.template.add_resource(Role(
@@ -241,26 +249,39 @@ service is down',
             MinimumHealthyPercent=100,
             MaximumPercent=200
         )
-        if 'udp_interface' in config:
-            nlb, lb, service_listener = self._add_nlb(cd, service_name, config, launch_type)
 
+        for interface, interface_config in interface_configs.items():
+            protocol, lb_type = self._lb_settings(interface)
+            lb, lb_listener, lb_sg, slb = getattr(self, '_add_' + lb_type)(cd, service_name, protocol, interface_config, launch_type)
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
+                sg_ingress_rules = []
+                if lb_type == 'alb':
+                    sg_ingress_rules.append({
+                        'IpProtocol': 'TCP',
+                        'SourceSecurityGroupId': Ref(lb_sg),
+                        'ToPort': int(interface_config['container_port']),
+                        'FromPort': int(interface_config['container_port']),
+                    })
+                else:  # NLB / TCP, UDP - ingress rules by cidr blocks
+                    sg_ingress_rules.append({
+                        'IpProtocol': protocol,
+                        'ToPort': int(interface_config['container_port']),
+                        'FromPort': int(interface_config['container_port']),
+                        'CidrIp': self._generate_nlb_security_group_cidr_ips(interface_config),
+                    })
+                if protocol in ['UDP']:  # NLB+UDP - requires TCP health check on different port ?
+                    sg_ingress_rules.append({
+                        'IpProtocol': 'TCP',
+                        'ToPort': int(interface_config['container_port']) + 1,
+                        'FromPort': int(interface_config['container_port']) + 1,
+                        'CidrIp': self._generate_nlb_security_group_cidr_ips(interface_config),
+                    })
                 service_security_group = SecurityGroup(
                     pascalcase("FargateService" + self.env + service_name),
                     GroupName=pascalcase("FargateService" + self.env + service_name),
-                    SecurityGroupIngress=[{
-                        'IpProtocol': 'UDP',
-                        'ToPort': int(config['udp_interface']['container_port']),
-                        'FromPort': int(config['udp_interface']['container_port']),
-                        'CidrIp': self._generate_nlb_security_group_cidr_ips(config),
-                    },{
-                        'IpProtocol': 'TCP',
-                        'ToPort': int(config['udp_interface']['container_port']) + 1,
-                        'FromPort': int(config['udp_interface']['container_port']) + 1,
-                        'CidrIp': self._generate_nlb_security_group_cidr_ips(config),
-                    }],
+                    SecurityGroupIngress=sg_ingress_rules,
                     VpcId=Ref(self.vpc),
                     GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
@@ -279,29 +300,30 @@ service is down',
                         )
                     )
                 }
-            else:
-                for idx, cidr_ip in enumerate(self._generate_nlb_security_group_cidr_ips(config)):
-                    for port_idx, protocol in enumerate(['UDP', 'TCP']):
-                        service_security_group_ingress = SecurityGroupIngress(
-                            service_name+protocol+'IngressRule'+str(idx),
-                            GroupId=self.host_security_group,
-                            IpProtocol=protocol,
-                            FromPort=(int(config['udp_interface']['container_port']) + port_idx), 
-                            ToPort=(int(config['udp_interface']['container_port']) + port_idx),
-                            CidrIp=cidr_ip,
-                        )
-                        self.template.add_resource(service_security_group_ingress)
+            else:  # Non fargate
+                if lb_type == 'nlb':  # NLBs use ingress rules on the EC2 Hosts
+                    for idx, cidr_ip in enumerate(self._generate_nlb_security_group_cidr_ips(interface_config)):
+                        for port_idx, _protocol in enumerate([protocol, 'TCP'] if protocol == 'UDP' else [protocol]):
+                            service_security_group_ingress = SecurityGroupIngress(
+                                service_name+_protocol+'IngressRule'+str(idx),
+                                GroupId=self.host_security_group,
+                                IpProtocol=_protocol,
+                                FromPort=(int(interface_config['container_port']) + port_idx), 
+                                ToPort=(int(interface_config['container_port']) + port_idx),
+                                CidrIp=cidr_ip,
+                            )
+                            self.template.add_resource(service_security_group_ingress)
                 launch_type_svc = {
                     'Role': Ref(self.ecs_service_role),
                     'PlacementStrategies': self.PLACEMENT_STRATEGIES
                 }
             svc = Service(
                 service_name,
-                LoadBalancers=[lb],
+                LoadBalancers=[slb],
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
-                DependsOn=service_listener.title,
+                DependsOn=lb_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
@@ -312,78 +334,16 @@ service is down',
                     Value=GetAtt(svc, 'Name')
                 )
             )
+            _url_scheme = 'https' if protocol in ['HTTP'] else protocol
             self.template.add_output(
                 Output(
                     service_name + "URL",
                     Description="The URL at which the service is accessible",
-                    Value=Sub("udp://${" + nlb.name + ".DNSName}")
+                    Value=Sub(_url_scheme.lower() + "://${" + lb.name + ".DNSName}")
                 )
             )
             self.template.add_resource(svc)
-        elif 'http_interface' in config:
-            alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
-
-            if launch_type == self.LAUNCH_TYPE_FARGATE:
-                # if launch type is ec2, then services inherit the ec2 instance security group
-                # otherwise, we need to specify a security group for the service
-                service_security_group = SecurityGroup(
-                    pascalcase("FargateService" + self.env + service_name),
-                    GroupName=pascalcase("FargateService" + self.env + service_name),
-                    SecurityGroupIngress=[{
-                        'IpProtocol': 'TCP',
-                        'SourceSecurityGroupId': Ref(alb_sg),
-                        'ToPort': int(config['http_interface']['container_port']),
-                        'FromPort': int(config['http_interface']['container_port']),
-                    }],
-                    VpcId=Ref(self.vpc),
-                    GroupDescription=pascalcase("FargateService" + self.env + service_name)
-                )
-                self.template.add_resource(service_security_group)
-
-                launch_type_svc = {
-                    'NetworkConfiguration': NetworkConfiguration(
-                        AwsvpcConfiguration=AwsvpcConfiguration(
-                            Subnets=[
-                                Ref(self.private_subnet1),
-                                Ref(self.private_subnet2)
-                            ],
-                            SecurityGroups=[
-                                Ref(service_security_group)
-                            ]
-                        )
-                    )
-                }
-            else:
-                launch_type_svc = {
-                    'Role': Ref(self.ecs_service_role),
-                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
-                }
-            svc = Service(
-                service_name,
-                LoadBalancers=[lb],
-                Cluster=self.cluster_name,
-                TaskDefinition=Ref(td),
-                DesiredCount=desired_count,
-                DependsOn=service_listener.title,
-                LaunchType=launch_type,
-                **launch_type_svc,
-            )
-            self.template.add_output(
-                Output(
-                    service_name + 'EcsServiceName',
-                    Description='The ECS name which needs to be entered',
-                    Value=GetAtt(svc, 'Name')
-                )
-            )
-            self.template.add_output(
-                Output(
-                    service_name + "URL",
-                    Description="The URL at which the service is accessible",
-                    Value=Sub("https://${" + alb.name + ".DNSName}")
-                )
-            )
-            self.template.add_resource(svc)
-        else:
+        if not interface_configs:  # No ingresses
             launch_type_svc = {}
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
@@ -442,58 +402,61 @@ service is down',
             }
         )
 
-    def _add_nlb(self, cd, service_name, config, launch_type):
-        nlb_name = service_name + pascalcase(self.env)
-        if config['udp_interface']['internal']:
-            nlb_subnets = [
+    def _add_nlb(self, cd, service_name, protocol, interface_config, launch_type):
+        lb_name = service_name + pascalcase(self.env)
+        if interface_config['internal']:
+            lb_subnets = [
                 Ref(self.private_subnet1),
                 Ref(self.private_subnet2)
             ]
             scheme = "internal"
-            nlb_name += 'Internal'
-            nlb_name = nlb_name[:32]
-            nlb = LoadBalancerV2(
+            lb_name += 'Internal'
+            lb_name = lb_name[:32]
+            lb = ELBv2(
                 'NLB' + service_name,
-                Subnets=nlb_subnets,
-                Name=nlb_name,
+                Subnets=lb_subnets,
+                Name=lb_name,
                 Tags=[
-                    {'Value': nlb_name, 'Key': 'Name'}
+                    {'Value': lb_name, 'Key': 'Name'}
                 ],
                 Scheme=scheme,
                 Type="network"
             )
         else:
-            nlb_subnets = [
+            lb_subnets = [
                 Ref(self.public_subnet1),
                 Ref(self.public_subnet2)
             ]
-            nlb_name = nlb_name[:32]
-            nlb = LoadBalancerV2(
+            lb_name = lb_name[:32]
+            lb = ELBv2(
                 'NLB' + service_name,
-                Subnets=nlb_subnets,
-                Name=nlb_name,
+                Subnets=lb_subnets,
+                Name=lb_name,
                 Tags=[
-                    {'Value': nlb_name, 'Key': 'Name'}
+                    {'Value': lb_name, 'Key': 'Name'}
                 ],
                 Type="network"
             )
-        self.template.add_resource(nlb)
+        self.template.add_resource(lb)
 
         target_group_name = "TargetGroup" + service_name
-        if config['udp_interface']['internal']:
+        if interface_config['internal']:
             target_group_name = target_group_name + 'Internal'
 
         target_group_config = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
             target_group_config['TargetType'] = 'ip'
 
+        health_check_port = int(interface_config['container_port'])
+        if protocol == 'UDP':
+            health_check_port = health_check_port + 1
         service_target_group = TargetGroup(
             target_group_name,
-            HealthyThresholdCount=3,
+            HealthyThresholdCount=2,
             HealthCheckIntervalSeconds=30,
             HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
-            HealthCheckPort=(int(config['udp_interface']['container_port']) + 1),
+            UnhealthyThresholdCount=2,
+            HealthCheckPort=health_check_port,
             TargetGroupAttributes=[
                 TargetGroupAttribute(
                     Key='deregistration_delay.timeout_seconds',
@@ -501,8 +464,8 @@ service is down',
                 )
             ],
             VpcId=Ref(self.vpc),
-            Protocol="UDP",
-            Port=int(config['udp_interface']['container_port']),
+            Protocol=protocol,
+            Port=int(interface_config['container_port']),
             **target_group_config
         )
         self.template.add_resource(service_target_group)
@@ -510,84 +473,84 @@ service is down',
         # Note: This is a ECS Loadbalancer definition. Not an NLB.
         # Defining this causes the target group to add a target to the correct
         # port in correct ECS cluster instance for the service container.
-        lb = LoadBalancer(
+        slb = LoadBalancer(
             ContainerName=cd.Name,
             TargetGroupArn=Ref(service_target_group),
-            ContainerPort=int(config['udp_interface']['container_port'])
+            ContainerPort=int(interface_config['container_port'])
         )
         target_group_action = Action(
             TargetGroupArn=Ref(target_group_name),
             Type="forward"
         )
-        service_listener = Listener(
+        lb_listener = Listener(
             "LoadBalancerListener" + service_name,
-            Protocol="UDP",
+            Protocol=protocol,
             DefaultActions=[target_group_action],
-            LoadBalancerArn=Ref(nlb),
-            Port=int(config['udp_interface']['container_port']),
+            LoadBalancerArn=Ref(lb),
+            Port=int(interface_config['container_port']),
         )
-        self.template.add_resource(service_listener)
-        self._add_nlb_alarms(service_name, nlb)
-        return nlb, lb, service_listener
+        self.template.add_resource(lb_listener)
+        self._add_nlb_alarms(service_name, lb)
+        return lb, lb_listener, None, slb 
 
-    def _add_alb(self, cd, service_name, config, launch_type):
+    def _add_alb(self, cd, service_name, protocol, interface_config, launch_type):
         sg_name = 'SG' + self.env + service_name
-        svc_alb_sg = SecurityGroup(
+        lb_sg = SecurityGroup(
             re.sub(r'\W+', '', sg_name),
             GroupName=self.env + '-' + service_name,
             SecurityGroupIngress=self._generate_alb_security_group_ingress(
-                config
+                interface_config
             ),
             VpcId=Ref(self.vpc),
             GroupDescription=Sub(service_name + "-alb-sg")
         )
-        self.template.add_resource(svc_alb_sg)
-        alb_name = service_name + pascalcase(self.env)
-        if config['http_interface']['internal']:
-            alb_subnets = [
+        self.template.add_resource(lb_sg)
+        lb_name = service_name + pascalcase(self.env)
+        if interface_config['internal']:
+            lb_subnets = [
                 Ref(self.private_subnet1),
                 Ref(self.private_subnet2)
             ]
             scheme = "internal"
-            alb_name += 'Internal'
-            alb_name = alb_name[:32]
-            alb = LoadBalancerV2(
+            lb_name += 'Internal'
+            lb_name = lb_name[:32]
+            lb = ELBv2(
                 'ALB' + service_name,
-                Subnets=alb_subnets,
+                Subnets=lb_subnets,
                 SecurityGroups=[
                     self.alb_security_group,
-                    Ref(svc_alb_sg)
+                    Ref(lb_sg)
                 ],
-                Name=alb_name,
+                Name=lb_name,
                 Tags=[
-                    {'Value': alb_name, 'Key': 'Name'}
+                    {'Value': lb_name, 'Key': 'Name'}
                 ],
                 Scheme=scheme
             )
         else:
-            alb_subnets = [
+            lb_subnets = [
                 Ref(self.public_subnet1),
                 Ref(self.public_subnet2)
             ]
-            alb_name = alb_name[:32]
-            alb = LoadBalancerV2(
+            lb_name = lb_name[:32]
+            lb = ELBv2(
                 'ALB' + service_name,
-                Subnets=alb_subnets,
+                Subnets=lb_subnets,
                 SecurityGroups=[
                     self.alb_security_group,
-                    Ref(svc_alb_sg)
+                    Ref(lb_sg)
                 ],
-                Name=alb_name,
+                Name=lb_name,
                 Tags=[
-                    {'Value': alb_name, 'Key': 'Name'}
+                    {'Value': lb_name, 'Key': 'Name'}
                 ]
             )
 
-        self.template.add_resource(alb)
+        self.template.add_resource(lb)
 
         target_group_name = "TargetGroup" + service_name
-        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
-        if config['http_interface']['internal']:
+        health_check_path = interface_config['health_check_path'] if 'health_check_path' in interface_config else "/elb-check"
+        if interface_config['internal']:
             target_group_name = target_group_name + 'Internal'
 
         target_group_config = {}
@@ -606,11 +569,11 @@ service is down',
                 )
             ],
             VpcId=Ref(self.vpc),
-            Protocol="HTTP",
+            Protocol=protocol,
             Matcher=Matcher(HttpCode="200-399"),
-            Port=int(config['http_interface']['container_port']),
+            Port=int(interface_config['container_port']),
             HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
+            UnhealthyThresholdCount=2,
             **target_group_config
         )
 
@@ -618,23 +581,23 @@ service is down',
         # Note: This is a ECS Loadbalancer definition. Not an ALB.
         # Defining this causes the target group to add a target to the correct
         # port in correct ECS cluster instance for the service container.
-        lb = LoadBalancer(
+        slb = LoadBalancer(
             ContainerName=cd.Name,
             TargetGroupArn=Ref(service_target_group),
-            ContainerPort=int(config['http_interface']['container_port'])
+            ContainerPort=int(interface_config['container_port'])
         )
         target_group_action = Action(
             TargetGroupArn=Ref(target_group_name),
             Type="forward"
         )
-        service_listener = self._add_alb_service_listener(
+        lb_listener = self._add_alb_service_listener(
             service_name,
             target_group_action,
-            alb,
-            config['http_interface']['internal']
+            lb,
+            interface_config['internal']
         )
-        self._add_alb_alarms(service_name, alb)
-        return alb, lb, service_listener, svc_alb_sg
+        self._add_alb_alarms(service_name, lb)
+        return lb, lb_listener, lb_sg, slb
 
     def _add_alb_service_listener(self, service_name, target_group_action,
                               alb, internal):
@@ -754,17 +717,17 @@ from load balancer',
         )
         self.template.add_resource(http_code_elb5xx_alarm)
 
-    def _generate_nlb_security_group_cidr_ips(self, config):
+    def _generate_nlb_security_group_cidr_ips(self, interface_config):
         cidr_ips = []
-        for cidr_ip in config['udp_interface']['restrict_access_to']:
+        for cidr_ip in interface_config['restrict_access_to']:
             if cidr_ip.find('/') == -1:
                 cidr_ip = cidr_ip + '/32'
             cidr_ips.append(cidr_ip)
         return cidr_ips
 
-    def _generate_alb_security_group_ingress(self, config):
+    def _generate_alb_security_group_ingress(self, interface_config):
         ingress_rules = []
-        for access_ip in config['http_interface']['restrict_access_to']:
+        for access_ip in interface_config['restrict_access_to']:
             if access_ip.find('/') == -1:
                 access_ip = access_ip + '/32'
             ingress_rules.append({
