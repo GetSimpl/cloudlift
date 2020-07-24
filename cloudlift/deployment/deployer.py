@@ -13,6 +13,7 @@ from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_col
 def deploy_new_version(client, cluster_name, ecs_service_name,
                        deploy_version_tag, service_name, sample_env_file_path,
                        env_name, color='white', complete_image_uri=None):
+    log_bold("Starting to deploy " + ecs_service_name)
     env_config = build_config(env_name, service_name, sample_env_file_path)
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     if deployment.service.desired_count == 0:
