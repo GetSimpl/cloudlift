@@ -104,14 +104,15 @@ def edit_config(name, environment):
 @cli.command()
 @_require_environment
 @_require_name
+@click.option('--timeout_seconds', default=180, help='The deployment timeout')
 @click.option('--version', default=None,
               help='local image version tag')
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
 @click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
-def deploy_service(name, environment, version, build_arg, dockerfile):
-    ServiceUpdater(name, environment, None, version, dict(build_arg), dockerfile).run()
+def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile):
+    ServiceUpdater(name, environment, None, timeout_seconds, version, dict(build_arg), dockerfile).run()
 
 
 @cli.command()
