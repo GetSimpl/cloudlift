@@ -452,21 +452,6 @@ class EcsAction(object):
         )
         return EcsService(self._cluster_name, response[u'service'])
 
-    def is_deployed(self, service):
-        if len(service[u'deployments']) != 1:
-            return False
-        running_tasks = self._client.list_tasks(
-            cluster_name=service.cluster,
-            service_name=service.name
-        )
-        if not running_tasks[u'taskArns']:
-            return service.desired_count == 0
-        running_count = self.get_running_tasks_count(
-            service=service,
-            task_arns=running_tasks[u'taskArns']
-        )
-        return service.desired_count == running_count
-
     def get_running_tasks_count(self, service, task_arns):
         running_count = 0
         tasks_details = self._client.describe_tasks(

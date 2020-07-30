@@ -1,4 +1,3 @@
-import sys
 from time import sleep
 
 from cloudlift.exceptions import UnrecoverableException
@@ -102,11 +101,18 @@ def wait_for_finish(action, existing_events, color):
             existing_events,
             color
         )
-        waiting = not action.is_deployed(service) and not service.errors
+        waiting = not is_deployed(service['deployments']) and not service.errors
     if service.errors:
         log_err(str(service.errors))
         return False
     return True
+
+
+def is_deployed(service_deployments):
+    for deployment in service_deployments:
+        if deployment['status'] == 'PRIMARY':
+            return deployment['desiredCount'] == deployment['runningCount']
+    return False
 
 
 def fetch_events(service):
