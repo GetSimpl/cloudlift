@@ -74,8 +74,6 @@ Resources:
       PlacementStrategies:
         - Field: attribute:ecs.availability-zone
           Type: spread
-        - Field: instanceId
-          Type: spread
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'DummyTaskDefinition'
     Type: AWS::ECS::Service
@@ -100,8 +98,6 @@ Resources:
       LaunchType: 'EC2'
       PlacementStrategies:
         - Field: attribute:ecs.availability-zone
-          Type: spread
-        - Field: instanceId
           Type: spread
       TaskDefinition: !Ref 'DummyRunSidekiqshTaskDefinition'
     Type: AWS::ECS::Service

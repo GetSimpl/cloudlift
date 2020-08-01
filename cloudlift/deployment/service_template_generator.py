@@ -37,10 +37,6 @@ class ServiceTemplateGenerator(TemplateGenerator):
         PlacementStrategy(
             Type='spread',
             Field='attribute:ecs.availability-zone'
-        ),
-        PlacementStrategy(
-            Type='spread',
-            Field='instanceId'
         )]
     LAUNCH_TYPE_FARGATE = 'FARGATE'
     LAUNCH_TYPE_EC2 = 'EC2'
