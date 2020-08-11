@@ -40,7 +40,7 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
         log_bold(ecs_service_name + " Deployed successfully.")
     else:
         log_err(ecs_service_name + " Deployment failed.")
-    return response
+        raise UnrecoverableException(ecs_service_name + " Deployment failed.")
 
 
 def deploy_and_wait(deployment, new_task_definition, color):
