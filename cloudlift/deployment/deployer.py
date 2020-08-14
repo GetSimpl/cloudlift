@@ -107,7 +107,7 @@ def wait_for_finish(action, existing_events, color, deploy_end_time):
         waiting = not is_deployed(service['deployments']) and not service.errors
         if time() > deploy_end_time:
             log_err("Deploy timed out!")
-            create_deployment_timeout_alarm(action.cluster_name, action.service_name)
+            record_deployment_failure_metric(action.cluster_name, action.service_name)
             return False
     if service.errors:
         log_err(str(service.errors))
@@ -115,7 +115,7 @@ def wait_for_finish(action, existing_events, color, deploy_end_time):
     return True
 
 
-def create_deployment_timeout_alarm(cluster_name, service_name):
+def record_deployment_failure_metric(cluster_name, service_name):
     cloudwatch_client = boto3.client('cloudwatch')
     cloudwatch_client.put_metric_data(
         Namespace='ECS/DeploymentMetrics',

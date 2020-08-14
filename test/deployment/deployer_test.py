@@ -2,7 +2,7 @@ from _datetime import datetime
 from unittest import TestCase
 from unittest.mock import patch, MagicMock, sentinel
 
-from cloudlift.deployment.deployer import is_deployed, create_deployment_timeout_alarm
+from cloudlift.deployment.deployer import is_deployed, record_deployment_failure_metric
 
 
 class TestDeployer(TestCase):
@@ -37,17 +37,16 @@ class TestDeployer(TestCase):
 
 
 @patch('cloudlift.deployment.deployer.datetime')
-@patch('cloudlift.deployment.deployer.boto3')
-def test_create_deployment_timeout_alarm(boto3, dt):
-    boto3.client = MagicMock()
-    boto3.client.put_metric_data = MagicMock()
+@patch('cloudlift.deployment.deployer.boto3.client')
+def test_create_deployment_timeout_alarm(mock_boto3_client, dt):
+    mock_boto3_client.put_metric_data = MagicMock()
     cluster_name = sentinel.cluster_name
     service_name = sentinel.service_name
     now = datetime.now()
     dt.utcnow = MagicMock(return_value=now)
-    create_deployment_timeout_alarm(cluster_name, service_name)
-    boto3.client.assert_called_with('cloudwatch')
-    boto3.client.return_value.put_metric_data.assert_called_with(
+    record_deployment_failure_metric(cluster_name, service_name)
+    mock_boto3_client.assert_called_with('cloudwatch')
+    mock_boto3_client.return_value.put_metric_data.assert_called_with(
         Namespace='ECS/DeploymentMetrics',
         MetricData=[
             {
