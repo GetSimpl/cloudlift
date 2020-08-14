@@ -119,6 +119,31 @@ disappears indicating instance is down',
             TreatMissingData='breaching'
         )
         self.template.add_resource(ecs_high_memory_alarm)
+        cloudlift_timedout_deployments_alarm = Alarm(
+            'TimedOutCloudliftDeployments' + str(svc.name),
+            EvaluationPeriods=1,
+            Dimensions=[
+                MetricDimension(
+                    Name='ClusterName',
+                    Value=self.cluster_name
+                ),
+                MetricDimension(
+                    Name='ServiceName',
+                    Value=GetAtt(svc, 'Name')
+                )
+            ],
+            AlarmActions=[Ref(self.notification_sns_arn)],
+            OKActions=[Ref(self.notification_sns_arn)],
+            AlarmDescription='Cloudlift deployment timed out',
+            Namespace='ECS/DeploymentMetrics',
+            Period=60,
+            ComparisonOperator='GreaterThanThreshold',
+            Statistic='Average',
+            Threshold='0',
+            MetricName='TimedOutCloudliftDeployments',
+            TreatMissingData='notBreaching'
+        )
+        self.template.add_resource(cloudlift_timedout_deployments_alarm)
         # How to add service task count alarm
         # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch-metrics.html#cw_running_task_count
         ecs_no_running_tasks_alarm = Alarm(

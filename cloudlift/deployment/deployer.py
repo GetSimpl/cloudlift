@@ -1,5 +1,5 @@
-from time import sleep
-
+import sys
+from time import sleep, time
 from cloudlift.exceptions import UnrecoverableException
 from colorclass import Color
 from terminaltables import SingleTable
@@ -7,11 +7,13 @@ from terminaltables import SingleTable
 from cloudlift.config import ParameterStore
 from cloudlift.deployment.ecs import DeployAction
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
+from datetime import datetime
+import boto3
 
 
 def deploy_new_version(client, cluster_name, ecs_service_name,
                        deploy_version_tag, service_name, sample_env_file_path,
-                       env_name, color='white', complete_image_uri=None):
+                       timeout_seconds, env_name, color='white', complete_image_uri=None):
     log_bold("Starting to deploy " + ecs_service_name)
     env_config = build_config(env_name, service_name, sample_env_file_path)
     deployment = DeployAction(client, cluster_name, ecs_service_name)
@@ -35,7 +37,7 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
         task_definition.apply_container_environment(container, env_config)
     print_task_diff(ecs_service_name, task_definition.diff, color)
     new_task_definition = deployment.update_task_definition(task_definition)
-    response = deploy_and_wait(deployment, new_task_definition, color)
+    response = deploy_and_wait(deployment, new_task_definition, color, timeout_seconds)
     if response:
         log_bold(ecs_service_name + " Deployed successfully.")
     else:
@@ -43,10 +45,11 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
         raise UnrecoverableException(ecs_service_name + " Deployment failed.")
 
 
-def deploy_and_wait(deployment, new_task_definition, color):
+def deploy_and_wait(deployment, new_task_definition, color, timeout_seconds):
     existing_events = fetch_events(deployment.get_service())
+    deploy_end_time = time() + timeout_seconds
     deployment.deploy(new_task_definition)
-    return wait_for_finish(deployment, existing_events, color)
+    return wait_for_finish(deployment, existing_events, color, deploy_end_time)
 
 
 def build_config(env_name, service_name, sample_env_file_path):
@@ -91,7 +94,7 @@ def make_container_defn_env_conf(service_config, environment_config):
     return container_defn_env_config
 
 
-def wait_for_finish(action, existing_events, color):
+def wait_for_finish(action, existing_events, color, deploy_end_time):
     waiting = True
     while waiting:
         sleep(1)
@@ -102,10 +105,38 @@ def wait_for_finish(action, existing_events, color):
             color
         )
         waiting = not is_deployed(service['deployments']) and not service.errors
+        if time() > deploy_end_time:
+            log_err("Deploy timed out!")
+            create_deployment_timeout_alarm(action.cluster_name, action.service_name)
+            return False
     if service.errors:
         log_err(str(service.errors))
         return False
     return True
+
+
+def create_deployment_timeout_alarm(cluster_name, service_name):
+    cloudwatch_client = boto3.client('cloudwatch')
+    cloudwatch_client.put_metric_data(
+        Namespace='ECS/DeploymentMetrics',
+        MetricData=[
+            {
+                "MetricName": 'TimedOutCloudliftDeployments',
+                "Value": 1,
+                "Timestamp": datetime.utcnow(),
+                "Dimensions": [
+                    {
+                        'Name': 'ClusterName',
+                        'Value': cluster_name
+                    },
+                    {
+                        'Name': 'ServiceName',
+                        'Value': service_name
+                    }
+                ]
+            }
+        ]
+    )
 
 
 def is_deployed(service_deployments):

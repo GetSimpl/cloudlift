@@ -21,7 +21,7 @@ DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 CHUNK_SIZE = 10
 
 class ServiceUpdater(object):
-    def __init__(self, name, environment, env_sample_file, version=None,
+    def __init__(self, name, environment, env_sample_file, timeout_seconds, version=None,
                  build_args=None, dockerfile=None, working_dir='.'):
         self.name = name
         self.environment = environment
@@ -29,6 +29,7 @@ class ServiceUpdater(object):
             self.env_sample_file = env_sample_file
         else:
             self.env_sample_file = './env.sample'
+        self.timeout_seconds = timeout_seconds
         self.version = version
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
         self.cluster_name = get_cluster_name(environment)
@@ -63,6 +64,7 @@ class ServiceUpdater(object):
                     self.version,
                     self.name,
                     self.env_sample_file,
+                    self.timeout_seconds,
                     self.environment,
                     color,
                     image_url
