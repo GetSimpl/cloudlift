@@ -1,11 +1,12 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.8.0", "notifications_arn": "some", "services":
+    Value: '{"cloudlift_version": "1.8.1", "notifications_arn": "some", "services":
       {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
       false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command":
-      "./run-sidekiq.sh"}}}'
+      "/elb-check"}, "deployment": {"maximum_percent": 150}}, "DummyRunSidekiqsh":
+      {"memory_reservation": 1000, "command": "./run-sidekiq.sh", "deployment": {"maximum_percent":
+      150}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
@@ -52,6 +53,9 @@ Resources:
   Dummy:
     Properties:
       Cluster: cluster-staging
+      DeploymentConfiguration:
+        MaximumPercent: 150
+        MinimumHealthyPercent: 100
       DesiredCount: 100
       LaunchType: EC2
       LoadBalancers:
@@ -79,7 +83,7 @@ Resources:
     Properties:
       Cluster: cluster-staging
       DeploymentConfiguration:
-        MaximumPercent: 200
+        MaximumPercent: 150
         MinimumHealthyPercent: 100
       DesiredCount: 199
       LaunchType: EC2

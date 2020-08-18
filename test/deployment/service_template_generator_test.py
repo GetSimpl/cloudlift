@@ -1,5 +1,6 @@
 import datetime
 import os
+from decimal import Decimal
 from unittest import TestCase
 
 from cfn_flip import to_json
@@ -15,18 +16,24 @@ def mocked_service_config():
         "notifications_arn": "some",
         "services": {
             "Dummy": {
-                "memory_reservation": 1000,
+                "memory_reservation": Decimal(1000),
                 "command": None,
                 "http_interface": {
                     "internal": False,
-                    "container_port": 7003,
+                    "container_port": Decimal(7003),
                     "restrict_access_to": ["0.0.0.0/0"],
                     "health_check_path": "/elb-check"
+                },
+                "deployment": {
+                    "maximum_percent": Decimal(150)
                 }
             },
             "DummyRunSidekiqsh": {
-                "memory_reservation": 1000,
-                "command": "./run-sidekiq.sh"
+                "memory_reservation": Decimal(1000),
+                "command": "./run-sidekiq.sh",
+                "deployment": {
+                    "maximum_percent": Decimal(150)  # The configuration is read as decimal always
+                }
             }
         }
     }

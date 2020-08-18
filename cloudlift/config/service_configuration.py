@@ -180,6 +180,17 @@ class ServiceConfiguration(object):
                     "minimum": 10,
                     "maximum": 30000
                 },
+                "deployment": {
+                    "type": "object",
+                    "properties": {
+                        "maximum_percent": {
+                            "type": "number",
+                            "minimum": 100,
+                            "maximum": 200
+                        },
+                    },
+                    "required": ["maximum_percent"]
+                },
                 "fargate": {
                     "type": "object",
                     "properties": {

@@ -21,13 +21,10 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
 from troposphere.iam import Role
-from cloudlift.config import region as region_service
-from cloudlift.config import get_account_id
+
 from cloudlift.config import DecimalEncoder
-from cloudlift.config import get_service_stack_name
+from cloudlift.config import get_account_id
 from cloudlift.deployment.deployer import build_config
-from cloudlift.deployment.ecs import DeployAction, EcsClient
-from cloudlift.config.logging import log, log_bold
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
 
@@ -267,10 +264,8 @@ service is down',
 
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
-        deployment_configuration = DeploymentConfiguration(
-            MinimumHealthyPercent=100,
-            MaximumPercent=200
-        )
+        maximum_percent = config['deployment'].get('maximum_percent', 200) if 'deployment' in config else 200
+        deployment_configuration = DeploymentConfiguration(MinimumHealthyPercent=100, MaximumPercent=int(maximum_percent))
 
         if 'http_interface' in config:
             lb, target_group_name = self._add_ecs_lb(cd, service_name, config, launch_type)
@@ -319,13 +314,13 @@ service is down',
 
             if alb_enabled:
                 launch_type_svc['DependsOn'] = service_listener.title
-
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
+                DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
