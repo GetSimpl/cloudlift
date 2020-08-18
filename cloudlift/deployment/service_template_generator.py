@@ -42,14 +42,13 @@ class ServiceTemplateGenerator(TemplateGenerator):
     LAUNCH_TYPE_EC2 = 'EC2'
 
     def __init__(self, service_configuration, environment_stack):
-        super(ServiceTemplateGenerator, self).__init__(
-            service_configuration.environment
-        )
+        super(ServiceTemplateGenerator, self).__init__(service_configuration.environment)
         self._derive_configuration(service_configuration)
         self.env_sample_file_path = './env.sample'
         self.environment_stack = environment_stack
-        self.current_version = ServiceInformationFetcher(
-            self.application_name, self.env).get_current_version()
+        information_fetcher = ServiceInformationFetcher(self.application_name, self.env)
+        self.current_version = information_fetcher.get_current_version()
+        self.desired_counts = information_fetcher.fetch_current_desired_count()
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
@@ -58,7 +57,6 @@ class ServiceTemplateGenerator(TemplateGenerator):
     def generate_service(self):
         self._add_service_parameters()
         self._add_service_outputs()
-        self._fetch_current_desired_count()
         self._add_ecs_service_iam_role()
         self._add_cluster_services()
         return to_yaml(self.template.to_json())
@@ -320,7 +318,6 @@ service is down',
                 }
 
             if alb_enabled:
-                print(service_listener.title)
                 launch_type_svc['DependsOn'] = service_listener.title
 
             svc = Service(
@@ -768,39 +765,6 @@ building this service",
                 self.environment_stack['Outputs']
             )
         )[0]['OutputValue']
-
-    def _fetch_current_desired_count(self):
-        stack_name = get_service_stack_name(self.env, self.application_name)
-        self.desired_counts = {}
-        try:
-            stack = region_service.get_client_for(
-                'cloudformation',
-                self.env
-            ).describe_stacks(StackName=stack_name)['Stacks'][0]
-            ecs_service_outputs = filter(
-                lambda x: x['OutputKey'].endswith('EcsServiceName'),
-                stack['Outputs']
-            )
-            ecs_service_names = []
-            for service_name in ecs_service_outputs:
-                ecs_service_names.append({
-                    "key": service_name['OutputKey'],
-                    "value": service_name['OutputValue']
-                })
-            ecs_client = EcsClient(None, None, self.region)
-            for service_name in ecs_service_names:
-                deployment = DeployAction(
-                    ecs_client,
-                    self.cluster_name,
-                    service_name["value"]
-                )
-                actual_service_name = service_name["key"]. \
-                    replace("EcsServiceName", "")
-                self.desired_counts[actual_service_name] = deployment. \
-                    service.desired_count
-            log("Existing service counts: " + str(self.desired_counts))
-        except Exception:
-            log_bold("Could not find existing services.")
 
     def _get_desired_task_count_for_service(self, service_name):
         if service_name in self.desired_counts:

@@ -1,10 +1,11 @@
-
 from subprocess import call
 
 from cloudlift.config import get_client_for
 from cloudlift.config import get_cluster_name, get_service_stack_name
 from cloudlift.config.logging import log, log_bold, log_err, log_intent, log_warning
-
+from cloudlift.exceptions import UnrecoverableException
+from cloudlift.deployment.ecs import DeployAction, EcsClient
+from cloudlift.config import get_region_for_environment
 
 class ServiceInformationFetcher(object):
     def __init__(self, name, environment):
@@ -21,19 +22,24 @@ class ServiceInformationFetcher(object):
             stack = get_client_for(
                 'cloudformation',
                 self.environment).describe_stacks(
-                    StackName=self.stack_name
-                )['Stacks'][0]
-            service_name_list = list(
+                StackName=self.stack_name
+            )['Stacks'][0]
+            ecs_service_outputs = list(
                 filter(
                     lambda x: x['OutputKey'].endswith('EcsServiceName'),
                     stack['Outputs']
                 )
             )
-            self.ecs_service_names = [
-                svc_name['OutputValue'] for svc_name in service_name_list
-            ]
+            self.ecs_service_names = [svc_name['OutputValue'] for svc_name in ecs_service_outputs]
+            self.ecs_service_logical_name_mappings = []
+            for service_output in ecs_service_outputs:
+                self.ecs_service_logical_name_mappings.append({
+                    "key": service_output['OutputKey'].replace("EcsServiceName", ""),
+                    "value": service_output['OutputValue']
+                })
         except Exception:
             self.ecs_service_names = []
+            self.ecs_service_logical_name_mappings = []
             log_warning("Could not determine services.")
 
     def get_current_version(self):
@@ -67,7 +73,7 @@ resetting to master")
             ec2_reservations = self.ec2_client.describe_instances(
                 InstanceIds=ecs_instance_ids
             )['Reservations']
-            log_bold(service,)
+            log_bold(service, )
             for reservation in ec2_reservations:
                 instances = reservation['Instances']
                 ips = [instance['PrivateIpAddress'] for instance in instances]
@@ -144,3 +150,15 @@ fetched.")
             return commit_sha
         except Exception:
             return None
+
+    def fetch_current_desired_count(self):
+        desired_counts = {}
+        try:
+            deployment_ecs_client = EcsClient(None, None, get_region_for_environment(self.environment))
+            for service_logical_name_map in self.ecs_service_logical_name_mappings:
+                deployment = DeployAction(deployment_ecs_client, self.cluster_name, service_logical_name_map["value"])
+                desired_counts[service_logical_name_map["key"]] = deployment.service.desired_count
+            log("Existing service counts: " + str(desired_counts))
+        except Exception:
+            raise UnrecoverableException("Could not find existing services.")
+        return desired_counts
