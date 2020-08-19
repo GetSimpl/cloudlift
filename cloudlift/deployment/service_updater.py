@@ -14,7 +14,6 @@ from cloudlift.config import (get_client_for,
                               get_region_for_environment)
 from cloudlift.config import get_cluster_name, get_service_stack_name
 from cloudlift.deployment import deployer
-from cloudlift.deployment.ecs import EcsClient
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_warning
 
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
@@ -45,7 +44,6 @@ class ServiceUpdater(object):
         log_bold("Checking image in ECR")
         self.upload_artefacts()
         log_bold("Initiating deployment\n")
-        ecs_client = EcsClient(None, None, self.region)
 
         jobs = []
         for index, service_name in enumerate(self.ecs_service_names):
@@ -56,7 +54,6 @@ class ServiceUpdater(object):
             process = multiprocessing.Process(
                 target=deployer.deploy_new_version,
                 args=(
-                    ecs_client,
                     self.cluster_name,
                     service_name,
                     self.version,

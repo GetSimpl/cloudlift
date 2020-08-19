@@ -1,19 +1,19 @@
-import sys
 from time import sleep
 
-from cloudlift.exceptions import UnrecoverableException
 from colorclass import Color
 from terminaltables import SingleTable
 
-from cloudlift.config import ParameterStore
-from cloudlift.deployment.ecs import DeployAction
+from cloudlift.config import ParameterStore, get_client_for
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
+from cloudlift.deployment.ecs import DeployAction
+from cloudlift.exceptions import UnrecoverableException
 
 
-def deploy_new_version(client, cluster_name, ecs_service_name,
+def deploy_new_version(cluster_name, ecs_service_name,
                        deploy_version_tag, service_name, sample_env_file_path,
                        env_name, color='white', complete_image_uri=None):
     env_config = build_config(env_name, service_name, sample_env_file_path)
+    client = get_client_for('ecs', env_name)
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     if deployment.service.desired_count == 0:
         desired_count = 1
