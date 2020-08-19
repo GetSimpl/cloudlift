@@ -25,6 +25,18 @@ in AWS.
 ```sh
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py | python get-pip.py
 ```
+- It's recommended that you use python3.6. (compatibility issues with newer python versions)You can do so easily using pyenv
+```
+brew install pyenv
+pyenv install 3.6.9
+pyenv pyenv global 3.6.9
+```
+
+- PATH changes
+```
+export PATH="$HOME/.pyenv/bin:$PATH"
+eval "$(pyenv init -)"
+```
 
 ### 2. Download and Install cloudlift
 
