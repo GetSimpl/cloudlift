@@ -115,7 +115,7 @@ disappears indicating instance is down',
         )
         self.template.add_resource(ecs_high_memory_alarm)
         cloudlift_timedout_deployments_alarm = Alarm(
-            'TimedOutCloudliftDeployments' + str(svc.name),
+            'FailedCloudliftDeployments' + str(svc.name),
             EvaluationPeriods=1,
             Dimensions=[
                 MetricDimension(
@@ -135,7 +135,7 @@ disappears indicating instance is down',
             ComparisonOperator='GreaterThanThreshold',
             Statistic='Average',
             Threshold='0',
-            MetricName='TimedOutCloudliftDeployments',
+            MetricName='FailedCloudliftDeployments',
             TreatMissingData='notBreaching'
         )
         self.template.add_resource(cloudlift_timedout_deployments_alarm)

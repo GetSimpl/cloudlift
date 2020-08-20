@@ -8,11 +8,10 @@ from mock import patch, MagicMock
 
 from cloudlift.config import ServiceConfiguration
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
-from cloudlift.version import VERSION
 
 def mocked_service_config():
     return {
-        "cloudlift_version": VERSION,
+        "cloudlift_version": 'test-version',
         "notifications_arn": "some",
         "services": {
             "Dummy": {
@@ -41,7 +40,7 @@ def mocked_service_config():
 
 def mocked_fargate_service_config():
     return {
-        "cloudlift_version": VERSION,
+        "cloudlift_version": 'test-version',
         "notifications_arn": "some",
         "services": {
             "DummyFargateRunSidekiqsh": {

@@ -1,7 +1,7 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.8.1", "notifications_arn": "some", "services":
+    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
       {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
       false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
       "/elb-check"}, "deployment": {"maximum_percent": 150}}, "DummyRunSidekiqsh":
@@ -296,6 +296,48 @@ Resources:
       Threshold: '1'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
+  FailedCloudliftDeploymentsDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'Dummy.Name'
+      EvaluationPeriods: 1
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Average
+      Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  FailedCloudliftDeploymentsDummyRunSidekiqsh:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+      EvaluationPeriods: 1
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Average
+      Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
   TargetGroupDummy:
     Properties:
       HealthCheckIntervalSeconds: 30
@@ -312,45 +354,3 @@ Resources:
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  TimedOutCloudliftDeploymentsDummy:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'Dummy.Name'
-      EvaluationPeriods: 1
-      MetricName: TimedOutCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
-  TimedOutCloudliftDeploymentsDummyRunSidekiqsh:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
-      EvaluationPeriods: 1
-      MetricName: TimedOutCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm

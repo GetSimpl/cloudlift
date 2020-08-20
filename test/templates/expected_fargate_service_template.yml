@@ -1,7 +1,7 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.8.0", "notifications_arn": "some", "services":
+    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
       {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory":
       512}, "memory_reservation": 512}, "DummyFargateService": {"command": null, "fargate":
       {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal":
@@ -108,6 +108,9 @@ Resources:
   DummyFargateService:
     Properties:
       Cluster: cluster-staging
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
       DesiredCount: 45
       LaunchType: FARGATE
       LoadBalancers:
@@ -310,6 +313,48 @@ Resources:
       Threshold: '1'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
+  FailedCloudliftDeploymentsDummyFargateRunSidekiqsh:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
+      EvaluationPeriods: 1
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Average
+      Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  FailedCloudliftDeploymentsDummyFargateService:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'DummyFargateService.Name'
+      EvaluationPeriods: 1
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Average
+      Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
   FargateServicestagingDummyFargateRunSidekiqsh:
     Properties:
       GroupDescription: FargateServicestagingDummyFargateRunSidekiqsh
@@ -344,45 +389,3 @@ Resources:
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  TimedOutCloudliftDeploymentsDummyFargateRunSidekiqsh:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
-      EvaluationPeriods: 1
-      MetricName: TimedOutCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
-  TimedOutCloudliftDeploymentsDummyFargateService:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyFargateService.Name'
-      EvaluationPeriods: 1
-      MetricName: TimedOutCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
