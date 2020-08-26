@@ -13,13 +13,14 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition)
+                             PortMapping, Service, MountPoint)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
 from troposphere.iam import Role
+from cloudlift.extensions.troposphere.ecs import TaskDefinition, Volume, EfsVolumeConfiguration
 
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
@@ -181,6 +182,13 @@ service is down',
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
 
+        if 'mountPoints' in config:
+            mountPoints = []
+            for mountPoint in config['mountPoints']:
+                mountPoints.append(MountPoint(ContainerPath=mountPoint['containerPath'],
+                                              SourceVolume=mountPoint['sourceVolume']))
+            container_definition_arguments['MountPoints'] = mountPoints
+
         cd = ContainerDefinition(**container_definition_arguments)
 
         task_role = self.template.add_resource(Role(
@@ -205,11 +213,19 @@ service is down',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
             }
+        volumes = []
+        if 'volumes' in config:
+            for volume in config['volumes']:
+                volumes.append(Volume(Name=volume['name'],
+                                      EfsVolumeConfiguration=EfsVolumeConfiguration(
+                                          FileSystemId=volume['efsFileSystemId'],
+                                          TransitEncryption='ENABLED')))
 
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
+            Volumes=volumes,
             TaskRoleArn=Ref(task_role),
             **launch_type_td
         )
@@ -398,7 +414,8 @@ service is down',
         self.template.add_resource(alb)
 
         target_group_name = "TargetGroup" + service_name
-        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
+        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config[
+            'http_interface'] else "/elb-check"
         if config['http_interface']['internal']:
             target_group_name = target_group_name + 'Internal'
 
