@@ -242,6 +242,13 @@ To run high level integration tests
 pytest -s test/test_cloudlift.py
 ```
 
+To run tests inside docker container
+
+```sh
+docker build -t cloudlift .
+docker run -it cloudlift
+```
+
 This tests expects to have an access to AWS console.
 Since there's no extensive test coverage, it's better to manually test the
 impacted areas whenever there's a code change.
