@@ -1,4 +1,4 @@
-import sys
+from os.path import basename
 from time import sleep, time
 from cloudlift.exceptions import UnrecoverableException
 from colorclass import Color
@@ -9,13 +9,21 @@ from cloudlift.deployment.ecs import DeployAction
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
 from datetime import datetime
 import boto3
+from glob import glob
+
+
+def find_essential_container(container_definitions):
+    for defn in container_definitions:
+        if defn[u'essential']:
+            return defn[u'name']
+
+    raise UnrecoverableException('no essential containers found')
 
 
 def deploy_new_version(client, cluster_name, ecs_service_name,
                        deploy_version_tag, service_name, sample_env_file_path,
                        timeout_seconds, env_name, color='white', complete_image_uri=None):
     log_bold("Starting to deploy " + ecs_service_name)
-    env_config = build_config(env_name, service_name, sample_env_file_path)
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     if deployment.service.desired_count == 0:
         desired_count = 1
@@ -25,15 +33,26 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
     task_definition = deployment.get_current_task_definition(
         deployment.service
     )
+
+    essential_container = find_essential_container(task_definition[u'containerDefinitions'])
+
+    container_configurations = build_config(
+        env_name,
+        service_name,
+        sample_env_file_path,
+        essential_container,
+    )
+
     if complete_image_uri is not None:
-        container_name = task_definition['containerDefinitions'][0]['name']
         task_definition.set_images(
+            essential_container,
             deploy_version_tag,
-            **{container_name: complete_image_uri}
+            **{essential_container: complete_image_uri}
         )
     else:
-        task_definition.set_images(deploy_version_tag)
+        task_definition.set_images(essential_container, deploy_version_tag)
     for container in task_definition.containers:
+        env_config = container_configurations.get(container[u'name'], [])
         task_definition.apply_container_environment(container, env_config)
     print_task_diff(ecs_service_name, task_definition.diff, color)
     new_task_definition = deployment.update_task_definition(task_definition)
@@ -54,26 +73,54 @@ def deploy_and_wait(deployment, new_task_definition, color, timeout_seconds):
     return wait_for_finish(deployment, existing_events, color, deploy_end_time)
 
 
-def build_config(env_name, service_name, sample_env_file_path):
-    service_config = read_config(open(sample_env_file_path).read())
+def build_config(env_name, cloudlift_service_name, sample_env_file_path, essential_container_name):
     try:
-        environment_config = ParameterStore(
-            service_name,
+        environment_config, sidecars_configs = ParameterStore(
+            cloudlift_service_name,
             env_name).get_existing_config()
     except Exception as err:
         log_intent(str(err))
         raise UnrecoverableException("Cannot find the configuration in parameter store \
-[env: %s | service: %s]." % (env_name, service_name))
-    missing_env_config = set(service_config) - set(environment_config)
-    if missing_env_config:
-        raise UnrecoverableException('There is no config value for the keys ' +
-                str(missing_env_config))
-    missing_env_sample_config = set(environment_config) - set(service_config)
-    if missing_env_sample_config:
-        raise UnrecoverableException('There is no config value for the keys in env.sample file ' +
-                str(missing_env_sample_config))
+[env: %s | service: %s]." % (env_name, cloudlift_service_name))
 
-    return make_container_defn_env_conf(service_config, environment_config)
+    sidecar_filename_format = 'sidecar_{}_{}'
+    configs_to_check = [(essential_container_name, sample_env_file_path, environment_config)]
+    sample_filename = basename(sample_env_file_path)
+    for sidecar_name, sidecar_config in sidecars_configs.items():
+        configs_to_check.append(
+            (container_name(sidecar_name), sidecar_filename_format.format(sidecar_name, sample_filename),
+             sidecar_config)
+        )
+
+    all_sidecar_env_samples = sorted(glob(sidecar_filename_format.format('*', sample_filename)))
+    all_sidecars_in_parameter_store = [sidecar_filename_format.format(name, sample_filename) for name in
+                                              sidecars_configs.keys()]
+
+    if all_sidecar_env_samples != all_sidecars_in_parameter_store:
+        raise UnrecoverableException('There is a mismatch in sidecar configuratons. '
+                                     'Env Samples found: {}, Configurations present for: {}'.format(
+            all_sidecar_env_samples,
+            all_sidecars_in_parameter_store,
+        ))
+
+    container_configurations = {}
+    for name, filepath, env_config in configs_to_check:
+        sample_config = read_config(open(filepath).read())
+        missing_actual_config = set(sample_config) - set(env_config)
+        if missing_actual_config:
+            raise UnrecoverableException(
+                'There is no config value for the keys of container {} '.format(name) +
+                str(missing_actual_config))
+
+        missing_sample_config = set(env_config) - set(sample_config)
+        if missing_sample_config:
+            raise UnrecoverableException('There is no config value for the keys in {} file '.format(filepath) +
+                                         str(missing_sample_config))
+
+        container_configurations[name] = make_container_defn_env_conf(sample_config,
+                                                                      env_config)
+
+    return container_configurations
 
 
 def read_config(file_content):
@@ -104,7 +151,6 @@ def wait_for_finish(action, existing_events, color, deploy_end_time):
             existing_events,
             color
         )
-
 
         if is_deployed(service['deployments']):
             return True
@@ -192,7 +238,7 @@ def print_task_diff(ecs_service_name, diffs, color):
                     Color(
                         '{' + env_var_diff_color + '}' +
                         env_var +
-                        '{/'+env_var_diff_color+'}'
+                        '{/' + env_var_diff_color + '}'
                     ),
                     old_val,
                     current_val
@@ -206,3 +252,11 @@ def print_task_diff(ecs_service_name, diffs, color):
             ecs_service_name + " No change in environment variables",
             color
         )
+
+
+def container_name(service_name):
+    return service_name + "Container"
+
+
+def strip_container_name(name):
+    return name.replace("Container", "")

@@ -249,9 +249,12 @@ class EcsTaskDefinition(dict):
     def get_overrides_env(env):
         return [{"name": e, "value": env[e]} for e in env]
 
-    def set_images(self, tag=None, **images):
+    def set_images(self, container_to_deploy, tag=None, **images):
         self.validate_container_options(**images)
         for container in self.containers:
+            if container[u'name'] != container_to_deploy:
+                continue
+
             if container[u'name'] in images:
                 new_image = images[container[u'name']]
                 diff = EcsTaskDefinitionDiff(

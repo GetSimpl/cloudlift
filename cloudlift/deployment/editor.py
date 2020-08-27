@@ -7,10 +7,10 @@ from cloudlift.deployment.deployer import read_config
 from cloudlift.config.logging import log_warning
 
 
-def edit_config(name, environment):
+def edit_config(name, environment, sidecar_name):
     parameter_store = ParameterStore(name, environment)
-    env_config_strings = parameter_store.get_existing_config_as_string()
-    edited_config_content = click.edit(str(env_config_strings))
+    env_config_strings = parameter_store.get_existing_config_as_string(sidecar_name)
+    edited_config_content = click.edit(str(env_config_strings), extension=".properties")
 
     if edited_config_content is None:
         log_warning("No changes made, exiting.")
@@ -25,6 +25,6 @@ def edit_config(name, environment):
     else:
         print_parameter_changes(differences)
         if click.confirm('Do you want update the config?'):
-            parameter_store.set_config(differences)
+            parameter_store.set_config(differences, sidecar_name)
         else:
             log_warning("Changes aborted.")

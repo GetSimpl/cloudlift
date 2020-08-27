@@ -258,6 +258,30 @@ class ServiceConfiguration(object):
                         }
                     },
                 },
+                "sidecars": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "image": {
+                                "type": "string"
+                            },
+                            "command": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "memory_reservation": {
+                                "type": "number"
+                            }
+                        },
+                        "required": ["name", "image", "memory_reservation"]
+                    }
+                },
                 "system_controls": {
                     "type": "array",
                     "items": {

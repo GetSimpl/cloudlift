@@ -24,7 +24,7 @@ from troposphere.iam import Role
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_account_id
-from cloudlift.deployment.deployer import build_config
+from cloudlift.deployment.deployer import build_config, container_name
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
 
@@ -170,19 +170,21 @@ service is down',
 
     def _add_service(self, service_name, config):
         launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
-        env_config = build_config(
+        container_configurations = build_config(
             self.env,
             self.application_name,
-            self.env_sample_file_path
+            self.env_sample_file_path,
+            container_name(service_name),
         )
+        log_config = self._gen_log_config(service_name)
         container_definition_arguments = {
             "Environment": [
-                Environment(Name=k, Value=v) for (k, v) in env_config
+                Environment(Name=k, Value=v) for (k, v) in container_configurations[container_name(service_name)]
             ],
-            "Name": service_name + "Container",
+            "Name": container_name(service_name),
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "LogConfiguration": self._gen_log_config(service_name),
+            "LogConfiguration": log_config,
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
@@ -209,7 +211,7 @@ service is down',
 
         if 'container_health_check' in config:
             configured_health_check = config['container_health_check']
-            ecs_health_check =  {'Command': ['CMD-SHELL', configured_health_check['command']]}
+            ecs_health_check = {'Command': ['CMD-SHELL', configured_health_check['command']]}
             if 'start_period' in configured_health_check:
                 ecs_health_check['StartPeriod'] = int(configured_health_check['start_period'])
             if 'retries' in configured_health_check:
@@ -222,7 +224,22 @@ service is down',
                 **ecs_health_check
             )
 
+        if 'sidecars' in config:
+            links = []
+            for sidecar in config['sidecars']:
+                links.append(container_name(sidecar.get('name')))
+            container_definition_arguments['Links'] = links
+
         cd = ContainerDefinition(**container_definition_arguments)
+        container_definitions = [cd]
+        if 'sidecars' in config:
+            for sidecar in config['sidecars']:
+                sidecar_container_name = container_name(sidecar.get('name'))
+                container_definitions.append(
+                    self._gen_container_definitions_for_sidecar(sidecar,
+                                                                log_config,
+                                                                container_configurations.get(sidecar_container_name, {})),
+                )
 
         task_role = self.template.add_resource(Role(
             service_name + "Role",
@@ -256,7 +273,7 @@ service is down',
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
-            ContainerDefinitions=[cd],
+            ContainerDefinitions=container_definitions,
             TaskRoleArn=Ref(task_role),
             PlacementConstraints=placement_constraints,
             **launch_type_td
@@ -265,7 +282,8 @@ service is down',
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
         maximum_percent = config['deployment'].get('maximum_percent', 200) if 'deployment' in config else 200
-        deployment_configuration = DeploymentConfiguration(MinimumHealthyPercent=100, MaximumPercent=int(maximum_percent))
+        deployment_configuration = DeploymentConfiguration(MinimumHealthyPercent=100,
+                                                           MaximumPercent=int(maximum_percent))
 
         if 'http_interface' in config:
             lb, target_group_name = self._add_ecs_lb(cd, service_name, config, launch_type)
@@ -391,6 +409,21 @@ service is down',
             )
             self.template.add_resource(svc)
         self._add_service_alarms(svc)
+
+    def _gen_container_definitions_for_sidecar(self, sidecar, log_config, env_config):
+        cd = {}
+        if 'command' in sidecar:
+            cd['Command'] = sidecar['command']
+
+        return ContainerDefinition(
+            Name=container_name(sidecar.get('name')),
+            Environment=[Environment(Name=k, Value=v) for (k, v) in env_config],
+            MemoryReservation=int(sidecar.get('memory_reservation')),
+            Image=sidecar.get('image'),
+            LogConfiguration=log_config,
+            Essential=False,
+            **cd
+        )
 
     def _gen_log_config(self, service_name):
         current_service_config = self.configuration['services'][service_name]

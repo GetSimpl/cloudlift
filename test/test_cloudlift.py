@@ -17,7 +17,28 @@ def setup_module(module):
 
 
 def mocked_service_config(cls, *args, **kwargs):
-    return None
+    return {
+        "cloudlift_version": VERSION,
+        "services": {
+            "Dummy": {
+                "command": None,
+                "sidecars": [
+                    {"name": "redis", "image": "redis", "memory_reservation": 256}
+                ],
+                "http_interface": {
+                    "alb_enabled": "true",
+                    "container_port": 80,
+                    "internal": False,
+                    "restrict_access_to": [
+                        "0.0.0.0/0"
+                    ],
+                    "health_check_path": "/elb-check"
+                },
+                "memory_reservation": 512
+            }
+        }
+    }
+
 
 def mocked_fargate_service_config(cls, *args, **kwargs):
     return {
@@ -43,9 +64,10 @@ def mocked_fargate_service_config(cls, *args, **kwargs):
     }
 
 
-environment_name = 'staging'
-service_name = 'dummy'
+environment_name = 'test'
+service_name = 'cfn-dummy'
 fargate_service_name = 'dummy-fargate'
+
 
 def test_cloudlift_can_deploy_to_ec2(keep_resources):
     cfn_client = boto3.client('cloudformation')
@@ -55,8 +77,7 @@ def test_cloudlift_can_deploy_to_ec2(keep_resources):
     waiter = cfn_client.get_waiter('stack_delete_complete')
     waiter.wait(StackName=stack_name)
     print("completed delete")
-    config_path = '/'.join([environment_name, service_name, 'env.properties'])
-    os.chdir('./test/dummy')
+    os.chdir('dummy')
     print("adding configuration to parameter store")
     ssm_client = boto3.client('ssm')
     ssm_client.put_parameter(
@@ -72,10 +93,20 @@ def test_cloudlift_can_deploy_to_ec2(keep_resources):
         KeyId='alias/aws/ssm',
         Overwrite=True
     )
+    ssm_client.put_parameter(
+        Name=f"/{environment_name}/{service_name}/REDIS_HOST",
+        Value="redisContainer",
+        Type="SecureString",
+        KeyId='alias/aws/ssm',
+        Overwrite=True
+    )
     with patch.object(ServiceConfiguration, 'edit_config',
                       new=mocked_service_config):
-        ServiceCreator(service_name, environment_name,).create()
-    ServiceUpdater(service_name, environment_name, None).run()
+        with patch.object(ServiceConfiguration, 'get_config',
+                          new=mocked_service_config):
+            ServiceCreator(service_name, environment_name, ).create()
+
+    ServiceUpdater(service_name, environment_name, None, timeout_seconds=600).run()
     outputs = cfn_client.describe_stacks(
         StackName=stack_name
     )['Stacks'][0]['Outputs']
@@ -85,15 +116,17 @@ def test_cloudlift_can_deploy_to_ec2(keep_resources):
     content_matched = wait_until(
         lambda: match_page_content(
             service_url,
-            'This is dummy app. Label: Demo'
+            'This is dummy app. Label: Demo. Redis PING: PONG'
         ), 60)
-    os.chdir('../../')
     assert content_matched
     if not keep_resources:
         cfn_client.delete_stack(StackName=stack_name)
 
 
 def test_cloudlift_can_deploy_to_fargate(keep_resources):
+    if os.getenv('RUN_FARGATE_INTEGRATION_TEST') != 'true':
+        print('RUN_FARGATE_INTEGRATION_TEST is not set to true. Skipping')
+        return
     cfn_client = boto3.client('cloudformation')
     stack_name = f'{fargate_service_name}-{environment_name}'
     cfn_client.delete_stack(StackName=stack_name)
@@ -119,11 +152,11 @@ def test_cloudlift_can_deploy_to_fargate(keep_resources):
         Overwrite=True
     )
     with patch.object(ServiceConfiguration, 'edit_config',
-                     new=mocked_fargate_service_config):
+                      new=mocked_fargate_service_config):
         with patch.object(ServiceConfiguration, 'get_config',
                           new=mocked_fargate_service_config):
-            ServiceCreator(fargate_service_name, environment_name,).create()
-    ServiceUpdater(fargate_service_name, environment_name, None).run()
+            ServiceCreator(fargate_service_name, environment_name).create()
+    ServiceUpdater(fargate_service_name, environment_name, None, timeout_seconds=600).run()
     outputs = cfn_client.describe_stacks(
         StackName=stack_name
     )['Stacks'][0]['Outputs']

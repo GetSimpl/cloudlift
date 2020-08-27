@@ -97,8 +97,10 @@ def update_environment(environment, update_ecs_agents):
 in parameter store")
 @_require_name
 @_require_environment
-def edit_config(name, environment):
-    editor.edit_config(name, environment)
+@click.option('--sidecar', help='Choose which sidecar to edit the configuration. Defaults to the main container ' +
+                                'if not provided')
+def edit_config(name, environment, sidecar):
+    editor.edit_config(name, environment, sidecar)
 
 
 @cli.command()
