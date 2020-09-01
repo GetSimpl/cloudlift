@@ -155,7 +155,7 @@ def wait_for_finish(action, existing_events, color, deploy_end_time):
         if is_deployed(service['deployments']):
             return True
 
-        sleep(1)
+        sleep(5)
 
     log_err("Deployment timed out!")
     return False
