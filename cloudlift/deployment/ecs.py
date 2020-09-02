@@ -60,7 +60,6 @@ class EcsClient(object):
             fargate_td = {
                 'executionRoleArn': execution_role_arn or u'',
                 'requiresCompatibilities': requires_compatibilities or [],
-                'networkMode': network_mode or u'',
                 'cpu': cpu,
                 'memory': memory,
             }
@@ -70,7 +69,8 @@ class EcsClient(object):
             volumes=volumes,
             taskRoleArn=role_arn or u'',
             placementConstraints=placement_constraints,
-            **fargate_td
+            networkMode=network_mode,
+        **fargate_td
         )
 
     def deregister_task_definition(self, task_definition_arn):
@@ -440,6 +440,7 @@ class EcsAction(object):
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
             placement_constraints=task_definition.placement_constraints,
+            network_mode=task_definition.network_mode,
             **fargate_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
