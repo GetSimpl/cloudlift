@@ -73,54 +73,31 @@ def deploy_and_wait(deployment, new_task_definition, color, timeout_seconds):
     return wait_for_finish(deployment, existing_events, color, deploy_end_time)
 
 
-def build_config(env_name, cloudlift_service_name, sample_env_file_path, essential_container_name):
+def build_config(env_name, service_name, sample_env_file_path, essential_container_name):
+    environment_config = _get_parameter_store_config(service_name, env_name)
+    _validate_config_availability(sample_env_file_path, environment_config)
+    return {essential_container_name: _make_container_defn_env_conf(environment_config)}
+
+
+def _get_parameter_store_config(service_name, env_name):
     try:
-        environment_config, sidecars_configs = ParameterStore(
-            cloudlift_service_name,
-            env_name).get_existing_config()
+        environment_config, _ = ParameterStore(service_name, env_name).get_existing_config()
     except Exception as err:
         log_intent(str(err))
-        raise UnrecoverableException("Cannot find the configuration in parameter store \
-[env: %s | service: %s]." % (env_name, cloudlift_service_name))
+        ex_msg = f"Cannot find the configuration in parameter store [env: ${env_name} | service: ${service_name}]."
+        raise UnrecoverableException(ex_msg)
+    return environment_config
 
-    sidecar_filename_format = 'sidecar_{}_{}'
-    configs_to_check = [(essential_container_name, sample_env_file_path, environment_config)]
-    sample_filename = basename(sample_env_file_path)
-    for sidecar_name, sidecar_config in sidecars_configs.items():
-        configs_to_check.append(
-            (container_name(sidecar_name), sidecar_filename_format.format(sidecar_name, sample_filename),
-             sidecar_config)
-        )
 
-    all_sidecar_env_samples = sorted(glob(sidecar_filename_format.format('*', sample_filename)))
-    all_sidecars_in_parameter_store = [sidecar_filename_format.format(name, sample_filename) for name in
-                                              sidecars_configs.keys()]
-
-    if all_sidecar_env_samples != all_sidecars_in_parameter_store:
-        raise UnrecoverableException('There is a mismatch in sidecar configuratons. '
-                                     'Env Samples found: {}, Configurations present for: {}'.format(
-            all_sidecar_env_samples,
-            all_sidecars_in_parameter_store,
-        ))
-
-    container_configurations = {}
-    for name, filepath, env_config in configs_to_check:
-        sample_config = read_config(open(filepath).read())
-        missing_actual_config = set(sample_config) - set(env_config)
-        if missing_actual_config:
-            raise UnrecoverableException(
-                'There is no config value for the keys of container {} '.format(name) +
-                str(missing_actual_config))
-
-        missing_sample_config = set(env_config) - set(sample_config)
-        if missing_sample_config:
-            raise UnrecoverableException('There is no config value for the keys in {} file '.format(filepath) +
-                                         str(missing_sample_config))
-
-        container_configurations[name] = make_container_defn_env_conf(sample_config,
-                                                                      env_config)
-
-    return container_configurations
+def _validate_config_availability(sample_env_file_path, environment_config):
+    sample_config = read_config(open(sample_env_file_path).read())
+    missing_actual_config = set(sample_config) - set(environment_config)
+    if missing_actual_config:
+        raise UnrecoverableException('There is no config value for the keys ' + str(missing_actual_config))
+    missing_sample_config = set(environment_config) - set(sample_config)
+    if missing_sample_config:
+        raise UnrecoverableException('There is no config value for the keys in {} file '.format(sample_env_file_path) +
+                                     str(missing_sample_config))
 
 
 def read_config(file_content):
@@ -134,9 +111,9 @@ def read_config(file_content):
     return config
 
 
-def make_container_defn_env_conf(service_config, environment_config):
+def _make_container_defn_env_conf(environment_config):
     container_defn_env_config = []
-    for env_var_name in service_config:
+    for env_var_name in environment_config:
         container_defn_env_config.append(
             (env_var_name, environment_config[env_var_name])
         )

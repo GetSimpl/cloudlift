@@ -237,7 +237,7 @@ class TestBuildConfig(TestCase):
     @patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test"))
     @patch('cloudlift.deployment.deployer.glob')
     @patch('cloudlift.deployment.deployer.ParameterStore')
-    def test_successful_build_config_for_one_main_container(self, mock_parameter_store, mock_glob):
+    def test_successful_build_config_for_the_main_container(self, mock_parameter_store, mock_glob):
         env_name = "staging"
         cloudlift_service_name = "Dummy"
         sample_env_file_path = "test-env.sample"
@@ -291,7 +291,7 @@ class TestBuildConfig(TestCase):
 
         assert pytest_wrapped_e.type == UnrecoverableException
         assert str(pytest_wrapped_e.value) == '"There is no config value for the' \
-                                              ' keys of container mainService {\'ADDITIONAL_CONFIG\'}"'
+                                              ' keys {\'ADDITIONAL_CONFIG\'}"'
 
     @patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test"))
     @patch('cloudlift.deployment.deployer.glob')
@@ -320,110 +320,3 @@ class TestBuildConfig(TestCase):
         assert str(pytest_wrapped_e.value) == '"There is no config value for the keys' \
                                               ' in test-env.sample file {\'ADDITIONAL_KEYS\'}"'
 
-    @patch('builtins.open', new_callable=mock_open, read_data="PORT=1\nLABEL=test")
-    @patch('cloudlift.deployment.deployer.glob')
-    @patch('cloudlift.deployment.deployer.ParameterStore')
-    def test_successful_build_config_with_sidecars(self, mock_parameter_store, mock_glob, mo):
-        handlers = (mo.return_value, mock_open(read_data="LISTEN_PORT=1234").return_value,)
-        mo.side_effect = handlers
-
-        env_name = "staging"
-        cloudlift_service_name = "Dummy"
-        sample_env_file_path = "test-env.sample"
-        essential_container_name = "mainServiceContainer"
-
-        mock_store = MagicMock()
-        mock_parameter_store.return_value = mock_store
-        mock_store.get_existing_config.return_value = (
-            {'PORT': '80', 'LABEL': 'Dummy'},
-            {'redis': {'LISTEN_PORT': '6379'}},
-        )
-
-        mock_glob.return_value = ['sidecar_redis_test-env.sample']
-
-        actual_configurations = build_config(
-            env_name,
-            cloudlift_service_name,
-            sample_env_file_path,
-            essential_container_name,
-        )
-
-        expected_configurations = {
-            "mainServiceContainer": [
-                ("PORT", "80"),
-                ("LABEL", "Dummy")
-            ],
-            "redisContainer": [
-                ('LISTEN_PORT', '6379')
-            ]
-        }
-
-        self.assertEqual(expected_configurations, actual_configurations)
-
-    @patch('builtins.open', new_callable=mock_open, read_data="PORT=1\nLABEL=test")
-    @patch('cloudlift.deployment.deployer.glob')
-    @patch('cloudlift.deployment.deployer.ParameterStore')
-    def test_failure_of_build_config_for_sidecars_configs_mismatch(self, mock_parameter_store, mock_glob, mo):
-        handlers = (mo.return_value, mock_open(read_data="LISTEN_PORT=1234").return_value,)
-        mo.side_effect = handlers
-
-        env_name = "staging"
-        cloudlift_service_name = "Dummy"
-        sample_env_file_path = "test-env.sample"
-        ecs_service_name = "mainService"
-
-        mock_store = MagicMock()
-        mock_parameter_store.return_value = mock_store
-        mock_store.get_existing_config.return_value = (
-            {'PORT': '80', 'LABEL': 'Dummy'},
-            {'redis': {'LISTEN_PORT': '6379', 'EXTRA_VAR': 'value'}},
-        )
-
-        mock_glob.return_value = ['sidecar_redis_test-env.sample']
-
-        with pytest.raises(UnrecoverableException) as pytest_wrapped_e:
-            build_config(
-                env_name,
-                cloudlift_service_name,
-                sample_env_file_path,
-                ecs_service_name,
-            )
-
-        mock_glob.assert_called_with('sidecar_*_test-env.sample')
-        assert pytest_wrapped_e.type == UnrecoverableException
-        assert str(pytest_wrapped_e.value) == '"There is no config value for the keys in ' \
-                                              'sidecar_redis_test-env.sample file {\'EXTRA_VAR\'}"'
-
-    @patch('builtins.open', new_callable=mock_open, read_data="PORT=1\nLABEL=test")
-    @patch('cloudlift.deployment.deployer.glob')
-    @patch('cloudlift.deployment.deployer.ParameterStore')
-    def test_failure_if_sample_for_sidecar_present(self, mock_parameter_store, mock_glob, mo):
-        handlers = (mo.return_value, mock_open(read_data="LISTEN_PORT=1234").return_value,)
-        mo.side_effect = handlers
-
-        env_name = "staging"
-        cloudlift_service_name = "Dummy"
-        sample_env_file_path = "test-env.sample"
-        ecs_service_name = "mainService"
-
-        mock_store = MagicMock()
-        mock_parameter_store.return_value = mock_store
-        mock_store.get_existing_config.return_value = (
-            {'PORT': '80', 'LABEL': 'Dummy'},
-            {'redis': {'LISTEN_PORT': '6379', 'EXTRA_VAR': 'value'}},
-        )
-
-        mock_glob.return_value = ['sidecar_redis_test-env.sample', 'sidecar_nginx_test-env.sample']
-
-        with pytest.raises(UnrecoverableException) as pytest_wrapped_e:
-            build_config(
-                env_name,
-                cloudlift_service_name,
-                sample_env_file_path,
-                ecs_service_name,
-            )
-
-        assert pytest_wrapped_e.type == UnrecoverableException
-        assert '"There is a mismatch in sidecar configuratons. ' \
-            'Env Samples found: [\'sidecar_nginx_test-env.sample\', \'sidecar_redis_test-env.sample\'], ' \
-            'Configurations present for: [\'sidecar_redis_test-env.sample\']"' == str(pytest_wrapped_e.value)
