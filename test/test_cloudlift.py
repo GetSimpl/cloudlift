@@ -26,7 +26,9 @@ def mocked_service_config(cls, *args, **kwargs):
                     {"name": "redis", "image": "redis", "memory_reservation": 256}
                 ],
                 "http_interface": {
-                    "alb_enabled": "true",
+                    "alb": {
+                        "create_new": True
+                    },
                     "container_port": 80,
                     "internal": False,
                     "restrict_access_to": [
@@ -95,7 +97,7 @@ def test_cloudlift_can_deploy_to_ec2(keep_resources):
     )
     ssm_client.put_parameter(
         Name=f"/{environment_name}/{service_name}/REDIS_HOST",
-        Value="redisContainer",
+        Value="redis",
         Type="SecureString",
         KeyId='alias/aws/ssm',
         Overwrite=True

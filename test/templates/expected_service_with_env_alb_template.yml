@@ -3,16 +3,18 @@ Outputs:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
       {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
-      false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}, "deployment": {"maximum_percent": 150}, "sidecars": [{"name": "redis", "image": "redis:latest",
-      "memory_reservation": 256}]}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh",
-      "deployment": {"maximum_percent": 150}}}}'
+      false, "alb": {"create_new": false, "host": "abc.xyz.com"}, "container_port": 7003,
+      "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}, "DummyWithCustomListener":
+      {"memory_reservation": 1000, "command": null, "http_interface": {"internal": false, "alb":
+      {"create_new": false, "listener_arn": "custom_listener_arn", "priority": 100}, "container_port": 7003,
+       "restrict_access_to": ["0.0.0.0/0"],
+        "health_check_path": "/elb-check"}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
-  DummyRunSidekiqshEcsServiceName:
+  DummyWithCustomListenerEcsServiceName:
     Description: The ECS name which needs to be entered
-    Value: !GetAtt 'DummyRunSidekiqsh.Name'
+    Value: !GetAtt 'DummyWithCustomListener.Name'
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -54,7 +56,7 @@ Resources:
     Properties:
       Cluster: cluster-staging
       DeploymentConfiguration:
-        MaximumPercent: 150
+        MaximumPercent: 200
         MinimumHealthyPercent: 100
       DesiredCount: 100
       LaunchType: EC2
@@ -68,6 +70,19 @@ Resources:
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'DummyTaskDefinition'
     Type: AWS::ECS::Service
+  DummyListenerRule:
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref 'TargetGroupDummy'
+          Type: 'forward'
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - 'abc.xyz.com'
+      ListenerArn: listenerARN1234
+      Priority: 4
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
   DummyRole:
     Properties:
       AssumeRolePolicyDocument:
@@ -79,53 +94,6 @@ Resources:
               Service:
                 - ecs-tasks.amazonaws.com
     Type: AWS::IAM::Role
-  DummyRunSidekiqsh:
-    Properties:
-      Cluster: cluster-staging
-      DeploymentConfiguration:
-        MaximumPercent: 150
-        MinimumHealthyPercent: 100
-      DesiredCount: 199
-      LaunchType: EC2
-      PlacementStrategies:
-        - Field: attribute:ecs.availability-zone
-          Type: spread
-      TaskDefinition: !Ref 'DummyRunSidekiqshTaskDefinition'
-    Type: AWS::ECS::Service
-  DummyRunSidekiqshRole:
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-    Type: AWS::IAM::Role
-  DummyRunSidekiqshTaskDefinition:
-    Properties:
-      ContainerDefinitions:
-        - Command:
-            - ./run-sidekiq.sh
-          Cpu: 0
-          Environment:
-            - Name: PORT
-              Value: '80'
-          Essential: 'true'
-          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: staging-logs
-              awslogs-region: us-west-2
-              awslogs-stream-prefix: DummyRunSidekiqsh
-          MemoryReservation: 1000
-          Name: DummyRunSidekiqshContainer
-      Family: DummyRunSidekiqshFamily
-      PlacementConstraints: []
-      TaskRoleArn: !Ref 'DummyRunSidekiqshRole'
-    Type: AWS::ECS::TaskDefinition
   DummyTaskDefinition:
     Properties:
       ContainerDefinitions:
@@ -135,8 +103,6 @@ Resources:
               Value: '80'
           Essential: 'true'
           Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
-          Links:
-            - 'redisContainer:redis'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -147,20 +113,70 @@ Resources:
           Name: DummyContainer
           PortMappings:
             - ContainerPort: 7003
-        - Environment: []
-          Essential: 'false'
-          Image: redis:latest
+      Family: DummyFamily
+      PlacementConstraints: []
+      TaskRoleArn: !Ref 'DummyRole'
+    Type: AWS::ECS::TaskDefinition
+  DummyWithCustomListener:
+    Properties:
+      Cluster: cluster-staging
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: 0
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: DummyWithCustomListenerContainer
+          ContainerPort: 7003
+          TargetGroupArn: !Ref 'TargetGroupDummyWithCustomListener'
+      PlacementStrategies:
+        - Field: attribute:ecs.availability-zone
+          Type: spread
+      Role: !Ref 'ECSServiceRole'
+      TaskDefinition: !Ref 'DummyWithCustomListenerTaskDefinition'
+    Type: AWS::ECS::Service
+  DummyWithCustomListenerListenerRule:
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref 'TargetGroupDummyWithCustomListener'
+          Type: 'forward'
+      Conditions: []
+      ListenerArn: custom_listener_arn
+      Priority: 100
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+  DummyWithCustomListenerRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
+  DummyWithCustomListenerTaskDefinition:
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 0
+          Environment:
+            - Name: PORT
+              Value: '80'
+          Essential: 'true'
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: staging-logs
               awslogs-region: us-west-2
-              awslogs-stream-prefix: Dummy
-          MemoryReservation: 256
-          Name: redisContainer
-      Family: DummyFamily
+              awslogs-stream-prefix: DummyWithCustomListener
+          MemoryReservation: 1000
+          Name: DummyWithCustomListenerContainer
+          PortMappings:
+            - ContainerPort: 7003
+      Family: DummyWithCustomListenerFamily
       PlacementConstraints: []
-      TaskRoleArn: !Ref 'DummyRole'
+      TaskRoleArn: !Ref 'DummyWithCustomListenerRole'
     Type: AWS::ECS::TaskDefinition
   ECSServiceRole:
     Properties:
@@ -199,7 +215,7 @@ Resources:
       Threshold: '80'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
-  EcsHighCPUAlarmDummyRunSidekiqsh:
+  EcsHighCPUAlarmDummyWithCustomListener:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -210,7 +226,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+          Value: !GetAtt 'DummyWithCustomListener.Name'
       EvaluationPeriods: 1
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -243,7 +259,7 @@ Resources:
       Threshold: '80'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
-  EcsHighMemoryAlarmDummyRunSidekiqsh:
+  EcsHighMemoryAlarmDummyWithCustomListener:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -254,7 +270,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+          Value: !GetAtt 'DummyWithCustomListener.Name'
       EvaluationPeriods: 1
       MetricName: MemoryUtilization
       Namespace: AWS/ECS
@@ -287,7 +303,7 @@ Resources:
       Threshold: '1'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
-  EcsNoRunningTasksAlarmDummyRunSidekiqsh:
+  EcsNoRunningTasksAlarmDummyWithCustomListener:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -298,7 +314,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+          Value: !GetAtt 'DummyWithCustomListener.Name'
       EvaluationPeriods: 1
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -330,7 +346,7 @@ Resources:
       Threshold: '0'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
-  FailedCloudliftDeploymentsDummyRunSidekiqsh:
+  FailedCloudliftDeploymentsDummyWithCustomListener:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
@@ -340,7 +356,7 @@ Resources:
         - Name: ClusterName
           Value: cluster-staging
         - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
+          Value: !GetAtt 'DummyWithCustomListener.Name'
       EvaluationPeriods: 1
       MetricName: FailedCloudliftDeployments
       Namespace: ECS/DeploymentMetrics
@@ -352,6 +368,22 @@ Resources:
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
   TargetGroupDummy:
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /elb-check
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200-399
+      Port: 7003
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref 'VPC'
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  TargetGroupDummyWithCustomListener:
     Properties:
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /elb-check

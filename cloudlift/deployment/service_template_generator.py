@@ -15,8 +15,10 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl,
                              HealthCheck)
-from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener, SubnetMapping
+from troposphere.elasticloadbalancingv2 import SubnetMapping
 from troposphere.elasticloadbalancingv2 import LoadBalancer as NLBLoadBalancer
+from troposphere.elasticloadbalancingv2 import (Action, Certificate, Listener, ListenerRule, Condition,
+                                                HostHeaderConfig)
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
@@ -25,6 +27,7 @@ from troposphere.iam import Role
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_account_id
+from cloudlift.config.region import get_environment_level_alb_listener, get_client_for
 from cloudlift.deployment.deployer import build_config, container_name
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
@@ -237,7 +240,10 @@ service is down',
         if 'sidecars' in config:
             links = []
             for sidecar in config['sidecars']:
-                links.append(container_name(sidecar.get('name')))
+                sidecar_name = sidecar.get('name')
+                links.append(
+                    "{}:{}".format(container_name(sidecar_name), sidecar_name)
+                )
             container_definition_arguments['Links'] = links
 
         cd = ContainerDefinition(**container_definition_arguments)
@@ -300,15 +306,24 @@ service is down',
         if 'udp_interface' in config:
             lb, target_group_name = self._add_ecs_nlb(cd, service_name, config['udp_interface'], launch_type)
             nlb_enabled = 'nlb_enabled' in config['udp_interface'] and config['udp_interface']['nlb_enabled']
+            launch_type_svc = {}
+
             if nlb_enabled:
                 elb, service_listener, nlb_sg = self._add_nlb(service_name, config, target_group_name)
-            launch_type_svc = {
-                'NetworkConfiguration': NetworkConfiguration(
+                launch_type_svc['DependsOn'] = service_listener.title
+                launch_type_svc['NetworkConfiguration'] = NetworkConfiguration(
                     AwsvpcConfiguration=AwsvpcConfiguration(
                         Subnets=[Ref(self.private_subnet1), Ref(self.private_subnet2)],
                         SecurityGroups=[Ref(nlb_sg)])
                 )
-            }
+                self.template.add_output(
+                    Output(
+                        service_name + "URL",
+                        Description="The URL at which the service is accessible",
+                        Value=Sub("udp://${" + elb.name + ".DNSName}")
+                    )
+                )
+
             if launch_type == self.LAUNCH_TYPE_EC2:
                 launch_type_svc['PlacementStrategies'] = self.PLACEMENT_STRATEGIES
             svc = Service(
@@ -317,7 +332,6 @@ service is down',
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
-                DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
@@ -328,31 +342,41 @@ service is down',
                     Value=GetAtt(svc, 'Name')
                 )
             )
-            self.template.add_output(
-                Output(
-                    service_name + "URL",
-                    Description="The URL at which the service is accessible",
-                    Value=Sub("udp://${" + elb.name + ".DNSName}")
-                )
-            )
             self.template.add_resource(svc)
         elif 'http_interface' in config:
             lb, target_group_name = self._add_ecs_lb(cd, service_name, config, launch_type)
-            alb_enabled = 'alb_enabled' in config['http_interface'] and config['http_interface']['alb_enabled']
+
+            security_group_ingress = {
+                'IpProtocol': 'TCP',
+                'ToPort': int(config['http_interface']['container_port']),
+                'FromPort': int(config['http_interface']['container_port']),
+            }
+            launch_type_svc = {}
+
+            alb_enabled = 'alb' in config['http_interface']
             if alb_enabled:
-                alb, service_listener, alb_sg = self._add_alb(service_name, config, target_group_name)
+                create_new_alb = config['http_interface']['alb'].get('create_new', False)
+
+                if create_new_alb:
+                    alb, service_listener, alb_sg = self._add_alb(service_name, config, target_group_name)
+                    launch_type_svc['DependsOn'] = service_listener.title
+
+                    self.template.add_output(
+                        Output(
+                            service_name + "URL",
+                            Description="The URL at which the service is accessible",
+                            Value=Sub("https://${" + alb.name + ".DNSName}")
+                        )
+                    )
+                    if launch_type == self.LAUNCH_TYPE_FARGATE:
+                        # needed for FARGATE security group creation.
+                        security_group_ingress['SourceSecurityGroupId'] = Ref(alb_sg)
+                else:
+                    self.attach_to_existing_listener(config['http_interface']['alb'], service_name, target_group_name)
 
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
-                security_group_ingress = {
-                    'IpProtocol': 'TCP',
-                    'ToPort': int(config['http_interface']['container_port']),
-                    'FromPort': int(config['http_interface']['container_port']),
-                }
-                if alb_enabled:
-                    security_group_ingress['SourceSecurityGroupId'] = Ref(alb_sg)
-
                 service_security_group = SecurityGroup(
                     pascalcase("FargateService" + self.env + service_name),
                     GroupName=pascalcase("FargateService" + self.env + service_name),
@@ -362,27 +386,21 @@ service is down',
                 )
                 self.template.add_resource(service_security_group)
 
-                launch_type_svc = {
-                    'NetworkConfiguration': NetworkConfiguration(
-                        AwsvpcConfiguration=AwsvpcConfiguration(
-                            Subnets=[
-                                Ref(self.private_subnet1),
-                                Ref(self.private_subnet2)
-                            ],
-                            SecurityGroups=[
-                                Ref(service_security_group)
-                            ]
-                        )
+                launch_type_svc['NetworkConfiguration'] = NetworkConfiguration(
+                    AwsvpcConfiguration=AwsvpcConfiguration(
+                        Subnets=[
+                            Ref(self.private_subnet1),
+                            Ref(self.private_subnet2)
+                        ],
+                        SecurityGroups=[
+                            Ref(service_security_group)
+                        ]
                     )
-                }
+                )
             else:
-                launch_type_svc = {
-                    'Role': Ref(self.ecs_service_role),
-                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
-                }
+                launch_type_svc['Role'] = Ref(self.ecs_service_role)
+                launch_type_svc['PlacementStrategies'] = self.PLACEMENT_STRATEGIES
 
-            if alb_enabled:
-                launch_type_svc['DependsOn'] = service_listener.title
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
@@ -403,15 +421,6 @@ service is down',
             )
 
             self.template.add_resource(svc)
-
-            if alb_enabled:
-                self.template.add_output(
-                    Output(
-                        service_name + "URL",
-                        Description="The URL at which the service is accessible",
-                        Value=Sub("https://${" + alb.name + ".DNSName}")
-                    )
-                )
         else:
             launch_type_svc = {}
             if launch_type == self.LAUNCH_TYPE_FARGATE:
@@ -460,6 +469,34 @@ service is down',
             )
             self.template.add_resource(svc)
         self._add_service_alarms(svc)
+
+    def attach_to_existing_listener(self, alb_config, service_name, target_group_name):
+        conditions = []
+        if 'host' in alb_config:
+            conditions.append(
+                Condition(
+                    Field="host-header",
+                    HostHeaderConfig=HostHeaderConfig(
+                        Values=[alb_config['host']],
+                    ),
+                )
+            )
+        listener_arn = alb_config['listener_arn'] if 'listener_arn' in alb_config \
+            else get_environment_level_alb_listener(self.env)
+        priority = int(alb_config['priority']) if 'priority' in alb_config \
+            else self._get_free_priority_from_listener(listener_arn)
+        self.template.add_resource(
+            ListenerRule(
+                service_name + "ListenerRule",
+                ListenerArn=listener_arn,
+                Priority=priority,
+                Conditions=conditions,
+                Actions=[Action(
+                    Type="forward",
+                    TargetGroupArn=Ref(target_group_name),
+                )]
+            )
+        )
 
     def _gen_container_definitions_for_sidecar(self, sidecar, log_config, env_config):
         cd = {}
@@ -999,6 +1036,30 @@ building this service",
                 self.environment_stack['Outputs']
             )
         )[0]['OutputValue']
+
+    def _get_free_priority_from_listener(self, listener_arn):
+        rules = []
+        elb_client = get_client_for('elbv2', self.env)
+        response = elb_client.describe_rules(
+            ListenerArn=listener_arn,
+        )
+
+        rules.extend(response.get('Rules', []))
+
+        while 'NextMarker' in response:
+            response = elb_client.describe_rules(
+                Marker=response['NextMarker'],
+            )
+            rules.extend(response.get('Rules', []))
+
+        priorities = set(rule['Priority'] for rule in rules)
+        for i in range(1, 50001):
+            if str(i) not in priorities:
+                return i
+        return -1
+
+    def _add_to_alb_listener_in_subpath(self, service_name, alb_listener_arn, subpath, target_group):
+        priority = self._get_free_priority_from_listener(alb_listener_arn)
 
     def _get_desired_task_count_for_service(self, service_name):
         if service_name in self.desired_counts:

@@ -140,7 +140,7 @@ class TestDeployAndWait(TestCase):
 
         new_task_definition = EcsTaskDefinition({'containerDefinitions': []})
         color = "green"
-        timeout_seconds = 4
+        timeout_seconds = 15
 
         self.assertTrue(
             deploy_and_wait(deployment, new_task_definition, color, timeout_seconds),

@@ -55,22 +55,24 @@ class EcsClient(object):
 
     def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
                                  requires_compatibilities=[], network_mode='bridge', placement_constraints=[]):
-        fargate_td = {}
+        options = {}
         if 'FARGATE' in requires_compatibilities:
-            fargate_td = {
+            options = {
                 'executionRoleArn': execution_role_arn or u'',
                 'requiresCompatibilities': requires_compatibilities or [],
                 'cpu': cpu,
                 'memory': memory,
             }
+        if network_mode:
+            options['networkMode'] = network_mode
+
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn or u'',
             placementConstraints=placement_constraints,
-            networkMode=network_mode,
-        **fargate_td
+        **options
         )
 
     def deregister_task_definition(self, task_definition_arn):

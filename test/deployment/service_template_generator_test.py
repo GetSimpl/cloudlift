@@ -4,7 +4,7 @@ from decimal import Decimal
 from unittest import TestCase
 
 from cfn_flip import to_json
-from mock import patch, MagicMock
+from mock import patch, MagicMock, call
 
 from cloudlift.config import ServiceConfiguration
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
@@ -172,6 +172,151 @@ class TestServiceTemplateGenerator(TestCase):
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_service_template.yml')
         with(open(template_file_path)) as expected_template_file:
             assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
+
+    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
+    @patch('cloudlift.deployment.service_template_generator.build_config')
+    @patch('cloudlift.deployment.service_template_generator.get_account_id')
+    @patch('cloudlift.deployment.template_generator.region_service')
+    def test_generate_service_with_new_alb(self, mock_region_service, mock_get_account_id, mock_build_config,
+                                           mockServiceInformationFetcher):
+        environment = 'staging'
+        application_name = 'dummy'
+        mock_service_info_inst = mockServiceInformationFetcher.return_value
+        mock_service_info_inst.get_current_version.return_value = "1.1.1"
+        mock_service_info_inst.fetch_current_desired_count.return_value = {"Dummy": 100, "DummyRunSidekiqsh": 199}
+        mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
+                                               environment=environment)
+        mock_service_configuration.get_config.return_value = {
+            "cloudlift_version": 'test-version',
+            "notifications_arn": "some",
+            "services": {
+                "Dummy": {
+                    "memory_reservation": Decimal(1000),
+                    "command": None,
+                    "http_interface": {
+                        "internal": False,
+                        "alb": {
+                            "create_new": True,
+                        },
+                        "container_port": Decimal(7003),
+                        "restrict_access_to": ["0.0.0.0/0"],
+                        "health_check_path": "/elb-check"
+                    }
+                },
+            }
+        }
+
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
+            return {ecs_service_name: [("PORT", "80")]}
+
+        mock_build_config.side_effect = mock_build_config_impl
+
+        mock_get_account_id.return_value = "12537612"
+        mock_region_service.get_region_for_environment.return_value = "us-west-2"
+        mock_region_service.get_ssl_certification_for_environment.return_value = "certificateARN1234"
+
+
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
+        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        generated_template = template_generator.generate_service()
+
+        template_file_path = os.path.join(os.path.dirname(__file__),
+                                          '../templates/expected_service_with_new_alb_template.yml')
+
+        with(open(template_file_path)) as expected_template_file:
+            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
+
+
+
+    @patch('cloudlift.deployment.service_template_generator.get_client_for')
+    @patch('cloudlift.deployment.service_template_generator.get_environment_level_alb_listener')
+    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
+    @patch('cloudlift.deployment.service_template_generator.build_config')
+    @patch('cloudlift.deployment.service_template_generator.get_account_id')
+    @patch('cloudlift.deployment.template_generator.region_service')
+    def test_generate_service_with_env_alb(self, mock_region_service, mock_get_account_id, mock_build_config,
+                                           mockServiceInformationFetcher, mock_get_environment_level_alb_listener,
+                                           mock_get_client_for):
+        environment = 'staging'
+        application_name = 'dummy'
+        mock_service_info_inst = mockServiceInformationFetcher.return_value
+        mock_service_info_inst.get_current_version.return_value = "1.1.1"
+        mock_service_info_inst.fetch_current_desired_count.return_value = {"Dummy": 100, "DummyRunSidekiqsh": 199}
+        mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
+                                               environment=environment)
+        mock_service_configuration.get_config.return_value = {
+            "cloudlift_version": 'test-version',
+            "notifications_arn": "some",
+            "services": {
+                "Dummy": {
+                    "memory_reservation": Decimal(1000),
+                    "command": None,
+                    "http_interface": {
+                        "internal": False,
+                        "alb": {
+                            "create_new": False,
+                            "host": "abc.xyz.com"
+                        },
+                        "container_port": Decimal(7003),
+                        "restrict_access_to": ["0.0.0.0/0"],
+                        "health_check_path": "/elb-check"
+                    }
+                },
+                "DummyWithCustomListener": {
+                    "memory_reservation": Decimal(1000),
+                    "command": None,
+                    "http_interface": {
+                        "internal": False,
+                        "alb": {
+                            "create_new": False,
+                            "listener_arn": "custom_listener_arn",
+                            "priority": 100,
+                        },
+                        "container_port": Decimal(7003),
+                        "restrict_access_to": ["0.0.0.0/0"],
+                        "health_check_path": "/elb-check"
+                    }
+                },
+            }
+        }
+
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
+            return {ecs_service_name: [("PORT", "80")]}
+
+        mock_build_config.side_effect = mock_build_config_impl
+
+        mock_get_account_id.return_value = "12537612"
+        mock_region_service.get_region_for_environment.return_value = "us-west-2"
+        mock_get_environment_level_alb_listener.return_value = "listenerARN1234"
+        mock_elbv2_client = MagicMock()
+        mock_get_client_for.return_value = mock_elbv2_client
+
+        def mock_describe_rules(ListenerArn=None, Marker=None):
+            if ListenerArn:
+                return {
+                    'Rules': [{'Priority': '1'}, {'Priority': '2'}],
+                    'NextMarker': '/next/marker'
+                }
+            if Marker:
+                return {
+                    'Rules': [{'Priority': '3'}, {'Priority': '5'}]
+                }
+
+        mock_elbv2_client.describe_rules.side_effect = mock_describe_rules
+
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
+        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        generated_template = template_generator.generate_service()
+
+        template_file_path = os.path.join(os.path.dirname(__file__),
+                                          '../templates/expected_service_with_env_alb_template.yml')
+
+        mock_elbv2_client.describe_rules.assert_has_calls(
+            [call(ListenerArn='listenerARN1234'),
+             call(Marker='/next/marker')])
+        with(open(template_file_path)) as expected_template_file:
+            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
+
 
     @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')

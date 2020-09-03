@@ -59,8 +59,7 @@ class TestServiceConfiguration(object):
                             "http_interface": {
                                 "internal": True,
                                 "container_port": 80,
-                                "restrict_access_to": ["0.0.0.0/0"],
-                                "alb_enabled": True,
+                                "restrict_access_to": ["0.0.0.0/0"]
                             }
                         }
                     }
@@ -91,7 +90,6 @@ class TestServiceConfiguration(object):
                                 "internal": True,
                                 "container_port": 80,
                                 "restrict_access_to": [u'0.0.0.0/0'],
-                                "alb_enabled": True,
                             }
                         }
                     }
@@ -117,7 +115,6 @@ class TestServiceConfiguration(object):
                                 "internal": True,
                                 "container_port": 80,
                                 "restrict_access_to": [u"123.123.123.123/32"],
-                                "alb_enabled": True,
                             }
                         }
                     }
@@ -144,7 +141,6 @@ class TestServiceConfiguration(object):
                                 "internal": True,
                                 "container_port": 80,
                                 "restrict_access_to": [u'0.0.0.0/0'],
-                                "alb_enabled": True,
                             },
                             "stop_timeout": 120
                         }
@@ -253,7 +249,6 @@ class TestServiceConfigurationValidation(TestCase):
                             'internal': True,
                             'container_port': 8080,
                             'restrict_access_to': ['0.0.0.0/0'],
-                            'alb_enabled': True
                         }
                     }
                 }
@@ -278,7 +273,6 @@ class TestServiceConfigurationValidation(TestCase):
                             'internal': True,
                             'container_port': 8080,
                             'restrict_access_to': ['0.0.0.0/0'],
-                            'alb_enabled': True,
                         },
                         "container_health_check": {
                             "command": "echo 'Working'",
@@ -304,7 +298,6 @@ class TestServiceConfigurationValidation(TestCase):
                             'internal': True,
                             'container_port': 8080,
                             'restrict_access_to': ['0.0.0.0/0'],
-                            'alb_enabled': True,
                         },
                         "container_health_check": {
                             "start_period": 123,

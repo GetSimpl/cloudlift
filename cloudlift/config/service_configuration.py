@@ -151,8 +151,25 @@ class ServiceConfiguration(object):
                         "internal": {
                             "type": "boolean"
                         },
-                        "alb_enabled": {
-                            "type": "boolean",
+                        "alb": {
+                            "type": "object",
+                            "properties": {
+                                "create_new": {
+                                    "type": "boolean",
+                                },
+                                "listener_arn": {
+                                    "type": "string"
+                                },
+                                "host": {
+                                    "type": "string"
+                                },
+                                "priority": {
+                                    "type": "number"
+                                }
+                            },
+                            "required": [
+                                "create_new"
+                            ]
                         },
                         "restrict_access_to": {
                             "type": "array",
@@ -171,8 +188,7 @@ class ServiceConfiguration(object):
                     "required": [
                         "internal",
                         "restrict_access_to",
-                        "container_port",
-                        "alb_enabled"
+                        "container_port"
                     ]
                 },
                 "memory_reservation": {
@@ -336,7 +352,9 @@ class ServiceConfiguration(object):
                 pascalcase(self.service_name): {
                     u'http_interface': {
                         u'internal': False,
-                        u'alb_enabled': True,
+                        u'alb': {
+                            u'create_new': True,
+                        },
                         u'restrict_access_to': [u'0.0.0.0/0'],
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
