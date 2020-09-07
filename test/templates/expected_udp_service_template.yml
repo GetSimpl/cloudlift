@@ -183,6 +183,7 @@ Resources:
             Principal:
               Service:
                 - ecs-tasks.amazonaws.com
+      ManagedPolicyArns: []
     Type: AWS::IAM::Role
   FreeradiusServerTaskDefinition:
     Properties:

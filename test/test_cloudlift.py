@@ -36,6 +36,7 @@ def mocked_service_config(cls, *args, **kwargs):
                     ],
                     "health_check_path": "/elb-check"
                 },
+                "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"],
                 "memory_reservation": 512
             }
         }
@@ -118,7 +119,7 @@ def test_cloudlift_can_deploy_to_ec2(keep_resources):
     content_matched = wait_until(
         lambda: match_page_content(
             service_url,
-            'This is dummy app. Label: Demo. Redis PING: PONG'
+            'This is dummy app. Label: Demo. Redis PING: PONG. AWS EC2 READ ACCESS: True'
         ), 60)
     assert content_matched
     if not keep_resources:

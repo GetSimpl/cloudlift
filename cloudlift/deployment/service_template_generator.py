@@ -257,9 +257,9 @@ service is down',
                                                                 container_configurations.get(sidecar_container_name,
                                                                                              {})),
                 )
-
         task_role = self.template.add_resource(Role(
             service_name + "Role",
+            ManagedPolicyArns=config.get('task_role_attached_managed_policy_arns', []),
             AssumeRolePolicyDocument=PolicyDocument(
                 Statement=[
                     Statement(

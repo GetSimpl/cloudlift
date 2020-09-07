@@ -40,7 +40,8 @@ def mocked_service_config():
                 "command": "./run-sidekiq.sh",
                 "deployment": {
                     "maximum_percent": Decimal(150)  # The configuration is read as decimal always
-                }
+                },
+                "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"],
             }
         }
     }
@@ -168,7 +169,6 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
         template_generator.env_sample_file_path = './test/templates/test_env.sample'
         generated_template = template_generator.generate_service()
-
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_service_template.yml')
         with(open(template_file_path)) as expected_template_file:
             assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
@@ -222,7 +222,6 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_new_alb_template.yml')
-
         with(open(template_file_path)) as expected_template_file:
             assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
@@ -310,7 +309,6 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_env_alb_template.yml')
-
         mock_elbv2_client.describe_rules.assert_has_calls(
             [call(ListenerArn='listenerARN1234'),
              call(Marker='/next/marker')])
@@ -416,6 +414,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator.env_sample_file_path = './test/templates/test_env.sample'
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_udp_service_template.yml')
+
         with(open(template_file_path)) as expected_template_file:
             assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
 
