@@ -21,18 +21,16 @@ in AWS.
 ### 1. Pre-requisites
 
 - pip
-
 ```sh
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py | python get-pip.py
 ```
 
-### 2. Download and Install cloudlift
+### 2. Install cloudlift
 
 ```sh
-git clone git@github.com:GetSimpl/cloudlift.git
-cd cloudlift
-./install-cloudlift.sh
+pip install cloudlift
 ```
+
 
 ### 2. Configure AWS
 
@@ -197,6 +195,15 @@ the MFA code.
 ## Contributing to cloudlift
 
 ### Setup
+
+#### Use the latest git master 
+
+```sh
+git clone git@github.com:GetSimpl/cloudlift.git
+cd cloudlift
+./install-cloudlift.sh
+```
+
 
 To ensure the tests use the development version and not the installed version run (refer [here](https://stackoverflow.com/a/20972950/227705))
 
