@@ -6,6 +6,9 @@ clean:
 test-template:
 		python3 -m pytest test/deployment/service_template_generator_test.py -vv
 
+test-unit:
+	pytest -s test/deployment/*
+
 test-integration:
 	pytest -s test/test_cloudlift.py
 
@@ -24,4 +27,5 @@ install-test-package:
 package-upload: package
 	python3 -m twine upload dist/*
     
-
+package-docker:
+	docker build -t cloudlift .

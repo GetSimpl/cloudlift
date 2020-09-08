@@ -1,16 +1,18 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.4.3", "services": {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh"}}}'
+    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
+      {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
+      false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}, "deployment": {"maximum_percent": 150}, "sidecars": [{"name": "redis", "image": "redis:latest",
+      "memory_reservation": 256}]}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh",
+      "deployment": {"maximum_percent": 150}}}}'
   DummyEcsServiceName:
-    Description: 'The ECS name which needs to be entered'
+    Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
   DummyRunSidekiqshEcsServiceName:
-    Description: 'The ECS name which needs to be entered'
+    Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyRunSidekiqsh.Name'
-  DummyURL:
-    Description: The URL at which the service is accessible
-    Value: !Sub 'https://${ALBDummy.DNSName}'
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -24,7 +26,7 @@ Parameters:
     Description: ''
     Type: String
   NotificationSnsArn:
-    Default: arn:aws:sns:ap-south-1:725827686899:non-prod-mumbai
+    Default: some
     Description: ''
     Type: String
   PrivateSubnet1:
@@ -48,33 +50,20 @@ Parameters:
     Description: ''
     Type: AWS::EC2::VPC::Id
 Resources:
-  ALBDummy:
-    Properties:
-      Name: DummyStaging
-      SecurityGroups:
-        - sg-095dbeb511019cfd8
-        - !Ref 'SGstagingDummy'
-      Subnets:
-        - !Ref 'PublicSubnet1'
-        - !Ref 'PublicSubnet2'
-      Tags:
-        - Key: Name
-          Value: DummyStaging
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
   Dummy:
-    DependsOn: SslLoadBalancerListenerDummy
     Properties:
       Cluster: cluster-staging
-      DesiredCount: 1
-      LaunchType: 'EC2'
+      DeploymentConfiguration:
+        MaximumPercent: 150
+        MinimumHealthyPercent: 100
+      DesiredCount: 100
+      LaunchType: EC2
       LoadBalancers:
         - ContainerName: DummyContainer
           ContainerPort: 7003
           TargetGroupArn: !Ref 'TargetGroupDummy'
       PlacementStrategies:
         - Field: attribute:ecs.availability-zone
-          Type: spread
-        - Field: instanceId
           Type: spread
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'DummyTaskDefinition'
@@ -94,14 +83,12 @@ Resources:
     Properties:
       Cluster: cluster-staging
       DeploymentConfiguration:
-        MaximumPercent: 200
+        MaximumPercent: 150
         MinimumHealthyPercent: 100
-      DesiredCount: 0
-      LaunchType: 'EC2'
+      DesiredCount: 199
+      LaunchType: EC2
       PlacementStrategies:
         - Field: attribute:ecs.availability-zone
-          Type: spread
-        - Field: instanceId
           Type: spread
       TaskDefinition: !Ref 'DummyRunSidekiqshTaskDefinition'
     Type: AWS::ECS::Service
@@ -123,19 +110,20 @@ Resources:
             - ./run-sidekiq.sh
           Cpu: 0
           Environment:
-            - Name: VAR1
-              Value: val1
+            - Name: PORT
+              Value: '80'
           Essential: 'true'
-          Image: 725827686899.dkr.ecr.ap-south-1.amazonaws.com/dummy-repo:master
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: staging-logs
-              awslogs-region: ap-south-1
+              awslogs-region: us-west-2
               awslogs-stream-prefix: DummyRunSidekiqsh
           MemoryReservation: 1000
           Name: DummyRunSidekiqshContainer
       Family: DummyRunSidekiqshFamily
+      PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRunSidekiqshRole'
     Type: AWS::ECS::TaskDefinition
   DummyTaskDefinition:
@@ -143,21 +131,35 @@ Resources:
       ContainerDefinitions:
         - Cpu: 0
           Environment:
-            - Name: VAR1
-              Value: val1
+            - Name: PORT
+              Value: '80'
           Essential: 'true'
-          Image: 725827686899.dkr.ecr.ap-south-1.amazonaws.com/dummy-repo:master
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
+          Links:
+            - 'redisContainer'
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: staging-logs
-              awslogs-region: ap-south-1
+              awslogs-region: us-west-2
               awslogs-stream-prefix: Dummy
           MemoryReservation: 1000
           Name: DummyContainer
           PortMappings:
             - ContainerPort: 7003
+        - Environment: []
+          Essential: 'false'
+          Image: redis:latest
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: staging-logs
+              awslogs-region: us-west-2
+              awslogs-stream-prefix: Dummy
+          MemoryReservation: 256
+          Name: redisContainer
       Family: DummyFamily
+      PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRole'
     Type: AWS::ECS::TaskDefinition
   ECSServiceRole:
@@ -195,6 +197,7 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: '80'
+      TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
   EcsHighCPUAlarmDummyRunSidekiqsh:
     Properties:
@@ -216,6 +219,7 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: '80'
+      TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
   EcsHighMemoryAlarmDummy:
     Properties:
@@ -237,6 +241,7 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: '80'
+      TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
   EcsHighMemoryAlarmDummyRunSidekiqsh:
     Properties:
@@ -258,6 +263,7 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: '80'
+      TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
   EcsNoRunningTasksAlarmDummy:
     Properties:
@@ -303,103 +309,48 @@ Resources:
       Threshold: '1'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
-  ElbHTTPCodeELB5xxAlarmDummy:
+  FailedCloudliftDeploymentsDummy:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if 5xx response originated from load balancer
-      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'Dummy.Name'
       EvaluationPeriods: 1
-      MetricName: HTTPCode_ELB_5XX_Count
-      Namespace: AWS/ApplicationELB
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
       OKActions:
         - !Ref 'NotificationSnsArn'
       Period: 60
-      Statistic: Sum
-      Threshold: '3'
+      Statistic: Average
+      Threshold: '0'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
-  ElbRejectedConnectionsAlarmDummy:
+  FailedCloudliftDeploymentsDummyRunSidekiqsh:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if load balancer has rejected connections because
-        the load balancer had reached its maximum number of connections.
-      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'DummyRunSidekiqsh.Name'
       EvaluationPeriods: 1
-      MetricName: RejectedConnectionCount
-      Namespace: AWS/ApplicationELB
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
       OKActions:
         - !Ref 'NotificationSnsArn'
       Period: 60
-      Statistic: Sum
-      Threshold: '1'
+      Statistic: Average
+      Threshold: '0'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
-  ElbUnhealthyHostAlarmDummy:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if any host is marked unhealthy
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
-      EvaluationPeriods: 1
-      MetricName: UnHealthyHostCount
-      Namespace: AWS/ApplicationELB
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Sum
-      Threshold: '1'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
-  LoadBalancerRedirectionListenerDummy:
-    Properties:
-      DefaultActions:
-          - RedirectConfig:
-              Port: '443'
-              Protocol: HTTPS
-              StatusCode: HTTP_301
-            Type: "redirect"
-      LoadBalancerArn: !Ref 'ALBDummy'
-      Port: 80
-      Protocol: HTTP
-    Type: AWS::ElasticLoadBalancingV2::Listener
-  SGstagingDummy:
-    Properties:
-      GroupDescription: !Sub 'Dummy-alb-sg'
-      GroupName: staging-Dummy
-      SecurityGroupIngress:
-        - CidrIp: '0.0.0.0/0'
-          FromPort: 80
-          IpProtocol: TCP
-          ToPort: 80
-        - CidrIp: '0.0.0.0/0'
-          FromPort: 443
-          IpProtocol: TCP
-          ToPort: 443
-      VpcId: !Ref 'VPC'
-    Type: AWS::EC2::SecurityGroup
-  SslLoadBalancerListenerDummy:
-    Properties:
-      Certificates:
-        - CertificateArn: arn:aws:acm:ap-south-1:725827686899:certificate/380232d3-d868-4ce3-a43d-211cdfd39d26
-      DefaultActions:
-        - TargetGroupArn: !Ref 'TargetGroupDummy'
-          Type: forward
-      LoadBalancerArn: !Ref 'ALBDummy'
-      Port: 443
-      Protocol: HTTPS
-      SslPolicy: ELBSecurityPolicy-FS-1-2-Res-2019-08
-    Type: AWS::ElasticLoadBalancingV2::Listener
   TargetGroupDummy:
     Properties:
       HealthCheckIntervalSeconds: 30

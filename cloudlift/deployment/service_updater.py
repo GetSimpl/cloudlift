@@ -18,22 +18,24 @@ from cloudlift.deployment.ecs import EcsClient
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_warning
 
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
-
+CHUNK_SIZE = 10
 
 class ServiceUpdater(object):
-    def __init__(self, name, environment, env_sample_file, version=None,
-                 build_args=None, working_dir='.'):
+    def __init__(self, name, environment, env_sample_file, timeout_seconds, version=None,
+                 build_args=None, dockerfile=None, working_dir='.'):
         self.name = name
         self.environment = environment
         if env_sample_file is not None:
             self.env_sample_file = env_sample_file
         else:
             self.env_sample_file = './env.sample'
+        self.timeout_seconds = timeout_seconds
         self.version = version
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
         self.cluster_name = get_cluster_name(environment)
-        self.working_dir = working_dir
         self.build_args = build_args
+        self.dockerfile = dockerfile
+        self.working_dir = working_dir
 
     def run(self):
         log_warning("Deploying to {self.region}".format(**locals()))
@@ -49,7 +51,7 @@ class ServiceUpdater(object):
 
         jobs = []
         for index, service_name in enumerate(self.ecs_service_names):
-            log_bold("Starting to deploy " + service_name)
+            log_bold("Queueing deployment of " + service_name)
             color = DEPLOYMENT_COLORS[index % 3]
             image_url = self.ecr_image_uri
             image_url += (':' + self.version)
@@ -62,22 +64,30 @@ class ServiceUpdater(object):
                     self.version,
                     self.name,
                     self.env_sample_file,
+                    self.timeout_seconds,
                     self.environment,
                     color,
                     image_url
                 )
             )
             jobs.append(process)
-            process.start()
 
-        exit_codes = []
-        while True:
-            sleep(1)
-            exit_codes = [proc.exitcode for proc in jobs]
-            if None not in exit_codes:
-                break
+        all_exit_codes = []
+        for chunk_of_jobs in chunks(jobs, CHUNK_SIZE):
+            exit_codes = []
+            for process in chunk_of_jobs:
+                process.start()
 
-        if any(exit_codes) != 0:
+            while True:
+                sleep(1)
+                exit_codes = [proc.exitcode for proc in chunk_of_jobs]
+                if None not in exit_codes:
+                    break
+
+            for exit_code in exit_codes:
+                all_exit_codes.append(exit_code)
+
+        if any(all_exit_codes) != 0:
             raise UnrecoverableException("Deployment failed")
 
     def upload_image(self, additional_tags):
@@ -90,19 +100,24 @@ class ServiceUpdater(object):
             self._add_image_tag(self.version, new_tag)
 
     def _build_image(self, image_name):
-        log_bold("Building docker image " + image_name)
+        log_bold(f'Building docker image {image_name} using {"default Dockerfile" if self.dockerfile is None else self.dockerfile}')
         command = self._build_command(image_name)
         subprocess.check_call(command, shell=True)
         log_bold("Built " + image_name)
 
     def _build_command(self, image_name):
+        dockerfile_opt = '' if self.dockerfile is None else f'-f {self.dockerfile}'
+        build_args_opts = self._build_args_opts()
+        return " ".join(filter(None, ['docker', 'build', dockerfile_opt, '-t', image_name, *build_args_opts, self.working_dir]))
+
+    def _build_args_opts(self):
         if self.build_args is None:
-            return f'docker build -t {image_name} {self.working_dir}'
+            return []
         else:
             build_args_command_fragment = []
             for k, v in self.build_args.items():
-                build_args_command_fragment.append(" --build-arg "+"=".join((k, v)))
-            return f'docker build -t {image_name}{"".join(build_args_command_fragment)} {self.working_dir}'
+                build_args_command_fragment.append("--build-arg "+"=".join((k, v)))
+            return build_args_command_fragment
 
     def upload_artefacts(self):
         self.ensure_repository()
@@ -269,3 +284,7 @@ version to be " + self.version + " based on current status")
                     "%s cluster not found. Create the environment cluster using `create_environment` command." % self.environment)
             else:
                 raise UnrecoverableException(str(client_error))
+
+def chunks(items, chunk_size):
+    for i in range(0, len(items), chunk_size):
+        yield items[i:i + chunk_size]

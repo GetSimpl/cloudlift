@@ -54,7 +54,7 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
-                                 requires_compatibilities=[], network_mode='bridge'):
+                                 requires_compatibilities=[], network_mode='bridge', placement_constraints=[]):
         fargate_td = {}
         if 'FARGATE' in requires_compatibilities:
             fargate_td = {
@@ -69,6 +69,7 @@ class EcsClient(object):
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn or u'',
+            placementConstraints=placement_constraints,
             **fargate_td
         )
 
@@ -223,6 +224,10 @@ class EcsTaskDefinition(dict):
     def diff(self):
         return self._diff
 
+    @property
+    def placement_constraints(self):
+        return self.get(u'placementConstraints')
+
     def get_overrides(self):
         override = dict()
         overrides = []
@@ -244,9 +249,12 @@ class EcsTaskDefinition(dict):
     def get_overrides_env(env):
         return [{"name": e, "value": env[e]} for e in env]
 
-    def set_images(self, tag=None, **images):
+    def set_images(self, container_to_deploy, tag=None, **images):
         self.validate_container_options(**images)
         for container in self.containers:
+            if container[u'name'] != container_to_deploy:
+                continue
+
             if container[u'name'] in images:
                 new_image = images[container[u'name']]
                 diff = EcsTaskDefinitionDiff(
@@ -431,7 +439,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
-
+            placement_constraints=task_definition.placement_constraints,
             **fargate_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
@@ -446,21 +454,6 @@ class EcsAction(object):
             task_definition=service.task_definition
         )
         return EcsService(self._cluster_name, response[u'service'])
-
-    def is_deployed(self, service):
-        if len(service[u'deployments']) != 1:
-            return False
-        running_tasks = self._client.list_tasks(
-            cluster_name=service.cluster,
-            service_name=service.name
-        )
-        if not running_tasks[u'taskArns']:
-            return service.desired_count == 0
-        running_count = self.get_running_tasks_count(
-            service=service,
-            task_arns=running_tasks[u'taskArns']
-        )
-        return service.desired_count == running_count
 
     def get_running_tasks_count(self, service, task_arns):
         running_count = 0

@@ -13,7 +13,8 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition)
+                             PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl,
+                             HealthCheck)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -21,13 +22,9 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroupAttribute)
 from troposphere.iam import Role
 
-from cloudlift.config import region as region_service
-from cloudlift.config import get_account_id
 from cloudlift.config import DecimalEncoder
-from cloudlift.config import get_service_stack_name
-from cloudlift.deployment.deployer import build_config
-from cloudlift.deployment.ecs import DeployAction, EcsClient
-from cloudlift.config.logging import log, log_bold
+from cloudlift.config import get_account_id
+from cloudlift.deployment.deployer import build_config, container_name
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
 
@@ -37,23 +34,18 @@ class ServiceTemplateGenerator(TemplateGenerator):
         PlacementStrategy(
             Type='spread',
             Field='attribute:ecs.availability-zone'
-        ),
-        PlacementStrategy(
-            Type='spread',
-            Field='instanceId'
         )]
     LAUNCH_TYPE_FARGATE = 'FARGATE'
     LAUNCH_TYPE_EC2 = 'EC2'
 
     def __init__(self, service_configuration, environment_stack):
-        super(ServiceTemplateGenerator, self).__init__(
-            service_configuration.environment
-        )
+        super(ServiceTemplateGenerator, self).__init__(service_configuration.environment)
         self._derive_configuration(service_configuration)
         self.env_sample_file_path = './env.sample'
         self.environment_stack = environment_stack
-        self.current_version = ServiceInformationFetcher(
-            self.application_name, self.env).get_current_version()
+        information_fetcher = ServiceInformationFetcher(self.application_name, self.env)
+        self.current_version = information_fetcher.get_current_version()
+        self.desired_counts = information_fetcher.fetch_current_desired_count()
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
@@ -62,7 +54,6 @@ class ServiceTemplateGenerator(TemplateGenerator):
     def generate_service(self):
         self._add_service_parameters()
         self._add_service_outputs()
-        self._fetch_current_desired_count()
         self._add_ecs_service_iam_role()
         self._add_cluster_services()
         return to_yaml(self.template.to_json())
@@ -93,7 +84,8 @@ indicating instance is down',
             ComparisonOperator='GreaterThanThreshold',
             Statistic='Average',
             Threshold='80',
-            MetricName='CPUUtilization'
+            MetricName='CPUUtilization',
+            TreatMissingData='breaching'
         )
         self.template.add_resource(ecs_high_cpu_alarm)
         ecs_high_memory_alarm = Alarm(
@@ -118,9 +110,35 @@ disappears indicating instance is down',
             ComparisonOperator='GreaterThanThreshold',
             Statistic='Average',
             Threshold='80',
-            MetricName='MemoryUtilization'
+            MetricName='MemoryUtilization',
+            TreatMissingData='breaching'
         )
         self.template.add_resource(ecs_high_memory_alarm)
+        cloudlift_timedout_deployments_alarm = Alarm(
+            'FailedCloudliftDeployments' + str(svc.name),
+            EvaluationPeriods=1,
+            Dimensions=[
+                MetricDimension(
+                    Name='ClusterName',
+                    Value=self.cluster_name
+                ),
+                MetricDimension(
+                    Name='ServiceName',
+                    Value=GetAtt(svc, 'Name')
+                )
+            ],
+            AlarmActions=[Ref(self.notification_sns_arn)],
+            OKActions=[Ref(self.notification_sns_arn)],
+            AlarmDescription='Cloudlift deployment timed out',
+            Namespace='ECS/DeploymentMetrics',
+            Period=60,
+            ComparisonOperator='GreaterThanThreshold',
+            Statistic='Average',
+            Threshold='0',
+            MetricName='FailedCloudliftDeployments',
+            TreatMissingData='notBreaching'
+        )
+        self.template.add_resource(cloudlift_timedout_deployments_alarm)
         # How to add service task count alarm
         # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch-metrics.html#cw_running_task_count
         ecs_no_running_tasks_alarm = Alarm(
@@ -152,19 +170,21 @@ service is down',
 
     def _add_service(self, service_name, config):
         launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
-        env_config = build_config(
+        container_configurations = build_config(
             self.env,
             self.application_name,
-            self.env_sample_file_path
+            self.env_sample_file_path,
+            container_name(service_name),
         )
+        log_config = self._gen_log_config(service_name)
         container_definition_arguments = {
             "Environment": [
-                Environment(Name=k, Value=v) for (k, v) in env_config
+                Environment(Name=k, Value=v) for (k, v) in container_configurations[container_name(service_name)]
             ],
-            "Name": service_name + "Container",
+            "Name": container_name(service_name),
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "LogConfiguration": self._gen_log_config(service_name),
+            "LogConfiguration": log_config,
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
@@ -178,10 +198,48 @@ service is down',
                 )
             ]
 
+        if 'stop_timeout' in config:
+            container_definition_arguments['StopTimeout'] = int(config['stop_timeout'])
+
+        if 'system_controls' in config:
+            container_definition_arguments['SystemControls'] = [SystemControl(Namespace=system_control['namespace'],
+                                                                              Value=system_control['value']) for
+                                                                system_control in config['system_controls']]
+
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
 
+        if 'container_health_check' in config:
+            configured_health_check = config['container_health_check']
+            ecs_health_check = {'Command': ['CMD-SHELL', configured_health_check['command']]}
+            if 'start_period' in configured_health_check:
+                ecs_health_check['StartPeriod'] = int(configured_health_check['start_period'])
+            if 'retries' in configured_health_check:
+                ecs_health_check['Retries'] = int(configured_health_check['retries'])
+            if 'interval' in configured_health_check:
+                ecs_health_check['Interval'] = int(configured_health_check['interval'])
+            if 'timeout' in configured_health_check:
+                ecs_health_check['Timeout'] = int(configured_health_check['timeout'])
+            container_definition_arguments['HealthCheck'] = HealthCheck(
+                **ecs_health_check
+            )
+
+        if 'sidecars' in config:
+            links = []
+            for sidecar in config['sidecars']:
+                links.append(container_name(sidecar.get('name')))
+            container_definition_arguments['Links'] = links
+
         cd = ContainerDefinition(**container_definition_arguments)
+        container_definitions = [cd]
+        if 'sidecars' in config:
+            for sidecar in config['sidecars']:
+                sidecar_container_name = container_name(sidecar.get('name'))
+                container_definitions.append(
+                    self._gen_container_definitions_for_sidecar(sidecar,
+                                                                log_config,
+                                                                container_configurations.get(sidecar_container_name, {})),
+                )
 
         task_role = self.template.add_resource(Role(
             service_name + "Role",
@@ -206,35 +264,48 @@ service is down',
                 'Memory': str(config['fargate']['memory'])
             }
 
+        placement_constraints = [
+            PlacementConstraint(
+                Type=constraint['type'], Expression=constraint['expression'])
+            for constraint in config['placement_constraints']
+        ] if 'placement_constraints' in config else []
+
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
-            ContainerDefinitions=[cd],
+            ContainerDefinitions=container_definitions,
             TaskRoleArn=Ref(task_role),
+            PlacementConstraints=placement_constraints,
             **launch_type_td
         )
 
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
-        deployment_configuration = DeploymentConfiguration(
-            MinimumHealthyPercent=100,
-            MaximumPercent=200
-        )
+        maximum_percent = config['deployment'].get('maximum_percent', 200) if 'deployment' in config else 200
+        deployment_configuration = DeploymentConfiguration(MinimumHealthyPercent=100,
+                                                           MaximumPercent=int(maximum_percent))
+
         if 'http_interface' in config:
-            alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
+            lb, target_group_name = self._add_ecs_lb(cd, service_name, config, launch_type)
+            alb_enabled = 'alb_enabled' in config['http_interface'] and config['http_interface']['alb_enabled']
+            if alb_enabled:
+                alb, service_listener, alb_sg = self._add_alb(service_name, config, target_group_name)
 
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
+                security_group_ingress = {
+                    'IpProtocol': 'TCP',
+                    'ToPort': int(config['http_interface']['container_port']),
+                    'FromPort': int(config['http_interface']['container_port']),
+                }
+                if alb_enabled:
+                    security_group_ingress['SourceSecurityGroupId'] = Ref(alb_sg)
+
                 service_security_group = SecurityGroup(
                     pascalcase("FargateService" + self.env + service_name),
                     GroupName=pascalcase("FargateService" + self.env + service_name),
-                    SecurityGroupIngress=[{
-                        'IpProtocol': 'TCP',
-                        'SourceSecurityGroupId': Ref(alb_sg),
-                        'ToPort': int(config['http_interface']['container_port']),
-                        'FromPort': int(config['http_interface']['container_port']),
-                    }],
+                    SecurityGroupIngress=[security_group_ingress],
                     VpcId=Ref(self.vpc),
                     GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
@@ -258,16 +329,20 @@ service is down',
                     'Role': Ref(self.ecs_service_role),
                     'PlacementStrategies': self.PLACEMENT_STRATEGIES
                 }
+
+            if alb_enabled:
+                launch_type_svc['DependsOn'] = service_listener.title
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
-                DependsOn=service_listener.title,
+                DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
+
             self.template.add_output(
                 Output(
                     service_name + 'EcsServiceName',
@@ -275,14 +350,17 @@ service is down',
                     Value=GetAtt(svc, 'Name')
                 )
             )
-            self.template.add_output(
-                Output(
-                    service_name + "URL",
-                    Description="The URL at which the service is accessible",
-                    Value=Sub("https://${" + alb.name + ".DNSName}")
-                )
-            )
+
             self.template.add_resource(svc)
+
+            if alb_enabled:
+                self.template.add_output(
+                    Output(
+                        service_name + "URL",
+                        Description="The URL at which the service is accessible",
+                        Value=Sub("https://${" + alb.name + ".DNSName}")
+                    )
+                )
         else:
             launch_type_svc = {}
             if launch_type == self.LAUNCH_TYPE_FARGATE:
@@ -332,17 +410,75 @@ service is down',
             self.template.add_resource(svc)
         self._add_service_alarms(svc)
 
+    def _gen_container_definitions_for_sidecar(self, sidecar, log_config, env_config):
+        cd = {}
+        if 'command' in sidecar:
+            cd['Command'] = sidecar['command']
+
+        return ContainerDefinition(
+            Name=container_name(sidecar.get('name')),
+            Environment=[Environment(Name=k, Value=v) for (k, v) in env_config],
+            MemoryReservation=int(sidecar.get('memory_reservation')),
+            Image=sidecar.get('image'),
+            LogConfiguration=log_config,
+            Essential=False,
+            **cd
+        )
+
     def _gen_log_config(self, service_name):
+        current_service_config = self.configuration['services'][service_name]
+        env_log_group = '-'.join([self.env, 'logs'])
         return LogConfiguration(
             LogDriver="awslogs",
             Options={
                 'awslogs-stream-prefix': service_name,
-                'awslogs-group': '-'.join([self.env, 'logs']),
+                'awslogs-group': current_service_config.get('log_group', env_log_group),
                 'awslogs-region': self.region
             }
         )
 
-    def _add_alb(self, cd, service_name, config, launch_type):
+    def _add_ecs_lb(self, cd, service_name, config, launch_type):
+        target_group_name = "TargetGroup" + service_name
+        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config[
+            'http_interface'] else "/elb-check"
+        if config['http_interface']['internal']:
+            target_group_name = target_group_name + 'Internal'
+
+        target_group_config = {}
+        if launch_type == self.LAUNCH_TYPE_FARGATE:
+            target_group_config['TargetType'] = 'ip'
+
+        service_target_group = TargetGroup(
+            target_group_name,
+            HealthCheckPath=health_check_path,
+            HealthyThresholdCount=2,
+            HealthCheckIntervalSeconds=30,
+            TargetGroupAttributes=[
+                TargetGroupAttribute(
+                    Key='deregistration_delay.timeout_seconds',
+                    Value='30'
+                )
+            ],
+            VpcId=Ref(self.vpc),
+            Protocol="HTTP",
+            Matcher=Matcher(HttpCode="200-399"),
+            Port=int(config['http_interface']['container_port']),
+            HealthCheckTimeoutSeconds=10,
+            UnhealthyThresholdCount=3,
+            **target_group_config
+        )
+
+        self.template.add_resource(service_target_group)
+
+        lb = LoadBalancer(
+            ContainerName=cd.Name,
+            TargetGroupArn=Ref(service_target_group),
+            ContainerPort=int(config['http_interface']['container_port'])
+        )
+
+        return lb, target_group_name
+
+    def _add_alb(self, service_name, config, target_group_name):
         sg_name = 'SG' + self.env + service_name
         svc_alb_sg = SecurityGroup(
             re.sub(r'\W+', '', sg_name),
@@ -354,6 +490,7 @@ service is down',
             GroupDescription=Sub(service_name + "-alb-sg")
         )
         self.template.add_resource(svc_alb_sg)
+
         alb_name = service_name + pascalcase(self.env)
         if config['http_interface']['internal']:
             alb_subnets = [
@@ -397,44 +534,6 @@ service is down',
 
         self.template.add_resource(alb)
 
-        target_group_name = "TargetGroup" + service_name
-        health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
-        if config['http_interface']['internal']:
-            target_group_name = target_group_name + 'Internal'
-
-        target_group_config = {}
-        if launch_type == self.LAUNCH_TYPE_FARGATE:
-            target_group_config['TargetType'] = 'ip'
-
-        service_target_group = TargetGroup(
-            target_group_name,
-            HealthCheckPath=health_check_path,
-            HealthyThresholdCount=2,
-            HealthCheckIntervalSeconds=30,
-            TargetGroupAttributes=[
-                TargetGroupAttribute(
-                    Key='deregistration_delay.timeout_seconds',
-                    Value='30'
-                )
-            ],
-            VpcId=Ref(self.vpc),
-            Protocol="HTTP",
-            Matcher=Matcher(HttpCode="200-399"),
-            Port=int(config['http_interface']['container_port']),
-            HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
-            **target_group_config
-        )
-
-        self.template.add_resource(service_target_group)
-        # Note: This is a ECS Loadbalancer definition. Not an ALB.
-        # Defining this causes the target group to add a target to the correct
-        # port in correct ECS cluster instance for the service container.
-        lb = LoadBalancer(
-            ContainerName=cd.Name,
-            TargetGroupArn=Ref(service_target_group),
-            ContainerPort=int(config['http_interface']['container_port'])
-        )
         target_group_action = Action(
             TargetGroupArn=Ref(target_group_name),
             Type="forward"
@@ -446,7 +545,7 @@ service is down',
             config['http_interface']['internal']
         )
         self._add_alb_alarms(service_name, alb)
-        return alb, lb, service_listener, svc_alb_sg
+        return alb, service_listener, svc_alb_sg
 
     def _add_service_listener(self, service_name, target_group_action,
                               alb, internal):
@@ -694,39 +793,6 @@ building this service",
                 self.environment_stack['Outputs']
             )
         )[0]['OutputValue']
-
-    def _fetch_current_desired_count(self):
-        stack_name = get_service_stack_name(self.env, self.application_name)
-        self.desired_counts = {}
-        try:
-            stack = region_service.get_client_for(
-                'cloudformation',
-                self.env
-            ).describe_stacks(StackName=stack_name)['Stacks'][0]
-            ecs_service_outputs = filter(
-                lambda x: x['OutputKey'].endswith('EcsServiceName'),
-                stack['Outputs']
-            )
-            ecs_service_names = []
-            for service_name in ecs_service_outputs:
-                ecs_service_names.append({
-                    "key": service_name['OutputKey'],
-                    "value": service_name['OutputValue']
-                })
-            ecs_client = EcsClient(None, None, self.region)
-            for service_name in ecs_service_names:
-                deployment = DeployAction(
-                    ecs_client,
-                    self.cluster_name,
-                    service_name["value"]
-                )
-                actual_service_name = service_name["key"]. \
-                    replace("EcsServiceName", "")
-                self.desired_counts[actual_service_name] = deployment. \
-                    service.desired_count
-            log("Existing service counts: " + str(self.desired_counts))
-        except Exception:
-            log_bold("Could not find existing services.")
 
     def _get_desired_task_count_for_service(self, service_name):
         if service_name in self.desired_counts:

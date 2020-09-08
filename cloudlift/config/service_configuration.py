@@ -51,12 +51,13 @@ class ServiceConfiguration(object):
             current_configuration = self.get_config()
 
             updated_configuration = edit(
-                json.dumps(
+                text=json.dumps(
                     current_configuration,
                     indent=4,
                     sort_keys=True,
                     cls=DecimalEncoder
-                )
+                ),
+                extension=".json"
             )
 
             if updated_configuration is None:
@@ -150,6 +151,9 @@ class ServiceConfiguration(object):
                         "internal": {
                             "type": "boolean"
                         },
+                        "alb_enabled": {
+                            "type": "boolean",
+                        },
                         "restrict_access_to": {
                             "type": "array",
                             "items": {
@@ -167,13 +171,25 @@ class ServiceConfiguration(object):
                     "required": [
                         "internal",
                         "restrict_access_to",
-                        "container_port"
+                        "container_port",
+                        "alb_enabled"
                     ]
                 },
                 "memory_reservation": {
                     "type": "number",
                     "minimum": 10,
                     "maximum": 30000
+                },
+                "deployment": {
+                    "type": "object",
+                    "properties": {
+                        "maximum_percent": {
+                            "type": "number",
+                            "minimum": 100,
+                            "maximum": 200
+                        },
+                    },
+                    "required": ["maximum_percent"]
                 },
                 "fargate": {
                     "type": "object",
@@ -195,7 +211,94 @@ class ServiceConfiguration(object):
                         {"type": "string"},
                         {"type": "null"}
                     ]
-                }
+                },
+                "stop_timeout": {
+                    "type": "number"
+                },
+                "container_health_check": {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string"
+                        },
+                        "start_period": {
+                            "type": "number"
+                        },
+                        "retries": {
+                            "type": "number",
+                            "minimum": 1,
+                            "maximum": 10
+                        },
+                        "interval": {
+                            "type": "number",
+                            "minimum": 5,
+                            "maximum": 300
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "minimum": 2,
+                            "maximum": 60
+                        },
+                    },
+                    "required": ["command"]
+                },
+                "placement_constraints": {
+                    "type": "array",
+                    "items": {
+                        "required": ["type"],
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["memberOf", "distinctInstance"],
+                            },
+                            "expression": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                },
+                "sidecars": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "image": {
+                                "type": "string"
+                            },
+                            "command": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "memory_reservation": {
+                                "type": "number"
+                            }
+                        },
+                        "required": ["name", "image", "memory_reservation"]
+                    }
+                },
+                "system_controls": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "namespace": {
+                                "type": "string"
+                            },
+                            "value": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                },
+                "log_group":{
+                    "type": "string",
+                },
             },
             "required": ["memory_reservation", "command"]
         }
@@ -222,8 +325,9 @@ class ServiceConfiguration(object):
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
+            errors = [str(i) for i in validation_error.relative_path]
             raise UnrecoverableException(validation_error.message + " in " +
-                    str(".".join(list(validation_error.relative_path))))
+                                         str(".".join(list(errors))))
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
@@ -232,10 +336,12 @@ class ServiceConfiguration(object):
                 pascalcase(self.service_name): {
                     u'http_interface': {
                         u'internal': False,
+                        u'alb_enabled': True,
                         u'restrict_access_to': [u'0.0.0.0/0'],
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
                     },
+                    u'system_controls': [],
                     u'memory_reservation': 1000,
                     u'command': None
                 }

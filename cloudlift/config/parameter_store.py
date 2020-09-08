@@ -19,20 +19,26 @@ class ParameterStore(object):
         # ssm_client = mfa_session.client('ssm')
         self.client = get_client_for('ssm', environment)
 
-    def get_existing_config_as_string(self):
-        environment_configs = self.get_existing_config()
+    def get_existing_config_as_string(self, sidecar_name=None):
+        environment_configs, sidecar_configs = self.get_existing_config()
+
+        result_configs = sidecar_configs.get(sidecar_name, {}) \
+            if sidecar_name is not None and sidecar_name != "" \
+            else environment_configs
+
         return '\n'.join('{}={}'.format(key, val) for key, val in sorted(
-            environment_configs.items()
+            result_configs.items()
         ))
 
     def get_existing_config(self):
         environment_configs = {}
+        sidecars_configs = {}
         next_token = None
         while True:
             if next_token:
                 response = self.client.get_parameters_by_path(
                     Path=self.path_prefix,
-                    Recursive=False,
+                    Recursive=True,
                     WithDecryption=True,
                     MaxResults=10,
                     NextToken=next_token
@@ -40,26 +46,35 @@ class ParameterStore(object):
             else:
                 response = self.client.get_parameters_by_path(
                     Path=self.path_prefix,
-                    Recursive=False,
+                    Recursive=True,
                     WithDecryption=True,
                     MaxResults=10
                 )
             for parameter in response['Parameters']:
                 parameter_name = parameter['Name'].split(self.path_prefix)[1]
-                environment_configs[parameter_name] = parameter['Value']
+                if parameter_name.startswith('sidecars/'):
+                    sidecar_name, sidecar_parameter = parameter_name.replace('sidecars/', '', 1).split('/')
+                    if sidecar_name not in sidecars_configs:
+                        sidecars_configs[sidecar_name] = {}
+
+                    sidecars_configs[sidecar_name].update({sidecar_parameter: parameter['Value']})
+                else:
+                    environment_configs[parameter_name] = parameter['Value']
 
             try:
                 next_token = response['NextToken']
             except KeyError:
                 break
-        return environment_configs
+        return environment_configs, sidecars_configs
 
-    def set_config(self, differences):
+    def set_config(self, differences, sidecar_name=None):
         self._validate_changes(differences)
+        path_prefix = self.path_prefix if sidecar_name is None else '{}sidecars/{}/'.format(self.path_prefix,
+                                                                                            sidecar_name)
         for parameter_change in differences:
             if parameter_change[0] == 'change':
-                response = self.client.put_parameter(
-                    Name='%s%s' % (self.path_prefix, parameter_change[1]),
+                self.client.put_parameter(
+                    Name='%s%s' % (path_prefix, parameter_change[1]),
                     Value=parameter_change[2][1],
                     Type='SecureString',
                     KeyId='alias/aws/ssm',
@@ -67,16 +82,16 @@ class ParameterStore(object):
                 )
             elif parameter_change[0] == 'add':
                 for added_parameter in parameter_change[2]:
-                    response = self.client.put_parameter(
-                        Name='%s%s' % (self.path_prefix, added_parameter[0]),
+                    self.client.put_parameter(
+                        Name='%s%s' % (path_prefix, added_parameter[0]),
                         Value=added_parameter[1],
                         Type='SecureString',
                         KeyId='alias/aws/ssm',
                         Overwrite=False
                     )
             elif parameter_change[0] == 'remove':
-                deleted_parameters = ["%s%s" % (self.path_prefix, item[0]) for item in parameter_change[2]]
-                response = self.client.delete_parameters(
+                deleted_parameters = ["%s%s" % (path_prefix, item[0]) for item in parameter_change[2]]
+                self.client.delete_parameters(
                     Names=deleted_parameters
                 )
 

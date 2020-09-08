@@ -21,7 +21,7 @@ def _require_environment(func):
                   help='environment')
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        if kwargs['environment'] == 'production':
+        if kwargs['environment'] == 'production' or kwargs['environment'] == 'prod':
             highlight_production()
         return func(*args, **kwargs)
     return wrapper
@@ -97,20 +97,24 @@ def update_environment(environment, update_ecs_agents):
 in parameter store")
 @_require_name
 @_require_environment
-def edit_config(name, environment):
-    editor.edit_config(name, environment)
+@click.option('--sidecar', help='Choose which sidecar to edit the configuration. Defaults to the main container ' +
+                                'if not provided')
+def edit_config(name, environment, sidecar):
+    editor.edit_config(name, environment, sidecar)
 
 
 @cli.command()
 @_require_environment
 @_require_name
+@click.option('--timeout_seconds', default=600, help='The deployment timeout')
 @click.option('--version', default=None,
               help='local image version tag')
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def deploy_service(name, environment, version, build_arg):
-    ServiceUpdater(name, environment, None, version, dict(build_arg)).run()
+@click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
+def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile):
+    ServiceUpdater(name, environment, None, timeout_seconds, version, dict(build_arg), dockerfile).run()
 
 
 @cli.command()
