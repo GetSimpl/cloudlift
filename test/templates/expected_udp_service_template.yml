@@ -209,11 +209,40 @@ Resources:
             - ContainerPort: 1814
               HostPort: 1814
               Protocol: tcp
+          Secrets:
+            - Name: LABEL
+              ValueFrom: arn_secret_label_v1
+      ExecutionRoleArn: !Ref 'FreeradiusServerTaskExecutionRole'
       Family: FreeradiusServerFamily
       NetworkMode: awsvpc
       PlacementConstraints: []
       TaskRoleArn: !Ref 'FreeradiusServerRole'
     Type: AWS::ECS::TaskDefinition
+  FreeradiusServerTaskExecutionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  - '*'
+          PolicyName: FreeradiusServerTaskExecutionRolePolicy
+    Type: AWS::IAM::Role
   LoadBalancerListenerFreeradiusServer:
     Properties:
       DefaultActions:

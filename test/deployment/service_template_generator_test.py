@@ -27,6 +27,7 @@ def mocked_service_config():
                 "deployment": {
                     "maximum_percent": Decimal(150)
                 },
+                "secrets_name_prefix": "dummy-config",
                 "sidecars": [
                     {
                         "name": "redis",
@@ -135,7 +136,7 @@ class TestServiceTemplateGenerator(TestCase):
     def test_initialization(self, mockServiceInformationFetcher, mock_get_resource_for):
         service_config = ServiceConfiguration("test-service", "staging")
 
-        generator = ServiceTemplateGenerator(service_config, None)
+        generator = ServiceTemplateGenerator(service_config, None, "env.sample")
 
         mock_get_resource_for.assert_called_with('dynamodb', 'staging')
         mockServiceInformationFetcher.assert_called_with("test-service", "staging")
@@ -158,16 +159,18 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
-            return {ecs_service_name: [("PORT", "80")]}
+        def mock_build_config_impl(env_name, service_name, sample_env_file_path, ecs_service_name, secrets_name_prefix):
+            expected_prefix = "dummy-config" if ecs_service_name == "DummyContainer" else None
+            self.assertEqual(secrets_name_prefix, expected_prefix)
+            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
         mock_get_account_id.return_value = "12537612"
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
 
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
-        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample')
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_service_template.yml')
         with(open(template_file_path)) as expected_template_file:
@@ -206,8 +209,8 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
-            return {ecs_service_name: [("PORT", "80")]}
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
+            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
@@ -215,17 +218,14 @@ class TestServiceTemplateGenerator(TestCase):
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
         mock_region_service.get_ssl_certification_for_environment.return_value = "certificateARN1234"
 
-
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
-        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample')
         generated_template = template_generator.generate_service()
 
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_new_alb_template.yml')
         with(open(template_file_path)) as expected_template_file:
             assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
-
-
 
     @patch('cloudlift.deployment.service_template_generator.get_client_for')
     @patch('cloudlift.deployment.service_template_generator.get_environment_level_alb_listener')
@@ -279,8 +279,8 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
-            return {ecs_service_name: [("PORT", "80")]}
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
+            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
@@ -303,8 +303,9 @@ class TestServiceTemplateGenerator(TestCase):
 
         mock_elbv2_client.describe_rules.side_effect = mock_describe_rules
 
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
-        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample')
+
         generated_template = template_generator.generate_service()
 
         template_file_path = os.path.join(os.path.dirname(__file__),
@@ -314,7 +315,6 @@ class TestServiceTemplateGenerator(TestCase):
              call(Marker='/next/marker')])
         with(open(template_file_path)) as expected_template_file:
             assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
-
 
     @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')
@@ -333,8 +333,8 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_fargate_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
-            return {ecs_service_name: [("PORT", "80")]}
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
+            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
@@ -344,8 +344,8 @@ class TestServiceTemplateGenerator(TestCase):
         mock_boto.resource.return_value = MagicMock()
         mock_boto.resource.return_value.Role.return_value = mock_iam_role
 
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
-        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample')
         generated_template = template_generator.generate_service()
 
         template_file_path = os.path.join(os.path.dirname(__file__),
@@ -370,8 +370,8 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_udp_fargate_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
-            return {ecs_service_name: [("PORT", "80")]}
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
+            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
@@ -381,8 +381,8 @@ class TestServiceTemplateGenerator(TestCase):
         mock_boto.resource.return_value = MagicMock()
         mock_boto.resource.return_value.Role.return_value = mock_iam_role
 
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
-        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample')
         with self.assertRaises(NotImplementedError) as context:
             template_generator.generate_service()
             self.assertTrue(
@@ -403,15 +403,15 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_udp_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name):
-            return {ecs_service_name: [("PORT", "80")]}
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
+            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
         mock_get_account_id.return_value = "12537612"
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
 
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack())
-        template_generator.env_sample_file_path = './test/templates/test_env.sample'
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample')
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_udp_service_template.yml')
 

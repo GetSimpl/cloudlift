@@ -111,10 +111,37 @@ Resources:
           Name: DummyContainer
           PortMappings:
             - ContainerPort: 7003
+          Secrets: []
+      ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
       Family: DummyFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRole'
     Type: AWS::ECS::TaskDefinition
+  DummyTaskExecutionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  - '*'
+          PolicyName: DummyTaskExecutionRolePolicy
+    Type: AWS::IAM::Role
   ECSServiceRole:
     Properties:
       AssumeRolePolicyDocument:

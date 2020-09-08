@@ -24,6 +24,7 @@ def _require_environment(func):
         if kwargs['environment'] == 'production' or kwargs['environment'] == 'prod':
             highlight_production()
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -35,7 +36,9 @@ repo')
         if kwargs['name'] is None:
             kwargs['name'] = deduce_name(None)
         return func(*args, **kwargs)
+
     return wrapper
+
 
 class CommandWrapper(click.Group):
     def __call__(self, *args, **kwargs):
@@ -66,15 +69,17 @@ AWS_DEFAULT_REGION env vars are set OR run 'aws configure'")
 ECS services")
 @_require_environment
 @_require_name
-def create_service(name, environment):
-    ServiceCreator(name, environment).create()
+@click.option('--env_sample_file', default='env.sample', help='env sample file path')
+def create_service(name, environment, env_sample_file):
+    ServiceCreator(name, environment, env_sample_file).create()
 
 
 @cli.command(help="Update existing service.")
 @_require_environment
 @_require_name
-def update_service(name, environment):
-    ServiceCreator(name, environment).update()
+@click.option('--env_sample_file', default='env.sample', help='env sample file path')
+def update_service(name, environment, env_sample_file):
+    ServiceCreator(name, environment, env_sample_file).update()
 
 
 @cli.command(help="Create a new environment")
@@ -111,10 +116,11 @@ def edit_config(name, environment, sidecar):
               help='local image version tag')
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
-                                                                   Please leave space between name and value" )
+                                                                   Please leave space between name and value")
 @click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
-def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile):
-    ServiceUpdater(name, environment, None, timeout_seconds, version, dict(build_arg), dockerfile).run()
+@click.option('--env_sample_file', default='env.sample', help='env sample file path')
+def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile, env_sample_file):
+    ServiceUpdater(name, environment, env_sample_file, timeout_seconds, version, dict(build_arg), dockerfile).run()
 
 
 @cli.command()
@@ -143,6 +149,7 @@ service task")
 @click.option('--mfa', help='MFA code', prompt='MFA Code')
 def start_session(name, environment, mfa):
     SessionCreator(name, environment).start_session(mfa)
+
 
 if __name__ == '__main__':
     cli()

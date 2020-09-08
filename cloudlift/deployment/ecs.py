@@ -7,7 +7,7 @@ value changes onto it and merging new configs. This means, environment
 variables cannot be deleted.
 
 To update the package:
-Copy the new contents, but ensure that apply_container_environment is retained
+Copy the new contents, but ensure that apply_container_environment_and_secrets is retained
 or updated. If the package supports deleting configs, use that.
 """
 
@@ -53,12 +53,12 @@ class EcsClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
-    def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
+    def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False,
+                                 execution_role_arn=None,
                                  requires_compatibilities=[], network_mode='bridge', placement_constraints=[]):
         options = {}
         if 'FARGATE' in requires_compatibilities:
             options = {
-                'executionRoleArn': execution_role_arn or u'',
                 'requiresCompatibilities': requires_compatibilities or [],
                 'cpu': cpu,
                 'memory': memory,
@@ -72,7 +72,8 @@ class EcsClient(object):
             volumes=volumes,
             taskRoleArn=role_arn or u'',
             placementConstraints=placement_constraints,
-        **options
+            executionRoleArn=execution_role_arn or u'',
+            **options
         )
 
     def deregister_task_definition(self, task_definition_arn):
@@ -293,44 +294,16 @@ class EcsTaskDefinition(dict):
                 self._diff.append(diff)
                 container[u'command'] = [new_command]
 
-    def set_environment(self, environment_list):
-        environment = {}
+    def apply_container_environment_and_secrets(self, container, new_environment_and_secrets):
+        new_environment = new_environment_and_secrets.get('environment', {})
+        old_environment = {env['name']: env['value'] for env in container.get('environment', {})}
+        container[u'environment'] = [{"name": e, "value": new_environment[e]} for e in new_environment]
+        self._diff.append(EcsTaskDefinitionDiff(container['name'], 'environment', new_environment, old_environment))
 
-        for env in environment_list:
-            environment.setdefault(env[0], {})
-            environment[env[0]][env[1]] = env[2]
-
-        self.validate_container_options(**environment)
-        for container in self.containers:
-            if container[u'name'] in environment:
-                self.apply_container_environment(
-                    container=container,
-                    new_environment=environment[container[u'name']]
-                )
-
-    def apply_container_environment(self, container, new_environment):
-        old_environment = {
-            env['name']: env['value'] for env in container.get(
-                'environment',
-                {}
-            )
-        }
-        merged_environment = {var[0]: var[1] for var in new_environment}
-
-        diff = EcsTaskDefinitionDiff(
-            container[u'name'],
-            u'environment',
-            merged_environment,
-            old_environment
-        )
-        self._diff.append(diff)
-
-        container[u'environment'] = [
-            {
-                "name": e,
-                "value": merged_environment[e]
-            } for e in merged_environment
-        ]
+        new_secrets = new_environment_and_secrets.get('secrets', {})
+        old_secrets = {env['name']: env['valueFrom'] for env in container.get('secrets', {})}
+        container[u'secrets'] = [{"name": s, "valueFrom": new_secrets[s]} for s in new_secrets]
+        self._diff.append(EcsTaskDefinitionDiff(container['name'], 'secrets', new_secrets, old_secrets))
 
     def validate_container_options(self, **container_options):
         for container_name in container_options:
@@ -427,14 +400,11 @@ class EcsAction(object):
     def update_task_definition(self, task_definition):
         fargate_td = {}
         if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
-
             fargate_td = {
-                'execution_role_arn': task_definition.execution_role_arn or u'',
                 'requires_compatibilities': task_definition.requires_compatibilities or [],
                 'network_mode': task_definition.network_mode or u'',
-                'cpu' : task_definition.cpu or u'',
-                'memory' : task_definition.memory or u'',
-
+                'cpu': task_definition.cpu or u'',
+                'memory': task_definition.memory or u'',
             }
         response = self._client.register_task_definition(
             family=task_definition.family,
@@ -443,6 +413,7 @@ class EcsAction(object):
             role_arn=task_definition.role_arn,
             placement_constraints=task_definition.placement_constraints,
             network_mode=task_definition.network_mode,
+            execution_role_arn=task_definition.execution_role_arn or u'',
             **fargate_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])

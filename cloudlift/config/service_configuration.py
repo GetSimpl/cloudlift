@@ -315,6 +315,9 @@ class ServiceConfiguration(object):
                 "log_group":{
                     "type": "string",
                 },
+                "secrets_name_prefix":{
+                    "type": "string",
+                },
                 "task_role_attached_managed_policy_arns": {
                     "type": "array",
                     "items": {

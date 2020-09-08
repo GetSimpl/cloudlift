@@ -4,16 +4,20 @@ Outputs:
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
       {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
       false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}, "deployment": {"maximum_percent": 150}, "sidecars": [{"name":
-      "redis", "image": "redis:latest", "memory_reservation": 256}]}, "DummyRunSidekiqsh":
-      {"memory_reservation": 1000, "command": "./run-sidekiq.sh", "deployment": {"maximum_percent":
-      150}, "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"]}}}'
+      "/elb-check"}, "deployment": {"maximum_percent": 150}, "secrets_name_prefix":
+      "dummy-config", "sidecars": [{"name": "redis", "image": "redis:latest", "memory_reservation":
+      256}]}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh",
+      "deployment": {"maximum_percent": 150}, "task_role_attached_managed_policy_arns":
+      ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"]}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
   DummyRunSidekiqshEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyRunSidekiqsh.Name'
+  DummySecretsNamePrefix:
+    Description: AWS secrets manager name prefix to pull the secrets from
+    Value: dummy-config
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -126,10 +130,39 @@ Resources:
               awslogs-stream-prefix: DummyRunSidekiqsh
           MemoryReservation: 1000
           Name: DummyRunSidekiqshContainer
+          Secrets:
+            - Name: LABEL
+              ValueFrom: arn_secret_label_v1
+      ExecutionRoleArn: !Ref 'DummyRunSidekiqshTaskExecutionRole'
       Family: DummyRunSidekiqshFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRunSidekiqshRole'
     Type: AWS::ECS::TaskDefinition
+  DummyRunSidekiqshTaskExecutionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  - '*'
+          PolicyName: DummyRunSidekiqshTaskExecutionRolePolicy
+    Type: AWS::IAM::Role
   DummyTaskDefinition:
     Properties:
       ContainerDefinitions:
@@ -151,6 +184,9 @@ Resources:
           Name: DummyContainer
           PortMappings:
             - ContainerPort: 7003
+          Secrets:
+            - Name: LABEL
+              ValueFrom: arn_secret_label_v1
         - Environment: []
           Essential: 'false'
           Image: redis:latest
@@ -162,10 +198,41 @@ Resources:
               awslogs-stream-prefix: Dummy
           MemoryReservation: 256
           Name: redisContainer
+      ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
       Family: DummyFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRole'
     Type: AWS::ECS::TaskDefinition
+  DummyTaskExecutionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-config-staging-??????
+              - Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  - '*'
+          PolicyName: DummyTaskExecutionRolePolicy
+    Type: AWS::IAM::Role
   ECSServiceRole:
     Properties:
       AssumeRolePolicyDocument:

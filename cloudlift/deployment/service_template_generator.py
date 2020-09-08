@@ -3,6 +3,9 @@ import re
 
 import boto3
 from awacs.aws import PolicyDocument, Statement, Allow, Principal
+from awacs.ecr import GetAuthorizationToken, BatchCheckLayerAvailability, GetDownloadUrlForLayer, BatchGetImage
+from awacs.logs import CreateLogStream, PutLogEvents
+from awacs.secretsmanager import GetSecretValue
 from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
 from stringcase import pascalcase
@@ -10,7 +13,7 @@ from troposphere import GetAtt, Output, Parameter, Ref, Sub
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
-                             DeploymentConfiguration, Environment,
+                             DeploymentConfiguration, Environment, Secret,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl,
@@ -23,7 +26,7 @@ from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
-from troposphere.iam import Role
+from troposphere.iam import Role, Policy
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_account_id
@@ -42,10 +45,10 @@ class ServiceTemplateGenerator(TemplateGenerator):
     LAUNCH_TYPE_FARGATE = 'FARGATE'
     LAUNCH_TYPE_EC2 = 'EC2'
 
-    def __init__(self, service_configuration, environment_stack):
+    def __init__(self, service_configuration, environment_stack, env_sample_file):
         super(ServiceTemplateGenerator, self).__init__(service_configuration.environment)
         self._derive_configuration(service_configuration)
-        self.env_sample_file_path = './env.sample'
+        self.env_sample_file_path = env_sample_file
         self.environment_stack = environment_stack
         information_fetcher = ServiceInformationFetcher(self.application_name, self.env)
         self.current_version = information_fetcher.get_current_version()
@@ -174,17 +177,15 @@ service is down',
 
     def _add_service(self, service_name, config):
         launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
-        container_configurations = build_config(
-            self.env,
-            self.application_name,
-            self.env_sample_file_path,
-            container_name(service_name),
-        )
+        secrets_name_prefix = config.get('secrets_name_prefix')
+        container_configurations = build_config(self.env, self.application_name, self.env_sample_file_path,
+                                                container_name(service_name), secrets_name_prefix)
+        env_config = container_configurations[container_name(service_name)]['environment']
+        secrets_config = container_configurations[container_name(service_name)]['secrets']
         log_config = self._gen_log_config(service_name)
         container_definition_arguments = {
-            "Environment": [
-                Environment(Name=k, Value=v) for (k, v) in container_configurations[container_name(service_name)]
-            ],
+            "Environment": [Environment(Name=name, Value=env_config[name]) for name in env_config],
+            "Secrets": [Secret(Name=name, ValueFrom=secrets_config[name]) for name in secrets_config],
             "Name": container_name(service_name),
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
@@ -192,6 +193,10 @@ service is down',
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
+        if secrets_name_prefix:
+            self.template.add_output(Output(service_name + "SecretsNamePrefix",
+                                            Description="AWS secrets manager name prefix to pull the secrets from",
+                                            Value=secrets_name_prefix))
 
         if 'http_interface' in config:
             container_definition_arguments['PortMappings'] = [
@@ -270,12 +275,12 @@ service is down',
                 ]
             )
         ))
+        task_execution_role = self._add_task_execution_role(service_name, secrets_name_prefix)
 
         launch_type_td = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
             launch_type_td = {
                 'RequiresCompatibilities': ['FARGATE'],
-                'ExecutionRoleArn': boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
                 'NetworkMode': 'awsvpc',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
@@ -293,6 +298,7 @@ service is down',
             Family=service_name + "Family",
             ContainerDefinitions=container_definitions,
             TaskRoleArn=Ref(task_role),
+            ExecutionRoleArn=Ref(task_execution_role),
             PlacementConstraints=placement_constraints,
             **launch_type_td
         )
@@ -497,6 +503,37 @@ service is down',
                 )]
             )
         )
+
+    def _add_task_execution_role(self, service_name, secrets_name_prefix):
+        # https://docs.aws.amazon.com/code-samples/latest/catalog/iam_policies-secretsmanager-asm-user-policy-grants-access-to-secret-by-name-with-wildcard.json.html
+        allow_secrets = [Statement(Effect=Allow, Action=[GetSecretValue], Resource=[
+            f"arn:aws:secretsmanager:{self.region}:{self.account_id}:secret:{secrets_name_prefix}-{self.env}-??????"])] \
+            if secrets_name_prefix else []
+
+        task_execution_role = self.template.add_resource(Role(
+            service_name + "TaskExecutionRole",
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Action=[AssumeRole],
+                        Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
+                    )
+                ]
+            ),
+            Policies=[
+                Policy(PolicyName=service_name + "TaskExecutionRolePolicy",
+                       PolicyDocument=PolicyDocument(
+                           Statement=[
+                               *allow_secrets,
+                               Statement(Effect=Allow,
+                                         Action=[GetAuthorizationToken, BatchCheckLayerAvailability,
+                                                 GetDownloadUrlForLayer, BatchGetImage, CreateLogStream, PutLogEvents],
+                                         Resource=["*"])
+                           ]
+                       ))]
+        ))
+        return task_execution_role
 
     def _gen_container_definitions_for_sidecar(self, sidecar, log_config, env_config):
         cd = {}

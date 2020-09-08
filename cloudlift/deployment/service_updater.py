@@ -2,33 +2,28 @@ import base64
 import multiprocessing
 import os
 import subprocess
-import boto3
 from time import sleep
 
-from botocore.exceptions import ClientError
+import boto3
+from cloudlift.config import get_account_id
+from cloudlift.config import get_cluster_name
+from cloudlift.config import (get_region_for_environment)
+from cloudlift.config.logging import log_bold, log_err, log_intent, log_warning
+from cloudlift.deployment import deployer, ServiceInformationFetcher
+from cloudlift.deployment.ecs import EcsClient
 from cloudlift.exceptions import UnrecoverableException
 from stringcase import spinalcase
 
-from cloudlift.config import get_account_id
-from cloudlift.config import (get_client_for,
-                              get_region_for_environment)
-from cloudlift.config import get_cluster_name, get_service_stack_name
-from cloudlift.deployment import deployer
-from cloudlift.deployment.ecs import EcsClient
-from cloudlift.config.logging import log_bold, log_err, log_intent, log_warning
-
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 CHUNK_SIZE = 10
+
 
 class ServiceUpdater(object):
     def __init__(self, name, environment, env_sample_file, timeout_seconds, version=None,
                  build_args=None, dockerfile=None, working_dir='.'):
         self.name = name
         self.environment = environment
-        if env_sample_file is not None:
-            self.env_sample_file = env_sample_file
-        else:
-            self.env_sample_file = './env.sample'
+        self.env_sample_file = env_sample_file
         self.timeout_seconds = timeout_seconds
         self.version = version
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
@@ -36,10 +31,10 @@ class ServiceUpdater(object):
         self.build_args = build_args
         self.dockerfile = dockerfile
         self.working_dir = working_dir
+        self.service_info = ServiceInformationFetcher(self.name, self.environment).service_info
 
     def run(self):
         log_warning("Deploying to {self.region}".format(**locals()))
-        self.init_stack_info()
         if not os.path.exists(self.env_sample_file):
             raise UnrecoverableException('env.sample not found. Exiting.')
         log_intent("name: " + self.name + " | environment: " +
@@ -50,8 +45,9 @@ class ServiceUpdater(object):
         ecs_client = EcsClient(None, None, self.region)
 
         jobs = []
-        for index, service_name in enumerate(self.ecs_service_names):
-            log_bold("Queueing deployment of " + service_name)
+        for index, ecs_service_logical_name in enumerate(self.service_info):
+            ecs_service_info = self.service_info[ecs_service_logical_name]
+            log_bold("Queueing deployment of " + ecs_service_info['ecs_service_name'])
             color = DEPLOYMENT_COLORS[index % 3]
             image_url = self.ecr_image_uri
             image_url += (':' + self.version)
@@ -60,14 +56,15 @@ class ServiceUpdater(object):
                 args=(
                     ecs_client,
                     self.cluster_name,
-                    service_name,
+                    ecs_service_info['ecs_service_name'],
                     self.version,
                     self.name,
                     self.env_sample_file,
                     self.timeout_seconds,
                     self.environment,
                     color,
-                    image_url
+                    image_url,
+                    ecs_service_info.get('secrets_name_prefix')
                 )
             )
             jobs.append(process)
@@ -100,7 +97,8 @@ class ServiceUpdater(object):
             self._add_image_tag(self.version, new_tag)
 
     def _build_image(self, image_name):
-        log_bold(f'Building docker image {image_name} using {"default Dockerfile" if self.dockerfile is None else self.dockerfile}')
+        log_bold(
+            f'Building docker image {image_name} using {"default Dockerfile" if self.dockerfile is None else self.dockerfile}')
         command = self._build_command(image_name)
         subprocess.check_call(command, shell=True)
         log_bold("Built " + image_name)
@@ -108,7 +106,8 @@ class ServiceUpdater(object):
     def _build_command(self, image_name):
         dockerfile_opt = '' if self.dockerfile is None else f'-f {self.dockerfile}'
         build_args_opts = self._build_args_opts()
-        return " ".join(filter(None, ['docker', 'build', dockerfile_opt, '-t', image_name, *build_args_opts, self.working_dir]))
+        return " ".join(
+            filter(None, ['docker', 'build', dockerfile_opt, '-t', image_name, *build_args_opts, self.working_dir]))
 
     def _build_args_opts(self):
         if self.build_args is None:
@@ -116,7 +115,7 @@ class ServiceUpdater(object):
         else:
             build_args_command_fragment = []
             for k, v in self.build_args.items():
-                build_args_command_fragment.append("--build-arg "+"=".join((k, v)))
+                build_args_command_fragment.append("--build-arg " + "=".join((k, v)))
             return build_args_command_fragment
 
     def upload_artefacts(self):
@@ -131,10 +130,10 @@ class ServiceUpdater(object):
                     'scanOnPush': True
                 },
             )
-            log_intent('Repo created with name: '+self.repo_name)
+            log_intent('Repo created with name: ' + self.repo_name)
         except Exception as ex:
             if type(ex).__name__ == 'RepositoryAlreadyExistsException':
-                log_intent('Repo exists with name: '+self.repo_name)
+                log_intent('Repo exists with name: ' + self.repo_name)
             else:
                 raise ex
 
@@ -246,7 +245,7 @@ version to be " + self.version + " based on current status")
     @property
     def ecr_image_uri(self):
         return str(self.account_id) + ".dkr.ecr." + self.region + \
-            ".amazonaws.com/" + self.repo_name
+               ".amazonaws.com/" + self.repo_name
 
     @property
     def repo_name(self):
@@ -260,30 +259,6 @@ version to be " + self.version + " based on current status")
     def account_id(self):
         return get_account_id()
 
-    def init_stack_info(self):
-        try:
-            self.stack_name = get_service_stack_name(self.environment, self.name)
-            stack = get_client_for(
-                'cloudformation',
-                self.environment
-            ).describe_stacks(
-                StackName=self.stack_name
-            )['Stacks'][0]
-            self.ecs_service_names = [
-                service_name['OutputValue'] for service_name in list(
-                    filter(
-                        lambda x: x['OutputKey'].endswith('EcsServiceName'),
-                        stack['Outputs']
-                    )
-                )
-            ]
-        except ClientError as client_error:
-            err = str(client_error)
-            if "Stack with id %s does not exist" % self.stack_name in err:
-                log_err(
-                    "%s cluster not found. Create the environment cluster using `create_environment` command." % self.environment)
-            else:
-                raise UnrecoverableException(str(client_error))
 
 def chunks(items, chunk_size):
     for i in range(0, len(items), chunk_size):

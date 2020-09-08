@@ -1,15 +1,14 @@
-from os.path import basename
+from datetime import datetime
 from time import sleep, time
+
+import boto3
+from cloudlift.config import ParameterStore
+from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
+from cloudlift.deployment.ecs import DeployAction
 from cloudlift.exceptions import UnrecoverableException
 from colorclass import Color
 from terminaltables import SingleTable
-
-from cloudlift.config import ParameterStore
-from cloudlift.deployment.ecs import DeployAction
-from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
-from datetime import datetime
-import boto3
-from glob import glob
+from cloudlift.config import secrets_manager
 
 
 def find_essential_container(container_definitions):
@@ -22,7 +21,7 @@ def find_essential_container(container_definitions):
 
 def deploy_new_version(client, cluster_name, ecs_service_name,
                        deploy_version_tag, service_name, sample_env_file_path,
-                       timeout_seconds, env_name, color='white', complete_image_uri=None):
+                       timeout_seconds, env_name, color='white', complete_image_uri=None, secrets_name_prefix=None):
     log_bold("Starting to deploy " + ecs_service_name)
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     if deployment.service.desired_count == 0:
@@ -30,30 +29,17 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
     else:
         desired_count = deployment.service.desired_count
     deployment.service.set_desired_count(desired_count)
-    task_definition = deployment.get_current_task_definition(
-        deployment.service
-    )
-
+    task_definition = deployment.get_current_task_definition(deployment.service)
     essential_container = find_essential_container(task_definition[u'containerDefinitions'])
-
-    container_configurations = build_config(
-        env_name,
-        service_name,
-        sample_env_file_path,
-        essential_container,
-    )
-
+    container_configurations = build_config(env_name, service_name, sample_env_file_path, essential_container,
+                                            secrets_name_prefix)
     if complete_image_uri is not None:
-        task_definition.set_images(
-            essential_container,
-            deploy_version_tag,
-            **{essential_container: complete_image_uri}
-        )
+        task_definition.set_images(essential_container, deploy_version_tag, **{essential_container: complete_image_uri})
     else:
         task_definition.set_images(essential_container, deploy_version_tag)
     for container in task_definition.containers:
-        env_config = container_configurations.get(container[u'name'], [])
-        task_definition.apply_container_environment(container, env_config)
+        env_config = container_configurations.get(container['name'], {})
+        task_definition.apply_container_environment_and_secrets(container, env_config)
     print_task_diff(ecs_service_name, task_definition.diff, color)
     new_task_definition = deployment.update_task_definition(task_definition)
 
@@ -73,10 +59,13 @@ def deploy_and_wait(deployment, new_task_definition, color, timeout_seconds):
     return wait_for_finish(deployment, existing_events, color, deploy_end_time)
 
 
-def build_config(env_name, service_name, sample_env_file_path, essential_container_name):
-    environment_config = _get_parameter_store_config(service_name, env_name)
-    _validate_config_availability(sample_env_file_path, environment_config)
-    return {essential_container_name: _make_container_defn_env_conf(environment_config)}
+def build_config(env_name, service_name, sample_env_file_path, essential_container_name, secrets_name_prefix=None):
+    env_config_secrets_mgr = secrets_manager.get_config(secrets_name_prefix, env_name) if secrets_name_prefix else {}
+    env_config_param_store = _get_parameter_store_config(service_name, env_name)
+    keys_not_in_secret_mgr = set(env_config_param_store) - set(env_config_secrets_mgr)
+    env_config = {k: env_config_param_store[k] for k in keys_not_in_secret_mgr}
+    _validate_config_availability(sample_env_file_path, set(env_config_param_store).union(set(env_config_secrets_mgr)))
+    return {essential_container_name: {"secrets": env_config_secrets_mgr, "environment": env_config}}
 
 
 def _get_parameter_store_config(service_name, env_name):
@@ -89,12 +78,12 @@ def _get_parameter_store_config(service_name, env_name):
     return environment_config
 
 
-def _validate_config_availability(sample_env_file_path, environment_config):
+def _validate_config_availability(sample_env_file_path, environment_var_set):
     sample_config = read_config(open(sample_env_file_path).read())
-    missing_actual_config = set(sample_config) - set(environment_config)
+    missing_actual_config = set(sample_config) - environment_var_set
     if missing_actual_config:
         raise UnrecoverableException('There is no config value for the keys ' + str(missing_actual_config))
-    missing_sample_config = set(environment_config) - set(sample_config)
+    missing_sample_config = environment_var_set - set(sample_config)
     if missing_sample_config:
         raise UnrecoverableException('There is no config value for the keys in {} file '.format(sample_env_file_path) +
                                      str(missing_sample_config))
@@ -109,15 +98,6 @@ def read_config(file_content):
         key, value = line.split('=', 1)
         config[key] = value
     return config
-
-
-def _make_container_defn_env_conf(environment_config):
-    container_defn_env_config = []
-    for env_var_name in environment_config:
-        container_defn_env_config.append(
-            (env_var_name, environment_config[env_var_name])
-        )
-    return container_defn_env_config
 
 
 def wait_for_finish(action, existing_events, color, deploy_end_time):
@@ -193,21 +173,32 @@ def print_task_diff(ecs_service_name, diffs, color):
     else:
         log_with_color(ecs_service_name + " No change in image version", color)
     env_diff = next(x for x in diffs if x.field == 'environment')
-    old_env, current_env = env_diff.old_value, env_diff.value
-    env_vars = sorted(
-        set(env_diff.old_value.keys()).union(env_diff.value.keys())
-    )
-    table_data = []
-    table_data.append(
-        [
-            Color('{autoyellow}Env. var.{/autoyellow}'),
-            Color('{autoyellow}Old value{/autoyellow}'),
-            Color('{autoyellow}Current value{/autoyellow}')
-        ]
-    )
-    for env_var in env_vars:
-        old_val = old_env.get(env_var, '-')
-        current_val = current_env.get(env_var, '-')
+    table_data = _prepare_diff_table(env_diff)
+    if len(table_data) > 1:
+        log_with_color(ecs_service_name + " Environment changes", color)
+        print(SingleTable(table_data).table)
+    else:
+        log_with_color(ecs_service_name + " No change in environment variables", color)
+    secrets_diff = next(x for x in diffs if x.field == 'secrets')
+    table_data = _prepare_diff_table(secrets_diff)
+    if len(table_data) > 1:
+        log_with_color(ecs_service_name + " Secrets changes", color)
+        print(SingleTable(table_data).table)
+    else:
+        log_with_color(ecs_service_name + " No change in secrets", color)
+
+
+def _prepare_diff_table(diff):
+    old_value, current_value = diff.old_value, diff.value
+    keys = sorted(set(diff.old_value.keys()).union(diff.value.keys()))
+    table_data = [[
+        Color('{autoyellow}Name{/autoyellow}'),
+        Color('{autoyellow}Old value{/autoyellow}'),
+        Color('{autoyellow}Current value{/autoyellow}')
+    ]]
+    for env_var in keys:
+        old_val = old_value.get(env_var, '-')
+        current_val = current_value.get(env_var, '-')
         if old_val != current_val:
             env_var_diff_color = 'autored'
             table_data.append(
@@ -221,14 +212,7 @@ def print_task_diff(ecs_service_name, diffs, color):
                     current_val
                 ]
             )
-    if len(table_data) > 1:
-        log_with_color(ecs_service_name + " Environment changes", color)
-        print(SingleTable(table_data).table)
-    else:
-        log_with_color(
-            ecs_service_name + " No change in environment variables",
-            color
-        )
+    return table_data
 
 
 def container_name(service_name):

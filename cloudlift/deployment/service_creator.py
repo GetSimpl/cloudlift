@@ -24,7 +24,7 @@ class ServiceCreator(object):
         CloudFormation template for ECS service and related dependencies
     '''
 
-    def __init__(self, name, environment):
+    def __init__(self, name, environment, env_sample_file):
         self.name = name
         self.environment = environment
         self.stack_name = get_service_stack_name(environment, name)
@@ -35,6 +35,7 @@ class ServiceCreator(object):
             self.name,
             self.environment
         )
+        self.env_sample_file = env_sample_file
 
     def create(self):
         '''
@@ -46,7 +47,8 @@ class ServiceCreator(object):
 
         template_generator = ServiceTemplateGenerator(
             self.service_configuration,
-            self.environment_stack
+            self.environment_stack,
+            self.env_sample_file,
         )
         service_template_body = template_generator.generate_service()
 
@@ -83,7 +85,8 @@ class ServiceCreator(object):
         try:
             template_generator = ServiceTemplateGenerator(
                 self.service_configuration,
-                self.environment_stack
+                self.environment_stack,
+                self.env_sample_file,
             )
             service_template_body = template_generator.generate_service()
             change_set = create_change_set(
