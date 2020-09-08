@@ -594,28 +594,18 @@ for cluster for 15 minutes.',
             Description="VPC in which environment is setup",
             Value=Ref(self.vpc))
         )
-        private_subnets = list(self.private_subnets)
-        self.template.add_output(Output(
-            "PrivateSubnet1",
-            Description="ID of the 1st subnet",
-            Value=Ref(private_subnets.pop()))
-        )
-        self.template.add_output(Output(
-            "PrivateSubnet2",
-            Description="ID of the 2nd subnet",
-            Value=Ref(private_subnets.pop()))
-        )
-        public_subnets = list(self.public_subnets)
-        self.template.add_output(Output(
-            "PublicSubnet1",
-            Description="ID of the 1st subnet",
-            Value=Ref(public_subnets.pop()))
-        )
-        self.template.add_output(Output(
-            "PublicSubnet2",
-            Description="ID of the 2nd subnet",
-            Value=Ref(public_subnets.pop()))
-        )
+        for idx in range(1, len(self.private_subnets) + 1):
+            self.template.add_output(Output(
+                "PrivateSubnet{}".format(idx),
+                Description="ID of private subnet {}".format(idx),
+                Value=Ref(self.private_subnets[idx])
+            ))
+        for idx in range(1, len(self.public_subnets) + 1):
+            self.template.add_output(Output(
+                "PublicSubnet{}".format(idx),
+                Description="ID of public subnet {}".format(idx),
+                Value=Ref(self.private_subnets[idx])
+            ))
         self.template.add_output(Output(
             "AutoScalingGroup",
             Description="AutoScaling group for ECS container instances",
