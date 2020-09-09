@@ -16,6 +16,7 @@ from json import dumps
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
+from botocore.config import Config
 from dateutil.tz.tz import tzlocal
 
 
@@ -26,7 +27,11 @@ class EcsClient(object):
                           aws_secret_access_key=secret_access_key,
                           region_name=region,
                           profile_name=profile)
-        self.boto = session.client(u'ecs')
+        config = Config(retries=dict(
+            max_attempts=10,
+            mode='standard',
+        ))
+        self.boto = session.client(u'ecs', config=config)
 
     def describe_services(self, cluster_name, service_name):
         return self.boto.describe_services(
