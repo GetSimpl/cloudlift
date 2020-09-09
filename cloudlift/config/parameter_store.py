@@ -4,6 +4,7 @@ from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import get_client_for
 from cloudlift.config.logging import log_err
+from cloudlift.utils import chunks
 
 
 class ParameterStore(object):
@@ -91,9 +92,10 @@ class ParameterStore(object):
                     )
             elif parameter_change[0] == 'remove':
                 deleted_parameters = ["%s%s" % (path_prefix, item[0]) for item in parameter_change[2]]
-                self.client.delete_parameters(
-                    Names=deleted_parameters
-                )
+                for chunked_parameters in chunks(deleted_parameters, 10):
+                    self.client.delete_parameters(
+                        Names=chunked_parameters
+                    )
 
     def _validate_changes(self, differences):
         errors = []
@@ -116,4 +118,3 @@ class ParameterStore(object):
 
     def _is_a_valid_parameter_key(self, key):
         return bool(re.match(r"^[\w|\.|\-|\/]+$", key))
-

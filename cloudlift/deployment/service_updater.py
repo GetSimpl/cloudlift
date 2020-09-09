@@ -13,6 +13,7 @@ from cloudlift.deployment import deployer, ServiceInformationFetcher
 from cloudlift.deployment.ecs import EcsClient
 from cloudlift.exceptions import UnrecoverableException
 from stringcase import spinalcase
+from cloudlift.utils import chunks
 
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 CHUNK_SIZE = 10
@@ -260,6 +261,3 @@ version to be " + self.version + " based on current status")
         return get_account_id()
 
 
-def chunks(items, chunk_size):
-    for i in range(0, len(items), chunk_size):
-        yield items[i:i + chunk_size]
