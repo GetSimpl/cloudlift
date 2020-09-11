@@ -96,7 +96,7 @@ class EnvironmentConfiguration(object):
             ],
             BillingMode='PAY_PER_REQUEST'
         )
-        log_bold("Configuration table created!")
+        log_bold("Environment configuration table created!")
 
     def _env_config_exists(self):
         response = self.table.get_item(

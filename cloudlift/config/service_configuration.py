@@ -5,6 +5,7 @@ retrieving service configuration.
 
 import json
 
+import boto3
 import dictdiffer
 from botocore.exceptions import ClientError
 from click import confirm, edit
@@ -37,10 +38,9 @@ class ServiceConfiguration(object):
         # mfa_region = get_region_for_environment(environment)
         # mfa_session = mfa.get_mfa_session(mfa_region)
         # ssm_client = mfa_session.client('ssm')
-        self.table = get_resource_for(
-            'dynamodb',
-            environment
-        ).Table(SERVICE_CONFIGURATION_TABLE)
+        session = boto3.session.Session()
+        self.dynamodb = session.resource('dynamodb')
+        self.table = self._get_table()
 
     def edit_config(self):
         '''
@@ -354,6 +354,41 @@ class ServiceConfiguration(object):
             raise UnrecoverableException(validation_error.message + " in " +
                                          str(".".join(list(errors))))
         log_bold("Schema valid!")
+
+    def _get_table(self):
+        dynamodb_client = boto3.session.Session().client('dynamodb')
+        table_names = dynamodb_client.list_tables()['TableNames']
+        if SERVICE_CONFIGURATION_TABLE not in table_names:
+            log_warning("Could not find configuration table, creating one..")
+            self._create_configuration_table()
+        return self.dynamodb.Table(SERVICE_CONFIGURATION_TABLE)
+
+    def _create_configuration_table(self):
+        self.dynamodb.create_table(
+            TableName=SERVICE_CONFIGURATION_TABLE,
+            KeySchema=[
+                {
+                    'AttributeName': 'service',
+                    'KeyType': 'HASH'
+                },
+                {
+                    'AttributeName': 'environment',
+                    'KeyType': 'RANGE'
+                }
+            ],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'service',
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': 'environment',
+                    'AttributeType': 'S'
+                }
+            ],
+            BillingMode='PAY_PER_REQUEST'
+        )
+        log_bold("Service configuration table created!")
 
     def _default_service_configuration(self):
         return {
