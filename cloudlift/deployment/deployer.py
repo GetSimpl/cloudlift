@@ -64,8 +64,11 @@ def build_config(env_name, service_name, sample_env_file_path, essential_contain
     env_config_param_store = _get_parameter_store_config(service_name, env_name)
     keys_not_in_secret_mgr = set(env_config_param_store) - set(env_config_secrets_mgr)
     env_config = {k: env_config_param_store[k] for k in keys_not_in_secret_mgr}
-    _validate_config_availability(sample_env_file_path, set(env_config_param_store).union(set(env_config_secrets_mgr)))
-    return {essential_container_name: {"secrets": env_config_secrets_mgr, "environment": env_config}}
+    sample_config_keys = set(read_config(open(sample_env_file_path).read()))
+    _validate_config_availability(sample_config_keys, set(env_config_param_store).union(set(env_config_secrets_mgr)))
+    secrets = {k: env_config_secrets_mgr[k] for k in set(env_config_secrets_mgr).intersection(sample_config_keys)}
+    env = {k: env_config[k] for k in set(env_config).intersection(sample_config_keys)}
+    return {essential_container_name: {"secrets": secrets, "environment": env}}
 
 
 def _get_parameter_store_config(service_name, env_name):
@@ -78,15 +81,10 @@ def _get_parameter_store_config(service_name, env_name):
     return environment_config
 
 
-def _validate_config_availability(sample_env_file_path, environment_var_set):
-    sample_config = read_config(open(sample_env_file_path).read())
-    missing_actual_config = set(sample_config) - environment_var_set
+def _validate_config_availability(sample_config_keys, environment_var_set):
+    missing_actual_config = sample_config_keys - environment_var_set
     if missing_actual_config:
         raise UnrecoverableException('There is no config value for the keys ' + str(missing_actual_config))
-    missing_sample_config = environment_var_set - set(sample_config)
-    if missing_sample_config:
-        raise UnrecoverableException('There is no config value for the keys in {} file '.format(sample_env_file_path) +
-                                     str(missing_sample_config))
 
 
 def read_config(file_content):

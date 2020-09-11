@@ -266,7 +266,7 @@ class TestBuildConfig(TestCase):
         env_name = "staging"
         cloudlift_service_name = "Dummy"
         sample_env_file_path = "test-env.sample"
-        essential_container_name = "mainServiceContainer"
+        essential_container_name = "mainService"
         secrets_name_prefix = "main"
         mock_store = MagicMock()
         mock_parameter_store.return_value = mock_store
@@ -277,7 +277,7 @@ class TestBuildConfig(TestCase):
                                              essential_container_name, secrets_name_prefix)
 
         expected_configurations = {
-            "mainServiceContainer": {
+            "mainService": {
                 "secrets": {"LABEL": "arn_for_secret_at_v1"},
                 "environment": {"PORT": "80"}
             }
@@ -309,7 +309,7 @@ class TestBuildConfig(TestCase):
     @patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test"))
     @patch('cloudlift.deployment.deployer.ParameterStore')
     @patch('cloudlift.deployment.deployer.secrets_manager')
-    def test_failure_build_config_for_if_parameter_store_has_additional_keys(self, m_secrets_mgr, m_parameter_store):
+    def test_build_config_ignores_additional_keys_in_param_store_and_sec_mgr(self, m_secrets_mgr, m_parameter_store):
         env_name = "staging"
         service_name = "Dummy"
         sample_env_file_path = "test-env.sample"
@@ -317,13 +317,17 @@ class TestBuildConfig(TestCase):
         secrets_name_prefix = "main"
         mock_store = MagicMock()
         m_parameter_store.return_value = mock_store
-        mock_store.get_existing_config.return_value = ({'PORT': '80', 'ADDITIONAL_KEYS': 'true'}, {})
-        m_secrets_mgr.get_config.return_value = {"LABEL": "arn_for_secret_at_v1"}
+        mock_store.get_existing_config.return_value = ({'PORT': '80', 'ADDITIONAL_KEY_1': 'true'}, {})
+        m_secrets_mgr.get_config.return_value = {"LABEL": "arn_for_secret_at_v1", 'ADDITIONAL_KEY_2': 'true'}
 
-        with pytest.raises(UnrecoverableException) as pytest_wrapped_e:
-            build_config(env_name, service_name, sample_env_file_path, essential_container_name, secrets_name_prefix)
+        actual_configurations = build_config(env_name, service_name, sample_env_file_path,
+                                             essential_container_name, secrets_name_prefix)
 
-        self.assertEqual(pytest_wrapped_e.type, UnrecoverableException)
-        self.assertEqual(str(pytest_wrapped_e.value), '"There is no config value for the keys in test-env.sample '
-                                                      'file {\'ADDITIONAL_KEYS\'}"')
+        expected_configurations = {
+            "mainService": {
+                "secrets": {"LABEL": "arn_for_secret_at_v1"},
+                "environment": {"PORT": "80"}
+            }
+        }
+        self.assertDictEqual(expected_configurations, actual_configurations)
         m_secrets_mgr.get_config.assert_called_once_with(secrets_name_prefix, env_name)
