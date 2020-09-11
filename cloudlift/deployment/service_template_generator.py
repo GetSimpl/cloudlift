@@ -95,32 +95,6 @@ indicating instance is down',
             TreatMissingData='breaching'
         )
         self.template.add_resource(ecs_high_cpu_alarm)
-        ecs_high_memory_alarm = Alarm(
-            'EcsHighMemoryAlarm' + str(svc.name),
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(
-                    Name='ClusterName',
-                    Value=self.cluster_name
-                ),
-                MetricDimension(
-                    Name='ServiceName',
-                    Value=GetAtt(svc, 'Name')
-                )
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            OKActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Alarm if memory too high or metric \
-disappears indicating instance is down',
-            Namespace='AWS/ECS',
-            Period=300,
-            ComparisonOperator='GreaterThanThreshold',
-            Statistic='Average',
-            Threshold='80',
-            MetricName='MemoryUtilization',
-            TreatMissingData='breaching'
-        )
-        self.template.add_resource(ecs_high_memory_alarm)
         cloudlift_timedout_deployments_alarm = Alarm(
             'FailedCloudliftDeployments' + str(svc.name),
             EvaluationPeriods=1,

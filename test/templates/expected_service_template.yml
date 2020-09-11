@@ -292,50 +292,6 @@ Resources:
       Threshold: '80'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
-  EcsHighMemoryAlarmDummy:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Alarm if memory too high or metric disappears indicating instance
-        is down
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'Dummy.Name'
-      EvaluationPeriods: 1
-      MetricName: MemoryUtilization
-      Namespace: AWS/ECS
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 300
-      Statistic: Average
-      Threshold: '80'
-      TreatMissingData: breaching
-    Type: AWS::CloudWatch::Alarm
-  EcsHighMemoryAlarmDummyRunSidekiqsh:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Alarm if memory too high or metric disappears indicating instance
-        is down
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyRunSidekiqsh.Name'
-      EvaluationPeriods: 1
-      MetricName: MemoryUtilization
-      Namespace: AWS/ECS
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 300
-      Statistic: Average
-      Threshold: '80'
-      TreatMissingData: breaching
-    Type: AWS::CloudWatch::Alarm
   EcsNoRunningTasksAlarmDummy:
     Properties:
       AlarmActions:
