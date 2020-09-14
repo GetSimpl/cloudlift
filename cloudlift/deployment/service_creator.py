@@ -93,7 +93,7 @@ class ServiceCreator(object):
                 self.client,
                 service_template_body,
                 self.stack_name,
-                "",
+                None,
                 self.environment
             )
             if change_set is None:

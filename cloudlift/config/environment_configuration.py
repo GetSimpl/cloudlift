@@ -106,6 +106,68 @@ class EnvironmentConfiguration(object):
         )
         return response.get('Item') is not None
 
+    def _create_vpc_config(self):
+        if confirm("Create a new VPC?"):
+            vpc_cidr = ipaddress.IPv4Network(prompt("VPC CIDR", default='10.10.10.10/16'))
+            nat_eip = prompt("Allocation ID Elastic IP for NAT")
+            public_subnet_1_cidr = prompt(
+                "Public Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[0])
+            public_subnet_2_cidr = prompt(
+                "Public Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[1])
+            private_subnet_1_cidr = prompt(
+                "Private Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[2])
+            private_subnet_2_cidr = prompt(
+                "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
+            return {
+                "create_new": True,
+                "cidr": str(vpc_cidr),
+                "nat-gateway": {
+                    "elastic-ip-allocation-id": nat_eip
+                },
+                "subnets": {
+                    "public": {
+                        "subnet-1": {
+                            "cidr": str(public_subnet_1_cidr)
+                        },
+                        "subnet-2": {
+                            "cidr": str(public_subnet_2_cidr)
+                        }
+                    },
+                    "private": {
+                        "subnet-1": {
+                            "cidr": str(private_subnet_1_cidr)
+                        },
+                        "subnet-2": {
+                            "cidr": str(private_subnet_2_cidr)
+                        }
+                    }
+                }
+            }
+        else:
+            vpc_id = prompt("VPC ID")
+            private_subnet_count = prompt("No of private subnets in the VPC", default=2)
+            private_subnet_ids = [prompt("Private Subnet {} ID".format(idx)) for idx in
+                                   range(1, private_subnet_count + 1)]
+            public_subnet_count = prompt("No of public subnets in the VPC", default=2)
+            public_subnet_ids = [prompt("Public Subnet {} ID".format(idx)) for idx in
+                                  range(1, public_subnet_count + 1)]
+            return {
+                "create_new": False,
+                "id": vpc_id,
+                "subnets": {
+                    "public": {
+                        "subnet-{}".format(idx + 1): {
+                            "id": public_subnet_ids[idx]
+                        } for idx in range(public_subnet_count)
+                    },
+                    "private": {
+                        "subnet-{}".format(idx + 1): {
+                            "id": private_subnet_ids[idx]
+                        } for idx in range(private_subnet_count)
+                    },
+                }
+            }
+
     def _create_config(self):
         log_warning(
             "\nConfiguration for this environment was not found in DynamoDB.\
@@ -115,16 +177,7 @@ class EnvironmentConfiguration(object):
             \nthe same configuration.\n"
         )
         region = prompt("AWS region for environment", default='ap-south-1')
-        vpc_cidr = ipaddress.IPv4Network(prompt("VPC CIDR", default='10.10.10.10/16'))
-        nat_eip = prompt("Allocation ID Elastic IP for NAT")
-        public_subnet_1_cidr = prompt(
-            "Public Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[0])
-        public_subnet_2_cidr = prompt(
-            "Public Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[1])
-        private_subnet_1_cidr = prompt(
-            "Private Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[2])
-        private_subnet_2_cidr = prompt(
-            "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
+        vpc_config = self._create_vpc_config()
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
         cluster_instance_type = prompt("Instance type", default='m5.xlarge')
@@ -134,30 +187,7 @@ class EnvironmentConfiguration(object):
         environment_configuration = {
             self.environment: {
                 "region": region,
-                "vpc": {
-                    "cidr": str(vpc_cidr),
-                    "nat-gateway": {
-                        "elastic-ip-allocation-id": nat_eip
-                    },
-                    "subnets": {
-                        "public": {
-                            "subnet-1": {
-                                "cidr": str(public_subnet_1_cidr)
-                            },
-                            "subnet-2": {
-                                "cidr": str(public_subnet_2_cidr)
-                            }
-                        },
-                        "private": {
-                            "subnet-1": {
-                                "cidr": str(private_subnet_1_cidr)
-                            },
-                            "subnet-2": {
-                                "cidr": str(private_subnet_2_cidr)
-                            }
-                        }
-                    }
-                },
+                "vpc": vpc_config,
                 "cluster": {
                     "min_instances": cluster_min_instances,
                     "max_instances": cluster_max_instances,
@@ -271,96 +301,155 @@ class EnvironmentConfiguration(object):
                         "region": {"type": "string"},
                         "vpc": {
                             "type": "object",
-                            "properties": {
-                                "cidr": {
-                                    "type": "string"
-                                },
-                                "nat-gateway": {
-                                    "type": "object",
+                            "oneOf": [
+                                {
                                     "properties": {
-                                        "elastic-ip-allocation-id": {
+                                        "create_new": {
+                                            "enum": [True]
+                                        },
+                                        "cidr": {
                                             "type": "string"
-                                        }
-                                    },
-                                    "required": [
-                                        "elastic-ip-allocation-id"
-                                    ]
-                                },
-                                "subnets": {
-                                    "type": "object",
-                                    "properties": {
-                                        "private": {
+                                        },
+                                        "nat-gateway": {
                                             "type": "object",
                                             "properties": {
-                                                "subnet-1": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "cidr": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "required": [
-                                                        "cidr"
-                                                    ]
-                                                },
-                                                "subnet-2": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "cidr": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "required": [
-                                                        "cidr"
-                                                    ]
+                                                "elastic-ip-allocation-id": {
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
-                                                "subnet-1",
-                                                "subnet-2"
+                                                "elastic-ip-allocation-id"
                                             ]
                                         },
-                                        "public": {
+                                        "subnets": {
                                             "type": "object",
                                             "properties": {
-                                                "subnet-1": {
+                                                "private": {
                                                     "type": "object",
                                                     "properties": {
-                                                        "cidr": {
-                                                            "type": "string"
+                                                        "subnet-1": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "cidr": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "cidr"
+                                                            ]
+                                                        },
+                                                        "subnet-2": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "cidr": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "cidr"
+                                                            ]
                                                         }
                                                     },
                                                     "required": [
-                                                        "cidr"
+                                                        "subnet-1",
+                                                        "subnet-2"
                                                     ]
                                                 },
-                                                "subnet-2": {
+                                                "public": {
                                                     "type": "object",
                                                     "properties": {
-                                                        "cidr": {
-                                                            "type": "string"
+                                                        "subnet-1": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "cidr": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "cidr"
+                                                            ]
+                                                        },
+                                                        "subnet-2": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "cidr": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "cidr"
+                                                            ]
                                                         }
                                                     },
                                                     "required": [
-                                                        "cidr"
+                                                        "subnet-1",
+                                                        "subnet-2"
                                                     ]
                                                 }
                                             },
                                             "required": [
-                                                "subnet-1",
-                                                "subnet-2"
+                                                "private",
+                                                "public"
                                             ]
                                         }
-                                    },
-                                    "required": [
-                                        "private",
-                                        "public"
-                                    ]
+                                    }
+                                },
+                                {
+                                    "properties": {
+                                        "create_new": {
+                                            "enum": [False]
+                                        },
+                                        "subnets": {
+                                            "type": "object",
+                                            "properties": {
+                                                "private": {
+                                                    "type": "object",
+                                                    "patternProperties": {
+                                                        "^subnet-[0-9]$": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "id"
+                                                            ]
+                                                        },
+                                                    },
+                                                    "additionalProperties": False,
+                                                    "maxProperties": 5,
+                                                    "minProperties": 1
+                                                },
+                                                "public": {
+                                                    "type": "object",
+                                                    "patternProperties": {
+                                                        "^subnet-[0-9]$": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "id"
+                                                            ]
+                                                        },
+                                                    },
+                                                    "additionalProperties": False,
+                                                    "maxProperties": 5,
+                                                    "minProperties": 1
+                                                }
+                                            },
+                                            "required": [
+                                                "private",
+                                                "public"
+                                            ]
+                                        }
+                                    }
                                 }
-                            },
+                            ],
                             "required": [
-                                "cidr",
-                                "nat-gateway",
                                 "subnets"
                             ]
                         }

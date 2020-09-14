@@ -9,15 +9,11 @@ from cloudlift.deployment.cloud_formation_stack import prepare_stack_options_for
 
 
 def create_change_set(client, service_template_body, stack_name,
-                      key_name, environment):
-    change_set_parameters = [
-        {'ParameterKey': 'Environment', 'ParameterValue': environment}
-    ]
-    if key_name:
-        change_set_parameters.append({
-            'ParameterKey': 'KeyPair',
-            'ParameterValue': key_name
-        })
+                      change_set_parameters, environment):
+    if not change_set_parameters:
+        change_set_parameters = [
+            {'ParameterKey': 'Environment', 'ParameterValue': environment}
+        ]
     options = prepare_stack_options_for_template(service_template_body, environment, stack_name)
     create_change_set_res = client.create_change_set(
         StackName=stack_name,

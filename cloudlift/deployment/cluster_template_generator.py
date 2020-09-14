@@ -33,21 +33,18 @@ class ClusterTemplateGenerator(TemplateGenerator):
     def __init__(self, environment, environment_configuration, desired_instances=None):
         super(ClusterTemplateGenerator, self).__init__(environment)
         self.configuration = environment_configuration
+        self.ami_id = self.configuration['cluster'].get('ami_id', None)
         if desired_instances is None:
             self.desired_instances = self.configuration['cluster']['min_instances']
         else:
             self.desired_instances = desired_instances
         self.private_subnets = []
         self.public_subnets = []
-        self._get_availability_zones()
+        self.availability_zones = self._get_availability_zones()
 
     def generate_cluster(self):
         self.__validate_parameters()
-        self._setup_network(
-            self.configuration['vpc']['cidr'],
-            self.configuration['vpc']['subnets'],
-            self.configuration['vpc']['nat-gateway']['elastic-ip-allocation-id'],
-        )
+        self._setup_network(self.configuration['vpc'])
         self._create_log_group()
         self._add_cluster_outputs()
         self._add_cluster_parameters()
@@ -59,7 +56,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
     def _get_availability_zones(self):
         client = get_client_for('ec2', self.env)
         aws_azs = client.describe_availability_zones()['AvailabilityZones']
-        self.availability_zones = [
+        return [
             zone['ZoneName'] for zone in aws_azs
         ][:2]
 
@@ -69,14 +66,42 @@ class ClusterTemplateGenerator(TemplateGenerator):
         return False
 
     # TODO: clean up
-    def _setup_network(self, cidr_block, subnet_configs, eip_allocation_id):
-        self._create_vpc(cidr_block)
-        self._create_public_network(subnet_configs['public'])
-        self._create_private_network(
-            subnet_configs['private'],
-            eip_allocation_id
+    def _setup_network(self, config):
+        if config.get("create_new", True):
+            self._create_vpc(config['cidr'])
+            self._create_public_network(config['subnets']['public'])
+            self._create_private_network(
+                config['subnets']['private'],
+                config['nat-gateway']['elastic-ip-allocation-id']
+            )
+            self._create_database_subnet_group()
+        else:
+            self._add_vpc(config['id'])
+            self.public_subnets = self._add_subnets(config['subnets']['public'], 'Public')
+            self.private_subnets = self._add_subnets(config['subnets']['private'], 'Private')
+        self._create_elasicache_subnet_group()
+
+    def _add_vpc(self, vpc_id):
+        self.vpc = Parameter(
+            camelcase("{self.env}Vpc".format(**locals())),
+            Type="AWS::EC2::VPC::Id",
+            Default=vpc_id
         )
-        self._create_database_subnet_group()
+        self.template.add_parameter(self.vpc)
+
+    def _add_subnets(self, subnet_configs, subnet_type):
+        subnets = []
+        for subnet_title, subnet_config in subnet_configs.items():
+            subnet_title = camelcase("{self.env}{subnet_type}".format(**locals())) + \
+                           pascalcase(re.sub('[^a-zA-Z0-9*]', '', subnet_title))
+            subnet = Parameter(
+                subnet_title,
+                Type="AWS::EC2::Subnet::Id",
+                Default=subnet_config['id']
+            )
+            subnets.append(subnet)
+            self.template.add_parameter(subnet)
+        return subnets
 
     def _create_vpc(self, cidr_block):
         self.vpc = VPC(
@@ -242,11 +267,13 @@ class ClusterTemplateGenerator(TemplateGenerator):
             SubnetIds=[Ref(subnet) for subnet in self.private_subnets]
         )
         self.template.add_resource(database_subnet_group)
+
+    def _create_elasicache_subnet_group(self):
         elasticache_subnet_group = ElastiCacheSubnetGroup(
             "ElasticacheSubnetGroup",
             CacheSubnetGroupName="{self.env}-subnet".format(**locals()),
             Description="{self.env} subnet group".format(**locals()),
-            SubnetIds=[Ref(subnet) for subnet in self.private_subnets]
+            SubnetIds=[Ref(subnet) for subnet in reversed(self.private_subnets)]
         )
         self.template.add_resource(elasticache_subnet_group)
 
@@ -510,7 +537,6 @@ for cluster for 15 minutes.',
         # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
         up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
         # TODO: clean up
-        subnets = list(self.private_subnets)
         self.auto_scaling_group = AutoScalingGroup(
             "AutoScalingGroup",
             UpdatePolicy=up,
@@ -524,7 +550,7 @@ for cluster for 15 minutes.',
             ],
             MinSize=Ref('MinSize'),
             MaxSize=Ref('MaxSize'),
-            VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
+            VPCZoneIdentifier=[Ref(subnet) for subnet in self.private_subnets],
             LaunchConfigurationName=Ref(launch_configuration),
             CreationPolicy=CreationPolicy(
                 ResourceSignal=ResourceSignal(Timeout='PT15M')
@@ -558,20 +584,25 @@ for cluster for 15 minutes.',
         self.notification_sns_arn = Parameter("NotificationSnsArn",
                                               Description='',
                                               Type="String",
-                                              Default=self.notifications_arn)
+                                               Default=self.notifications_arn)
         self.template.add_parameter(self.notification_sns_arn)
         self.template.add_parameter(Parameter(
             "InstanceType", Description='', Type="String", Default=self.configuration['cluster']['instance_type']))
 
-    def _add_mappings(self):
+    def _get_ami_id(self):
+        if self.ami_id:
+            return self.ami_id
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
         ssm_client = get_client_for('ssm', self.env)
         ami_response = ssm_client.get_parameter(
             Name='/aws/service/ecs/optimized-ami/amazon-linux-2/recommended')
-        ami_id = json.loads(ami_response['Parameter']['Value'])['image_id']
+        return json.loads(ami_response['Parameter']['Value'])['image_id']
+
+    def _add_mappings(self):
+
         region = get_region_for_environment(self.env)
         self.template.add_mapping('AWSRegionToAMI', {
-            region: {"AMI": ami_id}
+            region: {"AMI": self._get_ami_id()}
         })
 
     def _add_cluster_outputs(self):
@@ -594,28 +625,18 @@ for cluster for 15 minutes.',
             Description="VPC in which environment is setup",
             Value=Ref(self.vpc))
         )
-        private_subnets = list(self.private_subnets)
-        self.template.add_output(Output(
-            "PrivateSubnet1",
-            Description="ID of the 1st subnet",
-            Value=Ref(private_subnets.pop()))
-        )
-        self.template.add_output(Output(
-            "PrivateSubnet2",
-            Description="ID of the 2nd subnet",
-            Value=Ref(private_subnets.pop()))
-        )
-        public_subnets = list(self.public_subnets)
-        self.template.add_output(Output(
-            "PublicSubnet1",
-            Description="ID of the 1st subnet",
-            Value=Ref(public_subnets.pop()))
-        )
-        self.template.add_output(Output(
-            "PublicSubnet2",
-            Description="ID of the 2nd subnet",
-            Value=Ref(public_subnets.pop()))
-        )
+        for idx in range(1, len(self.private_subnets) + 1):
+            self.template.add_output(Output(
+                "PrivateSubnet{}".format(idx),
+                Description="ID of private subnet {}".format(idx),
+                Value=Ref(self.private_subnets[idx - 1])
+            ))
+        for idx in range(1, len(self.public_subnets) + 1):
+            self.template.add_output(Output(
+                "PublicSubnet{}".format(idx),
+                Description="ID of public subnet {}".format(idx),
+                Value=Ref(self.public_subnets[idx - 1])
+            ))
         self.template.add_output(Output(
             "AutoScalingGroup",
             Description="AutoScaling group for ECS container instances",

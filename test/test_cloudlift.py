@@ -14,8 +14,13 @@ from pathlib import Path
 
 TEST_DIR = Path(__file__).resolve().parent
 
+
 def setup_module(module):
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+environment_name = 'test'
+service_name = 'cfn-dummy'
 
 
 def mocked_service_config(cls, *args, **kwargs):
@@ -51,7 +56,7 @@ def mocked_service_with_secrets_manager_config(cls, *args, **kwargs):
         "services": {
             "Dummy": {
                 "command": None,
-                "secrets_name_prefix": service_name,
+                "secrets_name": "{}-{}".format(service_name, environment_name),
                 "sidecars": [
                     {"name": "redis", "image": "redis", "memory_reservation": 256}
                 ],
@@ -71,10 +76,6 @@ def mocked_service_with_secrets_manager_config(cls, *args, **kwargs):
             }
         }
     }
-
-
-environment_name = 'test'
-service_name = 'cfn-dummy'
 
 
 def test_cloudlift_can_deploy_to_ec2(keep_resources):
@@ -115,6 +116,7 @@ def test_cloudlift_service_with_secrets_manager_config(keep_resources):
     os.chdir(f'{TEST_DIR}/dummy')
     print("adding configuration to parameter store")
     _set_param_store_env(environment_name, service_name, {'PORT': '80', 'LABEL': 'Demo', 'REDIS_HOST': 'redis'})
+    print("adding configuration to secrets manager")
     _set_secrets_manager_config(f"{service_name}-{environment_name}", {'LABEL': 'Value from secret manager'})
     with patch.object(ServiceConfiguration, 'edit_config',
                       new=mocked_service_with_secrets_manager_config):
@@ -125,10 +127,8 @@ def test_cloudlift_service_with_secrets_manager_config(keep_resources):
     ServiceUpdater(service_name, environment_name, "env.sample", timeout_seconds=600).run()
     outputs = cfn_client.describe_stacks(StackName=stack_name)['Stacks'][0]['Outputs']
     service_url = [x for x in outputs if x["OutputKey"] == "DummyURL"][0]['OutputValue']
-    content_matched = wait_until(lambda: match_page_content(service_url, 'This is dummy app. '
-                                                                         'Label: Value from secret manager. '
-                                                                         'Redis PING: PONG. '
-                                                                         'AWS EC2 READ ACCESS: True'), 60)
+    expected = 'This is dummy app. Label: Value from secret manager. Redis PING: PONG. AWS EC2 READ ACCESS: True'
+    content_matched = wait_until(lambda: match_page_content(service_url, expected), 60)
     assert content_matched
     if not keep_resources:
         cfn_client.delete_stack(StackName=stack_name)
@@ -137,7 +137,8 @@ def test_cloudlift_service_with_secrets_manager_config(keep_resources):
 def match_page_content(service_url, content_expected):
     page_content = requests.get(service_url, verify=False).text
     print("page_content: " + str(page_content))
-    return page_content == content_expected
+    print("expected: " + content_expected)
+    return page_content.strip() == content_expected.strip()
 
 
 def wait_until(predicate, timeout, period=1, *args, **kwargs):
