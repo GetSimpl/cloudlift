@@ -22,6 +22,7 @@ from cloudlift.version import VERSION
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
+
 class ServiceConfiguration(object):
     '''
         Handles configuration in DynamoDB for services
@@ -312,10 +313,10 @@ class ServiceConfiguration(object):
                         }
                     },
                 },
-                "log_group":{
+                "log_group": {
                     "type": "string",
                 },
-                "secrets_name_prefix":{
+                "secrets_name": {
                     "type": "string",
                 },
                 "task_role_attached_managed_policy_arns": {
@@ -325,7 +326,7 @@ class ServiceConfiguration(object):
                     }
                 }
             },
-            "required": ["memory_reservation", "command"]
+            "required": ["memory_reservation", "command", "secrets_name"]
         }
         schema = {
             # "$schema": "http://json-schema.org/draft-04/schema#",

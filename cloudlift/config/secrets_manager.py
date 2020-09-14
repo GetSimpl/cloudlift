@@ -5,8 +5,7 @@ import json
 _secret_manager_cache = {}
 
 
-def get_config(name_prefix, env):
-    secret_name = f"{name_prefix}-{env}"
+def get_config(secret_name, env):
     if secret_name not in _secret_manager_cache:
         response = get_client_for('secretsmanager', env).get_secret_value(SecretId=secret_name)
         log(f"Fetched config from AWS secrets manager. Version: {response['VersionId']}")

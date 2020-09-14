@@ -2,19 +2,26 @@ Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
-      {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
-      false, "alb": {"create_new": false, "host": "abc.xyz.com"}, "container_port":
-      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}},
-      "DummyWithCustomListener": {"memory_reservation": 1000, "command": null, "http_interface":
-      {"internal": false, "alb": {"create_new": false, "listener_arn": "custom_listener_arn",
-      "priority": 100}, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"],
-      "health_check_path": "/elb-check"}}}}'
+      {"Dummy": {"memory_reservation": 1000, "command": null, "secrets_name": "something",
+      "http_interface": {"internal": false, "alb": {"create_new": false, "host": "abc.xyz.com"},
+      "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}}, "DummyWithCustomListener": {"memory_reservation": 1000, "command":
+      null, "secrets_name": "something", "http_interface": {"internal": false, "alb":
+      {"create_new": false, "listener_arn": "custom_listener_arn", "priority": 100},
+      "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
+  DummySecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: something
   DummyWithCustomListenerEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyWithCustomListener.Name'
+  DummyWithCustomListenerSecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: something
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -136,6 +143,11 @@ Resources:
         - PolicyDocument:
             Statement:
               - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:something-??????
+              - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability
                   - ecr:GetDownloadUrlForLayer
@@ -226,6 +238,11 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
+              - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:something-??????
               - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability

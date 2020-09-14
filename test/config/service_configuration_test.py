@@ -162,6 +162,7 @@ class TestServiceConfigurationValidation(TestCase):
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
+                        'secrets_name': 'secret-config',
                         'command': None,
                         'placement_constraints': [
                             {
@@ -205,6 +206,7 @@ class TestServiceConfigurationValidation(TestCase):
                     'TestService': {
                         'memory_reservation': 1000,
                         'command': None,
+                        'secrets_name': 'secret-config',
                         'system_controls': [
                             {
                                 'namespace': 'ns',
@@ -224,6 +226,7 @@ class TestServiceConfigurationValidation(TestCase):
                     'TestService': {
                         'memory_reservation': 1000,
                         'command': None,
+                        'secrets_name': 'secret-config',
                         'system_controls': "invalid"
                     }
                 }
@@ -245,6 +248,7 @@ class TestServiceConfigurationValidation(TestCase):
                     'TestService': {
                         'memory_reservation': 1000,
                         'command': None,
+                        'secrets_name': 'secret-config',
                         'http_interface': {
                             'internal': True,
                             'container_port': 8080,
@@ -269,6 +273,7 @@ class TestServiceConfigurationValidation(TestCase):
                     'TestService': {
                         'memory_reservation': 1000,
                         'command': None,
+                        'secrets_name': 'secret-config',
                         'http_interface': {
                             'internal': True,
                             'container_port': 8080,
@@ -294,6 +299,7 @@ class TestServiceConfigurationValidation(TestCase):
                     'TestService': {
                         'memory_reservation': 1000,
                         'command': None,
+                        'secrets_name': 'secret-config',
                         'http_interface': {
                             'internal': True,
                             'container_port': 8080,
@@ -322,6 +328,7 @@ class TestServiceConfigurationValidation(TestCase):
                     'TestService': {
                         'memory_reservation': 1000,
                         'command': None,
+                        'secrets_name': 'secret-config',
                         'sidecars': [
                             {
                                 'name': 'redis',

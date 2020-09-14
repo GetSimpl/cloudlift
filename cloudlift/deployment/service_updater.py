@@ -63,9 +63,9 @@ class ServiceUpdater(object):
                     self.env_sample_file,
                     self.timeout_seconds,
                     self.environment,
+                    ecs_service_info.get('secrets_name'),
                     color,
-                    image_url,
-                    ecs_service_info.get('secrets_name_prefix')
+                    image_url
                 )
             )
             jobs.append(process)

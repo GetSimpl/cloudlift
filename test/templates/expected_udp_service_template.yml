@@ -2,13 +2,17 @@ Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
-      {"FreeradiusServer": {"command": null, "memory_reservation": 1024, "udp_interface":
-      {"container_port": 1812, "eip_allocaltion_id1": "eipalloc-02abb9e5e123492ee",
-      "eip_allocaltion_id2": "eipalloc-02abb9e5e123492ee", "health_check_port": 1814,
-      "internal": false, "nlb_enabled": true, "restrict_access_to": ["0.0.0.0/0"]}}}}'
+      {"FreeradiusServer": {"command": null, "memory_reservation": 1024, "secrets_name":
+      "dummy-udp-config", "udp_interface": {"container_port": 1812, "eip_allocaltion_id1":
+      "eipalloc-02abb9e5e123492ee", "eip_allocaltion_id2": "eipalloc-02abb9e5e123492ee",
+      "health_check_port": 1814, "internal": false, "nlb_enabled": true, "restrict_access_to":
+      ["0.0.0.0/0"]}}}}'
   FreeradiusServerEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'FreeradiusServer.Name'
+  FreeradiusServerSecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: dummy-udp-config
   FreeradiusServerURL:
     Description: The URL at which the service is accessible
     Value: !Sub 'udp://${NLBFreeradiusServer.DNSName}'
@@ -209,6 +213,11 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
+              - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-udp-config-??????
               - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability

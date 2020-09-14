@@ -27,7 +27,7 @@ def mocked_service_config():
                 "deployment": {
                     "maximum_percent": Decimal(150)
                 },
-                "secrets_name_prefix": "dummy-config",
+                "secrets_name": "dummy-config",
                 "sidecars": [
                     {
                         "name": "redis",
@@ -43,6 +43,7 @@ def mocked_service_config():
                     "maximum_percent": Decimal(150)  # The configuration is read as decimal always
                 },
                 "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"],
+                "secrets_name": "dummy-sidekiq-config"
             }
         }
     }
@@ -56,6 +57,7 @@ def mocked_udp_service_config():
             "FreeradiusServer": {
                 "command": None,
                 "memory_reservation": Decimal(1024),
+                "secrets_name": "dummy-udp-config",
                 "udp_interface": {
                     "container_port": Decimal(1812),
                     "eip_allocaltion_id1": "eipalloc-02abb9e5e123492ee",
@@ -83,7 +85,8 @@ def mocked_fargate_service_config():
                     "cpu": 256,
                     "memory": 512
                 },
-                "memory_reservation": 512
+                "memory_reservation": 512,
+                "secrets_name": "dummy-fargate-config"
             },
             "DummyFargateService": {
                 "command": None,
@@ -99,7 +102,8 @@ def mocked_fargate_service_config():
                     ],
                     "health_check_path": "/elb-check"
                 },
-                "memory_reservation": 512
+                "memory_reservation": 512,
+                "secrets_name": "dummy-fargate-config"
             }
         }
     }
@@ -123,7 +127,8 @@ def mocked_udp_fargate_service_config():
                         "0.0.0.0/0"
                     ]
                 },
-                "memory_reservation": 512
+                "memory_reservation": 512,
+                "secrets_name": "dummy-fargate-config"
             }
         }
     }
@@ -159,9 +164,9 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_service_config()
 
-        def mock_build_config_impl(env_name, service_name, sample_env_file_path, ecs_service_name, secrets_name_prefix):
-            expected_prefix = "dummy-config" if ecs_service_name == "DummyContainer" else None
-            self.assertEqual(secrets_name_prefix, expected_prefix)
+        def mock_build_config_impl(env_name, service_name, sample_env_file_path, ecs_service_name, secrets_name):
+            expected = "dummy-config" if ecs_service_name == "DummyContainer" else "dummy-sidekiq-config"
+            self.assertEqual(secrets_name, expected)
             return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
@@ -195,6 +200,7 @@ class TestServiceTemplateGenerator(TestCase):
             "services": {
                 "Dummy": {
                     "memory_reservation": Decimal(1000),
+                    "secrets_name": "something",
                     "command": None,
                     "http_interface": {
                         "internal": False,
@@ -209,7 +215,7 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, sec_name):
             return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
@@ -221,7 +227,6 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample')
         generated_template = template_generator.generate_service()
-
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_new_alb_template.yml')
         with(open(template_file_path)) as expected_template_file:
@@ -250,6 +255,7 @@ class TestServiceTemplateGenerator(TestCase):
                 "Dummy": {
                     "memory_reservation": Decimal(1000),
                     "command": None,
+                    "secrets_name": "something",
                     "http_interface": {
                         "internal": False,
                         "alb": {
@@ -264,6 +270,7 @@ class TestServiceTemplateGenerator(TestCase):
                 "DummyWithCustomListener": {
                     "memory_reservation": Decimal(1000),
                     "command": None,
+                    "secrets_name": "something",
                     "http_interface": {
                         "internal": False,
                         "alb": {
@@ -279,7 +286,7 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, s_name):
             return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl

@@ -12,7 +12,7 @@ class TestSecretsManager(unittest.TestCase):
         mock_client = MagicMock('boto3_client', get_secret_value=MagicMock(return_value=_get_secret_response()))
         mock_get_client_for.return_value = mock_client
 
-        config = secrets_manager.get_config("dummy", "test")
+        config = secrets_manager.get_config("dummy-test", "test")
 
         mock_get_client_for.assert_called_once_with('secretsmanager', 'test')
         mock_client.get_secret_value.assert_called_once_with(SecretId='dummy-test')
@@ -27,11 +27,11 @@ class TestSecretsManager(unittest.TestCase):
         mock_client = MagicMock('boto3_client', get_secret_value=MagicMock(return_value=_get_secret_response()))
         mock_get_client_for.return_value = mock_client
 
-        secrets_manager.get_config("dummy", "test")
-        secrets_manager.get_config("dummy", "test")
+        secrets_manager.get_config("dummy-common", "test")
+        secrets_manager.get_config("dummy-common", "test")
 
         mock_get_client_for.assert_called_once_with('secretsmanager', 'test')
-        mock_client.get_secret_value.assert_called_once_with(SecretId='dummy-test')
+        mock_client.get_secret_value.assert_called_once_with(SecretId='dummy-common')
 
 
 def _get_secret_response():

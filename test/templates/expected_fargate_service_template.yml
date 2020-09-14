@@ -3,16 +3,23 @@ Outputs:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
       {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory":
-      512}, "memory_reservation": 512}, "DummyFargateService": {"command": null, "fargate":
-      {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal":
-      false, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"},
-      "memory_reservation": 512}}}'
+      512}, "memory_reservation": 512, "secrets_name": "dummy-fargate-config"}, "DummyFargateService":
+      {"command": null, "fargate": {"cpu": 256, "memory": 512}, "http_interface":
+      {"container_port": 80, "internal": false, "restrict_access_to": ["0.0.0.0/0"],
+      "health_check_path": "/elb-check"}, "memory_reservation": 512, "secrets_name":
+      "dummy-fargate-config"}}}'
   DummyFargateRunSidekiqshEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
+  DummyFargateRunSidekiqshSecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: dummy-fargate-config
   DummyFargateServiceEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyFargateService.Name'
+  DummyFargateServiceSecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: dummy-fargate-config
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -123,6 +130,11 @@ Resources:
         - PolicyDocument:
             Statement:
               - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-fargate-config-??????
+              - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability
                   - ecr:GetDownloadUrlForLayer
@@ -212,6 +224,11 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
+              - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-fargate-config-??????
               - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability

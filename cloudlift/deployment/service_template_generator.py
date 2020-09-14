@@ -151,9 +151,9 @@ service is down',
 
     def _add_service(self, service_name, config):
         launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
-        secrets_name_prefix = config.get('secrets_name_prefix')
+        secrets_name = config.get('secrets_name')
         container_configurations = build_config(self.env, self.application_name, self.env_sample_file_path,
-                                                container_name(service_name), secrets_name_prefix)
+                                                container_name(service_name), secrets_name)
         env_config = container_configurations[container_name(service_name)]['environment']
         secrets_config = container_configurations[container_name(service_name)]['secrets']
         log_config = self._gen_log_config(service_name)
@@ -167,10 +167,10 @@ service is down',
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
-        if secrets_name_prefix:
-            self.template.add_output(Output(service_name + "SecretsNamePrefix",
-                                            Description="AWS secrets manager name prefix to pull the secrets from",
-                                            Value=secrets_name_prefix))
+        if secrets_name:
+            self.template.add_output(Output(service_name + "SecretsName",
+                                            Description="AWS secrets manager name to pull the secrets from",
+                                            Value=secrets_name))
 
         if 'http_interface' in config:
             container_definition_arguments['PortMappings'] = [
@@ -249,7 +249,7 @@ service is down',
                 ]
             )
         ))
-        task_execution_role = self._add_task_execution_role(service_name, secrets_name_prefix)
+        task_execution_role = self._add_task_execution_role(service_name, secrets_name)
 
         launch_type_td = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
@@ -478,11 +478,11 @@ service is down',
             )
         )
 
-    def _add_task_execution_role(self, service_name, secrets_name_prefix):
+    def _add_task_execution_role(self, service_name, secrets_name):
         # https://docs.aws.amazon.com/code-samples/latest/catalog/iam_policies-secretsmanager-asm-user-policy-grants-access-to-secret-by-name-with-wildcard.json.html
         allow_secrets = [Statement(Effect=Allow, Action=[GetSecretValue], Resource=[
-            f"arn:aws:secretsmanager:{self.region}:{self.account_id}:secret:{secrets_name_prefix}-{self.env}-??????"])] \
-            if secrets_name_prefix else []
+            f"arn:aws:secretsmanager:{self.region}:{self.account_id}:secret:{secrets_name}-??????"])] \
+            if secrets_name else []
 
         task_execution_role = self.template.add_resource(Role(
             service_name + "TaskExecutionRole",

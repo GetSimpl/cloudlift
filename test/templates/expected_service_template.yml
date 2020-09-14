@@ -4,19 +4,22 @@ Outputs:
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
       {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
       false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}, "deployment": {"maximum_percent": 150}, "secrets_name_prefix":
-      "dummy-config", "sidecars": [{"name": "redis", "image": "redis:latest", "memory_reservation":
+      "/elb-check"}, "deployment": {"maximum_percent": 150}, "secrets_name": "dummy-config",
+      "sidecars": [{"name": "redis", "image": "redis:latest", "memory_reservation":
       256}]}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh",
       "deployment": {"maximum_percent": 150}, "task_role_attached_managed_policy_arns":
-      ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"]}}}'
+      ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"], "secrets_name": "dummy-sidekiq-config"}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
   DummyRunSidekiqshEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyRunSidekiqsh.Name'
-  DummySecretsNamePrefix:
-    Description: AWS secrets manager name prefix to pull the secrets from
+  DummyRunSidekiqshSecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: dummy-sidekiq-config
+  DummySecretsName:
+    Description: AWS secrets manager name to pull the secrets from
     Value: dummy-config
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
@@ -152,6 +155,11 @@ Resources:
         - PolicyDocument:
             Statement:
               - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-sidekiq-config-??????
+              - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability
                   - ecr:GetDownloadUrlForLayer
@@ -220,7 +228,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
-                  - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-config-staging-??????
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-config-??????
               - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability

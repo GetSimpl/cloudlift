@@ -2,12 +2,15 @@ Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
-      {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
-      false, "alb": {"create_new": true}, "container_port": 7003, "restrict_access_to":
-      ["0.0.0.0/0"], "health_check_path": "/elb-check"}}}}'
+      {"Dummy": {"memory_reservation": 1000, "secrets_name": "something", "command":
+      null, "http_interface": {"internal": false, "alb": {"create_new": true}, "container_port":
+      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
+  DummySecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: something
   DummyURL:
     Description: The URL at which the service is accessible
     Value: !Sub 'https://${ALBDummy.DNSName}'
@@ -130,6 +133,11 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
+              - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:something-??????
               - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:BatchCheckLayerAvailability
