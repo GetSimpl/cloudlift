@@ -51,7 +51,8 @@ class EnvironmentConfiguration(object):
         except ClientError:
             raise UnrecoverableException("Unable to fetch environment configuration from DynamoDB.")
         except KeyError:
-            raise UnrecoverableException("Environment configuration not found. Does this environment exist?")
+            raise UnrecoverableException("Unable to find environment config for {self.environment} in "
+                                         "region: {self.dynamodb.meta.client.meta.region_name}")
 
     def update_config(self):
         if not self._env_config_exists():
