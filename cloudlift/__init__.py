@@ -129,7 +129,7 @@ def deploy_service(name, environment, timeout_seconds, version, build_arg, docke
               help='Additional tags for the image apart from commit SHA')
 @_require_name
 def upload_to_ecr(name, local_tag, additional_tags):
-    ServiceUpdater(name, '', '', local_tag).upload_image(additional_tags)
+    ServiceUpdater(name, version=local_tag).upload_image(additional_tags)
 
 
 @cli.command(help="Get commit information of currently deployed code \

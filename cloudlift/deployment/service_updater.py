@@ -20,7 +20,7 @@ CHUNK_SIZE = 10
 
 
 class ServiceUpdater(object):
-    def __init__(self, name, environment, env_sample_file, timeout_seconds, version=None,
+    def __init__(self, name, environment='', env_sample_file='', timeout_seconds=None, version=None,
                  build_args=None, dockerfile=None, working_dir='.'):
         self.name = name
         self.environment = environment
