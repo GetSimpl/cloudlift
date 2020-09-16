@@ -470,7 +470,7 @@ service is down',
                     ),
                 )
             )
-        assert len(conditions) > 0, "must contain either path or host when specifying an existing ALB"
+
         listener_arn = alb_config['listener_arn'] if 'listener_arn' in alb_config \
             else get_environment_level_alb_listener(self.env)
         priority = int(alb_config['priority']) if 'priority' in alb_config \
