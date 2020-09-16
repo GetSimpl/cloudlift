@@ -208,28 +208,31 @@ An example service using `container_health_check`
 {
   "alb": {
     // Setting this to false means, the ALB is managed outside of this service definition.
-    // We can use this mode to attach the target group to one of the listeners of an existing ALB 
+    // We can use this mode to attach the target group to one of the listeners of an existing ALB
     "create_new": false,
 
     // Use listener_arn to attach the TargetGroup to an existing ALB's listener ARN.
     // The target group will be added using ListenerRule. Optional.
     // Default: If this is not specified, the environment level loadbalancer_listener_arn will
-    // be picked up. 
-    "listener_arn": "<listener-arn>", 
+    // be picked up.
+    "listener_arn": "<listener-arn>",
 
     // Use this to specify the priority of the listener rule. Optional.
     // Default: If this is not specified, a random available priority is used.
     "priority": 2,
-  
+
     // Use this to specify host based routing. Optional.
     "host": "abc.xyz",
+
+    // Use this to specify path based routing. Optional.
+    "path": "/api/*",
   }
 }
 ```
 
 #### 3. Deploy service
 
-This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS 
+This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS
 service task definition. It supports `--build-arg` argument of `docker build` command as well to pass
 custom build time arguments
 

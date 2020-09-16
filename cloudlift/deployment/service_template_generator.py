@@ -21,7 +21,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
 from troposphere.elasticloadbalancingv2 import SubnetMapping
 from troposphere.elasticloadbalancingv2 import LoadBalancer as NLBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Action, Certificate, Listener, ListenerRule, Condition,
-                                                HostHeaderConfig)
+                                                HostHeaderConfig, PathPatternConfig)
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
@@ -461,6 +461,16 @@ service is down',
                     ),
                 )
             )
+        if 'path' in alb_config:
+            conditions.append(
+                Condition(
+                    Field="path-pattern",
+                    PathPatternConfig=PathPatternConfig(
+                        Values=[alb_config['path']],
+                    ),
+                )
+            )
+        assert len(conditions) > 0, "must contain either path or host when specifying an existing ALB"
         listener_arn = alb_config['listener_arn'] if 'listener_arn' in alb_config \
             else get_environment_level_alb_listener(self.env)
         priority = int(alb_config['priority']) if 'priority' in alb_config \

@@ -164,6 +164,9 @@ class ServiceConfiguration(object):
                                 "host": {
                                     "type": "string"
                                 },
+                                "path": {
+                                    "type": "string"
+                                },
                                 "priority": {
                                     "type": "number"
                                 }
