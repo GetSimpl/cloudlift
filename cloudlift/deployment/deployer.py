@@ -107,7 +107,7 @@ def wait_for_finish(action, existing_events, color, deploy_end_time):
             color
         )
 
-        if is_deployed(service['deployments']):
+        if is_deployed(service):
             return True
 
         sleep(5)
@@ -140,10 +140,9 @@ def record_deployment_failure_metric(cluster_name, service_name):
     )
 
 
-def is_deployed(service_deployments):
-    for deployment in service_deployments:
-        if deployment['status'] == 'PRIMARY':
-            return deployment['desiredCount'] == deployment['runningCount']
+def is_deployed(service):
+    if len(service['deployments']) == 1 and service['desiredCount'] == service['runningCount']:
+        return True
     return False
 
 

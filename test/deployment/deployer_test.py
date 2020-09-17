@@ -11,33 +11,68 @@ from cloudlift.exceptions import UnrecoverableException
 
 class TestDeployer(TestCase):
     def test_is_deployed_returning_true_if_desiredCount_equals_runningCount(self):
-        deployments = [
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}]
-        assert is_deployed(deployments)
+        service = {
+            "desiredCount": 201,
+            "runningCount": 201,
+            "pendingCount": 0,
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}
+            ]
+        }
+        assert is_deployed(service)
 
-    def test_is_deployed_returning_false_if_desiredCount_not_equals_runningCount(self):
-        deployments = [
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}]
-        assert not is_deployed(deployments)
+    def test_is_deployed_false_if_desiredCount_not_equals_runningCount(self):
+        service = {
+            "desiredCount": 201,
+            "runningCount": 200,
+            "pendingCount": 1,
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}
+            ]
+        }
+        assert not is_deployed(service)
 
-    def test_is_deployed_considering_only_primary_deployment(self):
-        deployments = [
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'ACTIVE',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
-        ]
-        assert not is_deployed(deployments)
+    def test_is_deployed_false_for_multiple_deployments(self):
+        service = {
+            "desiredCount": 201,
+            "pendingCount": 0,
+            "runningCount": 401,
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'ACTIVE',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
+            ]
+        }
+        assert not is_deployed(service)
+
+    def test_is_deployed_false_for_multiple_deployments_when_desired_count_is_running_count(self):
+        service = {
+            "desiredCount": 201,
+            "pendingCount": 100,
+            "runningCount": 201,
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 100, 'runningCount': 101,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'ACTIVE',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 100, 'pendingCount': 0, 'runningCount': 100,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
+            ]
+        }
+        assert not is_deployed(service)
 
 
 class TestDeployAndWait(TestCase):
@@ -49,6 +84,8 @@ class TestDeployAndWait(TestCase):
         deployment = MagicMock()
         deployment.get_service.side_effect = [
             self.create_ecs_service_with_status({
+                'desiredCount': 5,
+                'runningCount': 0,
                 'events': [
                     {'message': 'event1', 'createdAt': datetime.now()}
                 ],
@@ -57,8 +94,10 @@ class TestDeployAndWait(TestCase):
                 ]
             }),
             self.create_ecs_service_with_status({
+                'desiredCount': 5,
+                'runningCount': 5,
                 'events': [
-                    {'message': 'event2', 'createdAt': datetime.now()}
+                    {'message': 'service test has reached a steady state.', 'createdAt': datetime.now()}
                 ],
                 'deployments': [
                     {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 5}
@@ -81,8 +120,10 @@ class TestDeployAndWait(TestCase):
     def test_deploy_and_wait_timeout(self, mock_log_err):
         deployment = MagicMock()
         deployment.get_service.return_value = self.create_ecs_service_with_status({
+            'desiredCount': 5,
+            'runningCount': 0,
             'events': [
-                {'message': 'event1', 'createdAt': datetime.now()}
+                {'message': 'service test has reached a steady state.', 'createdAt': datetime.now()}
             ],
             'deployments': [
                 {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0}
@@ -107,6 +148,8 @@ class TestDeployAndWait(TestCase):
         start_time = datetime.now(tz=tzlocal())
         deployment.get_service.side_effect = [
             self.create_ecs_service_with_status({
+                'desiredCount': 5,
+                'runningCount': 0,
                 'events': [
                     {'message': 'unable to place tasks due to memory', 'createdAt': start_time},
                 ],
@@ -120,6 +163,8 @@ class TestDeployAndWait(TestCase):
                 'events': [
                     {'message': 'unable to place tasks due to memory', 'createdAt': start_time + timedelta(seconds=1)},
                 ],
+                'desiredCount': 5,
+                'runningCount': 0,
                 'deployments': [
                     {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
                      'createdAt': start_time - timedelta(seconds=5),
@@ -127,8 +172,11 @@ class TestDeployAndWait(TestCase):
                 ]
             }),
             self.create_ecs_service_with_status({
+                'desiredCount': 5,
+                'runningCount': 5,
                 'events': [
-                    {'message': 'started tasks', 'createdAt': start_time + timedelta(seconds=2)},
+                    {'message': 'service test has reached a steady state.',
+                     'createdAt': start_time + timedelta(seconds=2)},
                 ],
                 'deployments': [
                     {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 5,
@@ -156,6 +204,8 @@ class TestDeployAndWait(TestCase):
         start_time = datetime.now(tz=tzlocal())
         deployment.get_service.side_effect = [
             self.create_ecs_service_with_status({
+                'desiredCount': 5,
+                'runningCount': 0,
                 'events': [
                     {'message': 'unable to place tasks due to memory', 'createdAt': start_time},
                 ],
@@ -166,6 +216,8 @@ class TestDeployAndWait(TestCase):
                 ]
             }),
             self.create_ecs_service_with_status({
+                'desiredCount': 5,
+                'runningCount': 0,
                 'events': [
                     {'message': 'unable to place tasks due to memory', 'createdAt': start_time + timedelta(seconds=1)},
                 ],
@@ -176,6 +228,8 @@ class TestDeployAndWait(TestCase):
                 ]
             }),
             self.create_ecs_service_with_status({
+                'desiredCount': 5,
+                'runningCount': 0,
                 'events': [
                     {'message': 'unable to place tasks due to memory', 'createdAt': start_time + timedelta(seconds=2)},
                 ],
