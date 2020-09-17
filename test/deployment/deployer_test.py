@@ -11,33 +11,64 @@ from cloudlift.exceptions import UnrecoverableException
 
 class TestDeployer(TestCase):
     def test_is_deployed_returning_true_if_desiredCount_equals_runningCount(self):
-        deployments = [
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}]
-        assert is_deployed(deployments)
+        service = {
+            "events": [
+                {'message': 'service test has reached a steady state.', 'createdAt': datetime.now()}
+            ],
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}
+            ]
+        }
+        assert is_deployed(service)
 
     def test_is_deployed_returning_false_if_desiredCount_not_equals_runningCount(self):
-        deployments = [
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}]
-        assert not is_deployed(deployments)
+        service = {
+            "events": [
+                {'message': 'service test has reached a steady state.', 'createdAt': datetime.now()}
+            ],
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}
+            ]
+        }
+        assert not is_deployed(service)
 
     def test_is_deployed_considering_only_primary_deployment(self):
-        deployments = [
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'ACTIVE',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
-            {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
-             'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
-             'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
-             'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
-        ]
-        assert not is_deployed(deployments)
+        service = {
+            "events": [
+                {'message': 'service test has reached a steady state.', 'createdAt': datetime.now()}
+            ],
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'ACTIVE',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 0, 'runningCount': 201,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 201, 'pendingCount': 1, 'runningCount': 200,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'},
+            ]
+        }
+        assert not is_deployed(service)
+
+    def test_is_deployed_returning_false_if_not_steady_state(self):
+        service = {
+            "events": [
+                {'message': 'random event', 'createdAt': datetime.now()}
+            ],
+            "deployments": [
+                {'id': 'ecs-svc/1234567891012345679', 'status': 'PRIMARY',
+                 'taskDefinition': 'arn:aws:ecs:us-west-2:123456789101:task-definition/SuperTaskFamily:513',
+                 'desiredCount': 200, 'pendingCount': 0, 'runningCount': 200,
+                 'createdAt': datetime.now(), 'updatedAt': datetime.now(), 'launchType': 'EC2'}
+            ]
+        }
+        assert not is_deployed(service)
 
 
 class TestDeployAndWait(TestCase):
@@ -58,7 +89,7 @@ class TestDeployAndWait(TestCase):
             }),
             self.create_ecs_service_with_status({
                 'events': [
-                    {'message': 'event2', 'createdAt': datetime.now()}
+                    {'message': 'service test has reached a steady state.', 'createdAt': datetime.now()}
                 ],
                 'deployments': [
                     {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 5}
@@ -82,7 +113,7 @@ class TestDeployAndWait(TestCase):
         deployment = MagicMock()
         deployment.get_service.return_value = self.create_ecs_service_with_status({
             'events': [
-                {'message': 'event1', 'createdAt': datetime.now()}
+                {'message': 'service test has reached a steady state.', 'createdAt': datetime.now()}
             ],
             'deployments': [
                 {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0}
@@ -128,7 +159,8 @@ class TestDeployAndWait(TestCase):
             }),
             self.create_ecs_service_with_status({
                 'events': [
-                    {'message': 'started tasks', 'createdAt': start_time + timedelta(seconds=2)},
+                    {'message': 'service test has reached a steady state.',
+                     'createdAt': start_time + timedelta(seconds=2)},
                 ],
                 'deployments': [
                     {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 5,
