@@ -22,7 +22,9 @@ def mocked_service_config():
                     "internal": False,
                     "container_port": Decimal(7003),
                     "restrict_access_to": ["0.0.0.0/0"],
-                    "health_check_path": "/elb-check"
+                    "health_check_path": "/elb-check",
+                    "deregistration_delay": 88,
+                    "load_balancing_algorithm": "round_robin"
                 },
                 "deployment": {
                     "maximum_percent": Decimal(150)

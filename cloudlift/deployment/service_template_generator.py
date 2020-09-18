@@ -34,7 +34,8 @@ from cloudlift.config.region import get_environment_level_alb_listener, get_clie
 from cloudlift.deployment.deployer import build_config, container_name
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
-
+from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY,\
+    DEFAULT_LOAD_BALANCING_ALGORITHM
 
 class ServiceTemplateGenerator(TemplateGenerator):
     PLACEMENT_STRATEGIES = [
@@ -565,7 +566,11 @@ service is down',
             TargetGroupAttributes=[
                 TargetGroupAttribute(
                     Key='deregistration_delay.timeout_seconds',
-                    Value='30'
+                    Value=str(config['http_interface'].get('deregistration_delay', DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY))
+                ),
+                TargetGroupAttribute(
+                    Key='load_balancing.algorithm.type',
+                    Value=str(config['http_interface'].get('load_balancing_algorithm', DEFAULT_LOAD_BALANCING_ALGORITHM))
                 )
             ],
             VpcId=Ref(self.vpc),
@@ -601,7 +606,11 @@ service is down',
             TargetGroupAttributes=[
                 TargetGroupAttribute(
                     Key='deregistration_delay.timeout_seconds',
-                    Value='30'
+                    Value=str(elb_config.get('deregistration_delay', DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY))
+                ),
+                TargetGroupAttribute(
+                    Key='load_balancing.algorithm.type',
+                    Value=elb_config.get('load_balancing_algorithm', DEFAULT_LOAD_BALANCING_ALGORITHM)
                 )
             ],
             VpcId=Ref(self.vpc),
