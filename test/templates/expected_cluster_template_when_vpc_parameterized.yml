@@ -35,7 +35,7 @@ Metadata:
 Mappings:
   AWSRegionToAMI:
     us-west-2:
-      AMI: ami-088bb4cd2f62fc0e1
+      AMI: ami-04bb74f3ffa3aa3e2
 Outputs:
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment

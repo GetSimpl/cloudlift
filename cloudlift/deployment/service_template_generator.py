@@ -35,7 +35,9 @@ from cloudlift.deployment.deployer import build_config, container_name
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY,\
-    DEFAULT_LOAD_BALANCING_ALGORITHM
+    DEFAULT_LOAD_BALANCING_ALGORITHM, DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS, DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS,\
+    DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT, DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT
+
 
 class ServiceTemplateGenerator(TemplateGenerator):
     PLACEMENT_STRATEGIES = [
@@ -561,12 +563,19 @@ service is down',
         service_target_group = TargetGroup(
             target_group_name,
             HealthCheckPath=health_check_path,
-            HealthyThresholdCount=2,
-            HealthCheckIntervalSeconds=30,
+            HealthyThresholdCount=int(config['http_interface'].get('health_check_healthy_threshold_count',
+                                                                   DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT)),
+            HealthCheckIntervalSeconds=int(config['http_interface'].get('health_check_interval_seconds',
+                                                                        DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS)),
+            HealthCheckTimeoutSeconds=int(config['http_interface'].get('health_check_timeout_seconds',
+                                                                       DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS)),
+            UnhealthyThresholdCount=int(config['http_interface'].get('health_check_unhealthy_threshold_count',
+                                                                     DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT)),
             TargetGroupAttributes=[
                 TargetGroupAttribute(
                     Key='deregistration_delay.timeout_seconds',
-                    Value=str(config['http_interface'].get('deregistration_delay', DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY))
+                    Value=str(config['http_interface'].get('deregistration_delay',
+                                                           DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY))
                 ),
                 TargetGroupAttribute(
                     Key='load_balancing.algorithm.type',
@@ -577,8 +586,6 @@ service is down',
             Protocol="HTTP",
             Matcher=Matcher(HttpCode="200-399"),
             Port=int(config['http_interface']['container_port']),
-            HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
             **target_group_config
         )
 
@@ -602,7 +609,17 @@ service is down',
                                'HealthCheckPort': int(elb_config['health_check_port']), 'TargetType': 'ip'}
         service_target_group = TargetGroup(
             target_group_name,
-            HealthCheckIntervalSeconds=30,
+            Protocol='UDP',
+            # Health check healthy threshold and unhealthy
+            # threshold must be the same for target groups with the UDP protocol
+            HealthyThresholdCount=int(elb_config.get('health_check_healthy_threshold_count',
+                                                     DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT)),
+            HealthCheckIntervalSeconds=int(elb_config.get('health_check_interval_seconds',
+                                                          DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS)),
+            HealthCheckTimeoutSeconds=int(elb_config.get('health_check_timeout_seconds',
+                                                         DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS)),
+            UnhealthyThresholdCount=int(elb_config.get('health_check_healthy_threshold_count',
+                                                       DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT)),
             TargetGroupAttributes=[
                 TargetGroupAttribute(
                     Key='deregistration_delay.timeout_seconds',
@@ -614,12 +631,6 @@ service is down',
                 )
             ],
             VpcId=Ref(self.vpc),
-            Protocol='UDP',
-            HealthCheckTimeoutSeconds=10,
-            # Health check healthy threshold and unhealthy
-            # threshold must be the same for target groups with the UDP protocol
-            HealthyThresholdCount=2,
-            UnhealthyThresholdCount=2,
             **target_group_config
         )
 

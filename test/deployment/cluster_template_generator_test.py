@@ -96,7 +96,9 @@ class TestClusterTemplateGenerator(TestCase):
     @patch("cloudlift.config.environment_configuration.EnvironmentConfiguration.get_config")
     @patch("cloudlift.config.environment_configuration.EnvironmentConfiguration._get_table")
     @patch("cloudlift.deployment.cluster_template_generator.ClusterTemplateGenerator._get_availability_zones")
-    def test_initialization(self, mock_avalability_zones, mock_get_table, mock_get_environment_config):
+    @patch("cloudlift.deployment.cluster_template_generator.ClusterTemplateGenerator._get_ami_id")
+    def test_initialization(self, mock_get_ami_id, mock_avalability_zones, mock_get_table, mock_get_environment_config):
+        mock_get_ami_id.return_value = "ami-04bb74f3ffa3aa3e2"
         mock_get_environment_config.return_value = environment_config_when_vpc_created
         mock_avalability_zones.return_value = ['us-west-2a', 'us-west-2b']
         template_generator = ClusterTemplateGenerator("test2", environment_config_when_vpc_created["test2"])
@@ -112,7 +114,9 @@ class TestClusterTemplateGenerator(TestCase):
     @patch("cloudlift.deployment.cluster_template_generator.VERSION", "test-version")
     @patch("cloudlift.config.region.EnvironmentConfiguration")
     @patch("cloudlift.deployment.ClusterTemplateGenerator._get_availability_zones")
-    def helper_mock_create_cluster(env_config, mock_get_avalability_zones, mock_environment_config):
+    @patch("cloudlift.deployment.ClusterTemplateGenerator._get_ami_id")
+    def helper_mock_create_cluster(env_config, mock_get_ami_id, mock_get_avalability_zones, mock_environment_config):
+        mock_get_ami_id.return_value = "ami-04bb74f3ffa3aa3e2"
         environment = list(env_config.keys())[0]
         mock_env_config_inst = mock_environment_config.return_value
         mock_env_config_inst.get_config.return_value = env_config

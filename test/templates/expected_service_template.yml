@@ -4,11 +4,13 @@ Outputs:
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
       {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
       false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check", "deregistration_delay": 88, "load_balancing_algorithm": "round_robin"},
-      "deployment": {"maximum_percent": 150}, "secrets_name": "dummy-config", "sidecars":
-      [{"name": "redis", "image": "redis:latest", "memory_reservation": 256}]}, "DummyRunSidekiqsh":
-      {"memory_reservation": 1000, "command": "./run-sidekiq.sh", "deployment": {"maximum_percent":
-      150}, "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"],
+      "/elb-check", "deregistration_delay": 88, "load_balancing_algorithm": "round_robin",
+      "health_check_interval_seconds": 43, "health_check_timeout_seconds": 24, "health_check_healthy_threshold_count":
+      6, "health_check_unhealthy_threshold_count": 4}, "deployment": {"maximum_percent":
+      150}, "secrets_name": "dummy-config", "sidecars": [{"name": "redis", "image":
+      "redis:latest", "memory_reservation": 256}]}, "DummyRunSidekiqsh": {"memory_reservation":
+      1000, "command": "./run-sidekiq.sh", "deployment": {"maximum_percent": 150},
+      "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"],
       "secrets_name": "dummy-sidekiq-config"}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
@@ -389,10 +391,10 @@ Resources:
     Type: AWS::CloudWatch::Alarm
   TargetGroupDummy:
     Properties:
-      HealthCheckIntervalSeconds: 30
+      HealthCheckIntervalSeconds: 43
       HealthCheckPath: /elb-check
-      HealthCheckTimeoutSeconds: 10
-      HealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 24
+      HealthyThresholdCount: 6
       Matcher:
         HttpCode: 200-399
       Port: 7003
@@ -402,6 +404,6 @@ Resources:
           Value: '88'
         - Key: load_balancing.algorithm.type
           Value: round_robin
-      UnhealthyThresholdCount: 3
+      UnhealthyThresholdCount: 4
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup

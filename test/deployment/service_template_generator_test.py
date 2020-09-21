@@ -24,7 +24,11 @@ def mocked_service_config():
                     "restrict_access_to": ["0.0.0.0/0"],
                     "health_check_path": "/elb-check",
                     "deregistration_delay": 88,
-                    "load_balancing_algorithm": "round_robin"
+                    "load_balancing_algorithm": "round_robin",
+                    "health_check_interval_seconds": 43,
+                    "health_check_timeout_seconds": 24,
+                    "health_check_healthy_threshold_count": 6,
+                    "health_check_unhealthy_threshold_count": 4
                 },
                 "deployment": {
                     "maximum_percent": Decimal(150)

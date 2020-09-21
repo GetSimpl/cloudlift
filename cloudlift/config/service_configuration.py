@@ -23,6 +23,11 @@ from cloudlift.version import VERSION
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY = 30
 DEFAULT_LOAD_BALANCING_ALGORITHM = u'least_outstanding_requests'
+DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT = 2
+DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT = 3
+DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS = 30
+DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS = 10
+
 
 class ServiceConfiguration(object):
     '''
@@ -188,7 +193,27 @@ class ServiceConfiguration(object):
                         "health_check_path": {
                             "type": "string",
                             "pattern": "^\/.*$"
-                        }
+                        },
+                        "health_check_healthy_threshold_count": {
+                            "type": "number",
+                            "minimum": 2,
+                            "maximum": 10
+                        },
+                        "health_check_unhealthy_threshold_count": {
+                            "type": "number",
+                            "minimum": 2,
+                            "maxium": 10
+                        },
+                        "health_check_interval_seconds": {
+                            "type": "number",
+                            "minimum": 5,
+                            "maximum": 300
+                        },
+                        "health_check_timeout_seconds": {
+                            "type": "number",
+                            "minimum": 2,
+                            "maximum": 120
+                        },
                     },
                     "load_balancing_algorithm": {
                         "type": "string",
