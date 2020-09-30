@@ -13,45 +13,18 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
 from cloudlift.exceptions import UnrecoverableException
-from cloudlift.config import DecimalEncoder
-from cloudlift.config import print_json_changes
-# import config.mfa as mfa
+from cloudlift.config import DecimalEncoder, print_json_changes
+from cloudlift.config.dynamodb_config import DynamodbConfig
 from cloudlift.config.logging import log_bold, log_err, log_warning
 
 ENVIRONMENT_CONFIGURATION_TABLE = 'environment_configurations'
 
-class EnvironmentConfiguration(object):
-    '''
-        Handles configuration in DynamoDB for cloudlift
-    '''
+
+class EnvironmentConfiguration(DynamodbConfig):
 
     def __init__(self, environment=None):
         self.environment = environment
-
-        session = boto3.session.Session()
-        self.dynamodb = session.resource('dynamodb')
-        self.table = self._get_table()
-
-    def get_config(self):
-        '''
-            Get configuration from DynamoDB
-        '''
-
-        try:
-            configuration_response = self.table.get_item(
-                Key={
-                    'environment': self.environment
-                },
-                ConsistentRead=True,
-                AttributesToGet=[
-                    'configuration'
-                ]
-            )
-            return configuration_response['Item']['configuration']
-        except ClientError:
-            raise UnrecoverableException("Unable to fetch environment configuration from DynamoDB.")
-        except KeyError:
-            raise UnrecoverableException("Environment configuration not found. Does this environment exist?")
+        super(EnvironmentConfiguration, self).__init__(ENVIRONMENT_CONFIGURATION_TABLE, [('environment', self.environment)])
 
     def update_config(self):
         if not self._env_config_exists():
@@ -71,32 +44,11 @@ class EnvironmentConfiguration(object):
         )
         return [env['environment'] for env in response['Items']]
 
-    def _get_table(self):
-        dynamodb_client = boto3.session.Session().client('dynamodb')
-        table_names = dynamodb_client.list_tables()['TableNames']
-        if ENVIRONMENT_CONFIGURATION_TABLE not in table_names:
-            log_warning("Could not find configuration table, creating one..")
-            self._create_configuration_table()
-        return self.dynamodb.Table(ENVIRONMENT_CONFIGURATION_TABLE)
-
-    def _create_configuration_table(self):
-        self.dynamodb.create_table(
-            TableName=ENVIRONMENT_CONFIGURATION_TABLE,
-            KeySchema=[
-                {
-                    'AttributeName': 'environment',
-                    'KeyType': 'HASH'
-                }
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': 'environment',
-                    'AttributeType': 'S'
-                }
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
-        log_bold("Configuration table created!")
+    def get_config(self):
+        try:
+            return self.get_config_in_db()
+        except KeyError:
+            raise UnrecoverableException("Environment configuration not found. Does this environment exist?")
 
     def _env_config_exists(self):
         response = self.table.get_item(
@@ -243,23 +195,7 @@ class EnvironmentConfiguration(object):
         '''
             Set configuration in DynamoDB
         '''
-        self._validate_changes(config)
-        try:
-            configuration_response = self.table.update_item(
-                TableName=ENVIRONMENT_CONFIGURATION_TABLE,
-                Key={
-                    'environment': self.environment
-                },
-                UpdateExpression='SET configuration = :configuration',
-                ExpressionAttributeValues={
-                    ':configuration': config
-                },
-                ReturnValues="UPDATED_NEW"
-            )
-            return configuration_response
-        except ClientError:
-            raise UnrecoverableException("Unable to store environment configuration in DynamoDB.")
-        pass
+        self.set_config_in_db(config)
 
     def _validate_changes(self, configuration):
         log_bold("\nValidating schema..")

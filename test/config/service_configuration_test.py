@@ -182,6 +182,7 @@ class TestServiceConfigurationValidation(TestCase):
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
+                        'secrets_name': 'test',
                         'command': None,
                         'placement_constraints': [{
                             'type': 'invalid'

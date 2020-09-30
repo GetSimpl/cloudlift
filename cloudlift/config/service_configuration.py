@@ -5,6 +5,7 @@ retrieving service configuration.
 
 import json
 
+import boto3
 import dictdiffer
 from botocore.exceptions import ClientError
 from click import confirm, edit
@@ -13,12 +14,12 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
 
-from cloudlift.config import DecimalEncoder
-from cloudlift.config import print_json_changes
+from cloudlift.config import DecimalEncoder, print_json_changes, DynamodbConfig
 # import config.mfa as mfa
 from cloudlift.config import get_resource_for
 from cloudlift.config.logging import log_bold, log_err, log_warning
 from cloudlift.version import VERSION
+
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY = 30
@@ -29,7 +30,8 @@ DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS = 30
 DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS = 10
 
 
-class ServiceConfiguration(object):
+
+class ServiceConfiguration(DynamodbConfig):
     '''
         Handles configuration in DynamoDB for services
     '''
@@ -44,10 +46,8 @@ class ServiceConfiguration(object):
         # mfa_region = get_region_for_environment(environment)
         # mfa_session = mfa.get_mfa_session(mfa_region)
         # ssm_client = mfa_session.client('ssm')
-        self.table = get_resource_for(
-            'dynamodb',
-            environment
-        ).Table(SERVICE_CONFIGURATION_TABLE)
+        super(ServiceConfiguration, self).__init__(SERVICE_CONFIGURATION_TABLE, [
+            ('service_name', self.service_name), ('environment', self.environment)])
 
     def edit_config(self):
         '''
@@ -94,51 +94,20 @@ class ServiceConfiguration(object):
         '''
             Get configuration from DynamoDB
         '''
+        existing_configuration = self.get_config_in_db()
+        if not existing_configuration:
+            existing_configuration = self._default_service_configuration()
+            self.new_service = True
 
-        try:
-            configuration_response = self.table.get_item(
-                Key={
-                    'service_name': self.service_name,
-                    'environment': self.environment
-                },
-                ConsistentRead=True,
-                AttributesToGet=[
-                    'configuration'
-                ]
-            )
-            if 'Item' in configuration_response:
-                existing_configuration = configuration_response['Item']['configuration']
-            else:
-                existing_configuration = self._default_service_configuration()
-                self.new_service = True
-
-            existing_configuration.pop("cloudlift_version", None)
-            return existing_configuration
-        except ClientError:
-            raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
+        existing_configuration.pop("cloudlift_version", None)
+        return existing_configuration
 
     def set_config(self, config):
         '''
             Set configuration in DynamoDB
         '''
         config['cloudlift_version'] = VERSION
-        self._validate_changes(config)
-        try:
-            configuration_response = self.table.update_item(
-                TableName=SERVICE_CONFIGURATION_TABLE,
-                Key={
-                    'service_name': self.service_name,
-                    'environment': self.environment
-                },
-                UpdateExpression='SET configuration = :configuration',
-                ExpressionAttributeValues={
-                    ':configuration': config
-                },
-                ReturnValues="UPDATED_NEW"
-            )
-            return configuration_response
-        except ClientError:
-            raise UnrecoverableException("Unable to store service configuration in DynamoDB.")
+        self.set_config_in_db(config)
 
     def update_cloudlift_version(self):
         '''

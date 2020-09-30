@@ -149,7 +149,6 @@ class TestServiceTemplateGenerator(TestCase):
 
         generator = ServiceTemplateGenerator(service_config, None, "env.sample")
 
-        mock_get_resource_for.assert_called_with('dynamodb', 'staging')
         mockServiceInformationFetcher.assert_called_with("test-service", "staging")
         assert generator.env == 'staging'
         assert generator.application_name == 'test-service'
