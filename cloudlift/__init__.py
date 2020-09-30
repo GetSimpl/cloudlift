@@ -124,6 +124,14 @@ def deploy_service(name, environment, timeout_seconds, version, build_arg, docke
 
 
 @cli.command()
+@_require_environment
+@_require_name
+@click.option('--timeout_seconds', default=600, help='The deployment timeout')
+def revert_service(name, environment, timeout_seconds):
+    ServiceUpdater(name, environment, timeout_seconds).revert()
+
+
+@cli.command()
 @click.option('--local_tag', help='Commit sha for image to be uploaded')
 @click.option('--additional_tags', default=[], multiple=True,
               help='Additional tags for the image apart from commit SHA')
