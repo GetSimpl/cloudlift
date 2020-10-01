@@ -128,7 +128,7 @@ def deploy_service(name, environment, timeout_seconds, version, build_arg, docke
 @_require_name
 @click.option('--timeout_seconds', default=600, help='The deployment timeout')
 def revert_service(name, environment, timeout_seconds):
-    ServiceUpdater(name, environment, timeout_seconds).revert()
+    ServiceUpdater(name, environment, timeout_seconds=timeout_seconds).revert()
 
 
 @cli.command()
