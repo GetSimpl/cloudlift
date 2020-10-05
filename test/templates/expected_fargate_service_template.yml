@@ -1,13 +1,13 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
-      {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory":
-      512}, "memory_reservation": 512, "secrets_name": "dummy-fargate-config"}, "DummyFargateService":
-      {"command": null, "fargate": {"cpu": 256, "memory": 512}, "http_interface":
-      {"container_port": 80, "internal": false, "restrict_access_to": ["0.0.0.0/0"],
-      "health_check_path": "/elb-check"}, "memory_reservation": 512, "secrets_name":
-      "dummy-fargate-config"}}}'
+    Value: '{"cloudlift_version": "test-version", "ecr_repo": {"name": "test-service-repo"},
+      "notifications_arn": "some", "services": {"DummyFargateRunSidekiqsh": {"command":
+      null, "fargate": {"cpu": 256, "memory": 512}, "memory_reservation": 512, "secrets_name":
+      "dummy-fargate-config"}, "DummyFargateService": {"command": null, "fargate":
+      {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal":
+      false, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"},
+      "memory_reservation": 512, "secrets_name": "dummy-fargate-config"}}}'
   DummyFargateRunSidekiqshEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
@@ -20,6 +20,9 @@ Outputs:
   DummyFargateServiceSecretsName:
     Description: AWS secrets manager name to pull the secrets from
     Value: dummy-fargate-config
+  ECRRepoName:
+    Description: ECR repo to for docker images
+    Value: test-service-repo
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -417,7 +420,7 @@ Resources:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
         - Key: load_balancing.algorithm.type
-          Value: 'least_outstanding_requests'
+          Value: least_outstanding_requests
       TargetType: ip
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'

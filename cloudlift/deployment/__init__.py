@@ -10,3 +10,4 @@ from .service_information_fetcher import *
 from .service_template_generator import *
 from .service_updater import *
 from .template_generator import *
+from .ecr import *

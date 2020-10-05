@@ -8,6 +8,7 @@ test-template:
 
 test-unit:
 	pytest -s test/deployment/*
+	pytest -s test/config/*
 
 test-integration:
 	pytest -s test/test_cloudlift.py

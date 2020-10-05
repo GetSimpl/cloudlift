@@ -1,16 +1,14 @@
+from unittest import TestCase
+from unittest.mock import patch
+
 import boto3
-import pytest
 from moto import mock_dynamodb2
 
 from cloudlift.config import ServiceConfiguration
-from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
-
-from unittest import TestCase
-from unittest.mock import patch, MagicMock
+from cloudlift.version import VERSION
 
 
-@pytest.mark.skip(reason="does not pass due to moto dependency")
 class TestServiceConfiguration(object):
     def setup_existing_params(self):
         client = boto3.resource('dynamodb')
@@ -52,9 +50,11 @@ class TestServiceConfiguration(object):
             ExpressionAttributeValues={
                 ':configuration': {
                     "cloudlift_version": VERSION,
+                    'ecr_repo': {'name': 'test-service-repo'},
                     "services": {
                         "TestService": {
                             "memory_reservation": 1000,
+                            "secrets_name": "secret-config",
                             "command": None,
                             "http_interface": {
                                 "internal": True,
@@ -82,18 +82,20 @@ class TestServiceConfiguration(object):
         store_object = ServiceConfiguration('test-service', 'dummy-staging')
         response = store_object.get_config()
         assert response == {
-                    "services": {
-                        "TestService": {
-                            "memory_reservation": 1000,
-                            "command": None,
-                            "http_interface": {
-                                "internal": True,
-                                "container_port": 80,
-                                "restrict_access_to": [u'0.0.0.0/0'],
-                            }
-                        }
+            'ecr_repo': {'name': 'test-service-repo'},
+            "services": {
+                "TestService": {
+                    "memory_reservation": 1000,
+                    'secrets_name': 'secret-config',
+                    "command": None,
+                    "http_interface": {
+                        "internal": True,
+                        "container_port": 80,
+                        "restrict_access_to": [u'0.0.0.0/0'],
                     }
                 }
+            }
+        }
 
     @mock_dynamodb2
     def test_set_config(self):
@@ -107,19 +109,20 @@ class TestServiceConfiguration(object):
         update_response = store_object.get_config()
 
         assert update_response == {
-                    "services": {
-                        "TestService": {
-                            "memory_reservation": 1000,
-                            "command": None,
-                            "http_interface": {
-                                "internal": True,
-                                "container_port": 80,
-                                "restrict_access_to": [u"123.123.123.123/32"],
-                            }
-                        }
+            'ecr_repo': {'name': 'test-service-repo'},
+            "services": {
+                "TestService": {
+                    "memory_reservation": 1000,
+                    'secrets_name': 'secret-config',
+                    "command": None,
+                    "http_interface": {
+                        "internal": True,
+                        "container_port": 80,
+                        "restrict_access_to": [u"123.123.123.123/32"],
                     }
                 }
-
+            }
+        }
 
     @mock_dynamodb2
     def test_set_config_stop_timeout(self):
@@ -133,32 +136,42 @@ class TestServiceConfiguration(object):
         update_response = store_object.get_config()
 
         assert update_response == {
-                    "services": {
-                        "TestService": {
-                            "memory_reservation": 1000,
-                            "command": None,
-                            "http_interface": {
-                                "internal": True,
-                                "container_port": 80,
-                                "restrict_access_to": [u'0.0.0.0/0'],
-                            },
-                            "stop_timeout": 120
-                        }
-                    }
+            "ecr_repo": {"name": "test-service-repo"},
+            "services": {
+                "TestService": {
+                    "memory_reservation": 1000,
+                    'secrets_name': 'secret-config',
+                    "command": None,
+                    "http_interface": {
+                        "internal": True,
+                        "container_port": 80,
+                        "restrict_access_to": [u'0.0.0.0/0'],
+                    },
+                    "stop_timeout": 120
                 }
+            }
+        }
 
 
 class TestServiceConfigurationValidation(TestCase):
+    @mock_dynamodb2
+    @patch("cloudlift.config.service_configuration.getcwd")
+    def test_default_service_configuration_ecr_repo(self, getcwd):
+        getcwd.return_value = "/path/to/dummy"
 
-    @patch("cloudlift.config.service_configuration.get_resource_for")
-    def test_set_config_placement_constraints(self, mock_get_resource_for):
-        mock_get_resource_for.return_value = MagicMock()
+        service = ServiceConfiguration('test-service', 'test')
+        conf = service._default_service_configuration()
 
+        self.assertEqual({'name': 'dummy-repo'}, conf.get('ecr_repo'))
+
+    @mock_dynamodb2
+    def test_set_config_placement_constraints(self):
         service = ServiceConfiguration('test-service', 'test')
 
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
@@ -179,10 +192,11 @@ class TestServiceConfigurationValidation(TestCase):
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
-                        'secrets_name': 'test',
+                        'secrets_name': 'secret-config',
                         'command': None,
                         'placement_constraints': [{
                             'type': 'invalid'
@@ -194,15 +208,14 @@ class TestServiceConfigurationValidation(TestCase):
         except UnrecoverableException as e:
             self.assertTrue("'invalid' is not one of ['memberOf', 'distinctInstance']" in str(e))
 
-    @patch("cloudlift.config.service_configuration.get_resource_for")
-    def test_set_config_system_controls(self, mock_get_resource_for):
-        mock_get_resource_for.return_value = MagicMock()
-
+    @mock_dynamodb2
+    def test_set_config_system_controls(self):
         service = ServiceConfiguration('test-service', 'test')
 
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
@@ -223,6 +236,7 @@ class TestServiceConfigurationValidation(TestCase):
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
@@ -236,15 +250,14 @@ class TestServiceConfigurationValidation(TestCase):
         except UnrecoverableException as e:
             self.assertTrue("'invalid' is not of type 'array'" in str(e))
 
-    @patch("cloudlift.config.service_configuration.get_resource_for")
-    def test_set_config_http_interface(self, mock_get_resource_for):
-        mock_get_resource_for.return_value = MagicMock()
-
+    @mock_dynamodb2
+    def test_set_config_http_interface(self):
         service = ServiceConfiguration('test-service', 'test')
 
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
@@ -261,15 +274,14 @@ class TestServiceConfigurationValidation(TestCase):
         except UnrecoverableException as e:
             self.fail('Exception thrown: {}'.format(e))
 
-    @patch("cloudlift.config.service_configuration.get_resource_for")
-    def test_set_config_health_check_command(self, mock_get_resource_for):
-        mock_get_resource_for.return_value = MagicMock()
-
+    @mock_dynamodb2
+    def test_set_config_health_check_command(self):
         service = ServiceConfiguration('test-service', 'test')
 
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
@@ -296,6 +308,7 @@ class TestServiceConfigurationValidation(TestCase):
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,
@@ -316,15 +329,14 @@ class TestServiceConfigurationValidation(TestCase):
         except UnrecoverableException as e:
             self.assertTrue(True)
 
-    @patch("cloudlift.config.service_configuration.get_resource_for")
-    def test_sidecars(self, mock_get_resource_for):
-        mock_get_resource_for.return_value = MagicMock()
-
+    @mock_dynamodb2
+    def test_sidecars(self):
         service = ServiceConfiguration('test-service', 'test')
 
         try:
             service._validate_changes({
                 'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
                 'services': {
                     'TestService': {
                         'memory_reservation': 1000,

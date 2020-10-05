@@ -12,3 +12,8 @@ def get_config(secret_name, env):
         secret_val = json.loads(response['SecretString'])
         _secret_manager_cache[secret_name] = {k: f"{response['ARN']}:{k}::{response['VersionId']}" for k in secret_val}
     return _secret_manager_cache[secret_name]
+
+
+def clear_cache():
+    global _secret_manager_cache
+    _secret_manager_cache = {}

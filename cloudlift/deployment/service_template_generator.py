@@ -1,7 +1,6 @@
 import json
 import re
 
-import boto3
 from awacs.aws import PolicyDocument, Statement, Allow, Principal
 from awacs.ecr import GetAuthorizationToken, BatchCheckLayerAvailability, GetDownloadUrlForLayer, BatchGetImage
 from awacs.logs import CreateLogStream, PutLogEvents
@@ -18,25 +17,24 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl,
                              HealthCheck)
-from troposphere.elasticloadbalancingv2 import SubnetMapping
-from troposphere.elasticloadbalancingv2 import LoadBalancer as NLBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Action, Certificate, Listener, ListenerRule, Condition,
                                                 HostHeaderConfig, PathPatternConfig)
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
+from troposphere.elasticloadbalancingv2 import LoadBalancer as NLBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
+from troposphere.elasticloadbalancingv2 import SubnetMapping
 from troposphere.iam import Role, Policy
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_account_id
 from cloudlift.config.region import get_environment_level_alb_listener, get_client_for
-from cloudlift.deployment.deployer import build_config, container_name
-from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
-from cloudlift.deployment.template_generator import TemplateGenerator
-from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY,\
-    DEFAULT_LOAD_BALANCING_ALGORITHM, DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS, DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS,\
+from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY, \
+    DEFAULT_LOAD_BALANCING_ALGORITHM, DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS, DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS, \
     DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT, DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT
+from cloudlift.deployment.deployer import build_config, container_name
+from cloudlift.deployment.template_generator import TemplateGenerator
 
 
 class ServiceTemplateGenerator(TemplateGenerator):
@@ -48,14 +46,13 @@ class ServiceTemplateGenerator(TemplateGenerator):
     LAUNCH_TYPE_FARGATE = 'FARGATE'
     LAUNCH_TYPE_EC2 = 'EC2'
 
-    def __init__(self, service_configuration, environment_stack, env_sample_file):
+    def __init__(self, service_configuration, environment_stack, env_sample_file, ecr_image_uri, desired_counts=None):
         super(ServiceTemplateGenerator, self).__init__(service_configuration.environment)
         self._derive_configuration(service_configuration)
         self.env_sample_file_path = env_sample_file
         self.environment_stack = environment_stack
-        information_fetcher = ServiceInformationFetcher(self.application_name, self.env)
-        self.current_version = information_fetcher.get_current_version()
-        self.desired_counts = information_fetcher.fetch_current_desired_count()
+        self.ecr_image_uri = ecr_image_uri
+        self.desired_counts = desired_counts or {}
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
@@ -66,6 +63,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self._add_service_outputs()
         self._add_ecs_service_iam_role()
         self._add_cluster_services()
+        self._add_ecr_outputs()
         return to_yaml(self.template.to_json())
 
     def _add_cluster_services(self):
@@ -164,7 +162,7 @@ service is down',
             "Environment": [Environment(Name=name, Value=env_config[name]) for name in env_config],
             "Secrets": [Secret(Name=name, ValueFrom=secrets_config[name]) for name in secrets_config],
             "Name": container_name(service_name),
-            "Image": self.ecr_image_uri + ':' + self.current_version,
+            "Image": self.ecr_image_uri,
             "Essential": 'true',
             "LogConfiguration": log_config,
             "MemoryReservation": int(config['memory_reservation']),
@@ -579,7 +577,8 @@ service is down',
                 ),
                 TargetGroupAttribute(
                     Key='load_balancing.algorithm.type',
-                    Value=str(config['http_interface'].get('load_balancing_algorithm', DEFAULT_LOAD_BALANCING_ALGORITHM))
+                    Value=str(
+                        config['http_interface'].get('load_balancing_algorithm', DEFAULT_LOAD_BALANCING_ALGORITHM))
                 )
             ],
             VpcId=Ref(self.vpc),
@@ -998,6 +997,33 @@ building this service",
         ))
         self._add_stack_outputs()
 
+    def _add_ecr_outputs(self):
+        ecr_repo_config = self.configuration.get('ecr_repo')
+        self.template.add_output(
+            Output(
+                "ECRRepoName",
+                Description="ECR repo to for docker images",
+                Value=ecr_repo_config.get('name')
+            )
+        )
+
+        if 'account_id' in ecr_repo_config:
+            self.template.add_output(
+                Output(
+                    "ECRAccountID",
+                    Description="Account ID to which the ECR repo belongs to",
+                    Value=ecr_repo_config.get('account_id')
+                )
+            )
+        if 'assume_role_arn' in ecr_repo_config:
+            self.template.add_output(
+                Output(
+                    "ECRAssumeRoleARN",
+                    Description="Role to assume to interact with ECR",
+                    Value=ecr_repo_config.get('assume_role_arn')
+                )
+            )
+
     def _add_service_parameters(self):
         self.notification_sns_arn = Parameter(
             "NotificationSnsArn",
@@ -1099,20 +1125,11 @@ building this service",
                 return i
         return -1
 
-    def _add_to_alb_listener_in_subpath(self, service_name, alb_listener_arn, subpath, target_group):
-        priority = self._get_free_priority_from_listener(alb_listener_arn)
-
     def _get_desired_task_count_for_service(self, service_name):
         if service_name in self.desired_counts:
             return self.desired_counts[service_name]
         else:
-            return 0
-
-    @property
-    def ecr_image_uri(self):
-        return str(self.account_id) + ".dkr.ecr." + \
-               self.region + ".amazonaws.com/" + \
-               self.repo_name
+            return 1
 
     @property
     def account_id(self):

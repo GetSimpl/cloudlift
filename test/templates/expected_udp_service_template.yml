@@ -1,12 +1,15 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
-      {"FreeradiusServer": {"command": null, "memory_reservation": 1024, "secrets_name":
-      "dummy-udp-config", "udp_interface": {"container_port": 1812, "eip_allocaltion_id1":
-      "eipalloc-02abb9e5e123492ee", "eip_allocaltion_id2": "eipalloc-02abb9e5e123492ee",
-      "health_check_port": 1814, "internal": false, "nlb_enabled": true, "restrict_access_to":
-      ["0.0.0.0/0"]}}}}'
+    Value: '{"cloudlift_version": "test-version", "ecr_repo": {"name": "test-service-repo"},
+      "notifications_arn": "some", "services": {"FreeradiusServer": {"command": null,
+      "memory_reservation": 1024, "secrets_name": "dummy-udp-config", "udp_interface":
+      {"container_port": 1812, "eip_allocaltion_id1": "eipalloc-02abb9e5e123492ee",
+      "eip_allocaltion_id2": "eipalloc-02abb9e5e123492ee", "health_check_port": 1814,
+      "internal": false, "nlb_enabled": true, "restrict_access_to": ["0.0.0.0/0"]}}}}'
+  ECRRepoName:
+    Description: ECR repo to for docker images
+    Value: test-service-repo
   FreeradiusServerEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'FreeradiusServer.Name'
@@ -175,7 +178,7 @@ Resources:
             - Name: PORT
               Value: '80'
           Essential: 'true'
-          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -281,7 +284,7 @@ Resources:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
         - Key: load_balancing.algorithm.type
-          Value: 'least_outstanding_requests'
+          Value: least_outstanding_requests
       TargetType: ip
       UnhealthyThresholdCount: 2
       VpcId: !Ref 'VPC'

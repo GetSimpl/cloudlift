@@ -3,8 +3,10 @@ import os
 from decimal import Decimal
 from unittest import TestCase
 
-from cfn_flip import to_json
+from cfn_flip import to_json, to_yaml, load
 from mock import patch, MagicMock, call
+from moto import mock_dynamodb2
+
 
 from cloudlift.config import ServiceConfiguration
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
@@ -14,6 +16,7 @@ def mocked_service_config():
     return {
         "cloudlift_version": 'test-version',
         "notifications_arn": "some",
+        "ecr_repo": {"name": "test-service-repo"},
         "services": {
             "Dummy": {
                 "memory_reservation": Decimal(1000),
@@ -58,6 +61,7 @@ def mocked_service_config():
 def mocked_udp_service_config():
     return {
         "cloudlift_version": 'test-version',
+        "ecr_repo": {"name": "test-service-repo"},
         "notifications_arn": "some",
         "services": {
             "FreeradiusServer": {
@@ -83,6 +87,7 @@ def mocked_udp_service_config():
 def mocked_fargate_service_config():
     return {
         "cloudlift_version": 'test-version',
+        "ecr_repo": {"name": "test-service-repo"},
         "notifications_arn": "some",
         "services": {
             "DummyFargateRunSidekiqsh": {
@@ -118,6 +123,7 @@ def mocked_fargate_service_config():
 def mocked_udp_fargate_service_config():
     return {
         "cloudlift_version": 'test-version',
+        "ecr_repo": {"name": "test-service-repo"},
         "notifications_arn": "some",
         "services": {
             "DummyFargateService": {
@@ -142,29 +148,22 @@ def mocked_udp_fargate_service_config():
 
 class TestServiceTemplateGenerator(TestCase):
 
-    @patch('cloudlift.config.service_configuration.get_resource_for')
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
-    def test_initialization(self, mockServiceInformationFetcher, mock_get_resource_for):
-        service_config = ServiceConfiguration("test-service", "staging")
+    def test_initialization(self):
+        mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name="test-service",
+                                               environment="staging")
 
-        generator = ServiceTemplateGenerator(service_config, None, "env.sample")
+        generator = ServiceTemplateGenerator(mock_service_configuration, None, "env.sample", ecr_image_uri="image:v1")
 
-        mockServiceInformationFetcher.assert_called_with("test-service", "staging")
         assert generator.env == 'staging'
         assert generator.application_name == 'test-service'
         assert generator.environment_stack is None
 
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
-    def test_generate_service(self, mock_region_service, mock_get_account_id, mock_build_config,
-                              mockServiceInformationFetcher):
+    def test_generate_service(self, mock_region_service, mock_get_account_id, mock_build_config):
         environment = 'staging'
         application_name = 'dummy'
-        mock_service_info_inst = mockServiceInformationFetcher.return_value
-        mock_service_info_inst.get_current_version.return_value = "1.1.1"
-        mock_service_info_inst.fetch_current_desired_count.return_value = {"Dummy": 100, "DummyRunSidekiqsh": 199}
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_service_config()
@@ -180,28 +179,26 @@ class TestServiceTemplateGenerator(TestCase):
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample')
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_service_template.yml')
         with(open(template_file_path)) as expected_template_file:
-            assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
+            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
-    def test_generate_service_with_new_alb(self, mock_region_service, mock_get_account_id, mock_build_config,
-                                           mockServiceInformationFetcher):
+    def test_generate_service_with_new_alb(self, mock_region_service, mock_get_account_id, mock_build_config):
         environment = 'staging'
         application_name = 'dummy'
-        mock_service_info_inst = mockServiceInformationFetcher.return_value
-        mock_service_info_inst.get_current_version.return_value = "1.1.1"
-        mock_service_info_inst.fetch_current_desired_count.return_value = {"Dummy": 100, "DummyRunSidekiqsh": 199}
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
                                                environment=environment)
         mock_service_configuration.get_config.return_value = {
             "cloudlift_version": 'test-version',
             "notifications_arn": "some",
+            "ecr_repo": {"name": "test-service-repo"},
             "services": {
                 "Dummy": {
                     "memory_reservation": Decimal(1000),
@@ -230,7 +227,10 @@ class TestServiceTemplateGenerator(TestCase):
         mock_region_service.get_ssl_certification_for_environment.return_value = "certificateARN1234"
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample')
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
+
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_new_alb_template.yml')
@@ -239,23 +239,19 @@ class TestServiceTemplateGenerator(TestCase):
 
     @patch('cloudlift.deployment.service_template_generator.get_client_for')
     @patch('cloudlift.deployment.service_template_generator.get_environment_level_alb_listener')
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
     def test_generate_service_with_env_alb_host_based(self, mock_region_service, mock_get_account_id, mock_build_config,
-                                           mockServiceInformationFetcher, mock_get_environment_level_alb_listener,
-                                           mock_get_client_for):
+                                                      mock_get_environment_level_alb_listener, mock_get_client_for):
         environment = 'staging'
         application_name = 'dummy'
-        mock_service_info_inst = mockServiceInformationFetcher.return_value
-        mock_service_info_inst.get_current_version.return_value = "1.1.1"
-        mock_service_info_inst.fetch_current_desired_count.return_value = {"Dummy": 100, "DummyRunSidekiqsh": 199}
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
                                                environment=environment)
         mock_service_configuration.get_config.return_value = {
             "cloudlift_version": 'test-version',
             "notifications_arn": "some",
+            "ecr_repo": {"name": "test-service-repo"},
             "services": {
                 "Dummy": {
                     "memory_reservation": Decimal(1000),
@@ -281,6 +277,7 @@ class TestServiceTemplateGenerator(TestCase):
                         "alb": {
                             "create_new": False,
                             "listener_arn": "custom_listener_arn",
+                            "path": "/api/*",
                             "priority": 100,
                         },
                         "container_port": Decimal(7003),
@@ -316,7 +313,9 @@ class TestServiceTemplateGenerator(TestCase):
         mock_elbv2_client.describe_rules.side_effect = mock_describe_rules
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample')
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
 
         generated_template = template_generator.generate_service()
 
@@ -328,94 +327,12 @@ class TestServiceTemplateGenerator(TestCase):
         with(open(template_file_path)) as expected_template_file:
             assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
-    @patch('cloudlift.deployment.service_template_generator.get_client_for')
-    @patch('cloudlift.deployment.service_template_generator.get_environment_level_alb_listener')
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
-    def test_generate_service_with_env_alb_path_based(self, mock_region_service, mock_get_account_id, mock_build_config,
-                                           mockServiceInformationFetcher, mock_get_environment_level_alb_listener,
-                                           mock_get_client_for):
-        environment = 'staging'
-        application_name = 'dummy'
-        mock_service_info_inst = mockServiceInformationFetcher.return_value
-        mock_service_info_inst.get_current_version.return_value = "1.1.1"
-        mock_service_info_inst.fetch_current_desired_count.return_value = {"Dummy": 100, "DummyRunSidekiqsh": 199}
-        mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
-                                               environment=environment)
-        mock_service_configuration.get_config.return_value = {
-            "cloudlift_version": 'test-version',
-            "notifications_arn": "some",
-            "services": {
-                "Dummy": {
-                    "memory_reservation": Decimal(1000),
-                    "command": None,
-                    "secrets_name": "something",
-                    "http_interface": {
-                        "internal": False,
-                        "alb": {
-                            "create_new": False,
-                            "path": "/api/*"
-                        },
-                        "container_port": Decimal(7003),
-                        "restrict_access_to": ["0.0.0.0/0"],
-                        "health_check_path": "/elb-check"
-                    }
-                }
-            }
-        }
-
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, s_name):
-            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
-
-        mock_build_config.side_effect = mock_build_config_impl
-
-        mock_get_account_id.return_value = "12537612"
-        mock_region_service.get_region_for_environment.return_value = "us-west-2"
-        mock_get_environment_level_alb_listener.return_value = "listenerARN1234"
-        mock_elbv2_client = MagicMock()
-        mock_get_client_for.return_value = mock_elbv2_client
-
-        def mock_describe_rules(ListenerArn=None, Marker=None):
-            if ListenerArn:
-                return {
-                    'Rules': [{'Priority': '1'}, {'Priority': '2'}],
-                    'NextMarker': '/next/marker'
-                }
-            if Marker:
-                return {
-                    'Rules': [{'Priority': '3'}, {'Priority': '5'}]
-                }
-
-        mock_elbv2_client.describe_rules.side_effect = mock_describe_rules
-
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample')
-
-        generated_template = template_generator.generate_service()
-
-        template_file_path = os.path.join(os.path.dirname(__file__),
-                                          '../templates/expected_service_with_env_alb_template_path_based.yml')
-        mock_elbv2_client.describe_rules.assert_has_calls(
-            [call(ListenerArn='listenerARN1234'),
-             call(Marker='/next/marker')])
-        with(open(template_file_path)) as expected_template_file:
-            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
-
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
-    @patch('cloudlift.deployment.service_template_generator.build_config')
-    @patch('cloudlift.deployment.service_template_generator.get_account_id')
-    @patch('cloudlift.deployment.template_generator.region_service')
-    @patch('cloudlift.deployment.service_template_generator.boto3')
-    def test_generate_fargate_service(self, mock_boto, mock_region_service, mock_get_account_id, mock_build_config,
-                                      mockServiceInformationFetcher):
+    def test_generate_fargate_service(self, mock_region_service, mock_get_account_id, mock_build_config):
         environment = 'staging'
         application_name = 'dummyFargate'
-        mock_service_info_inst = mockServiceInformationFetcher.return_value
-        mock_service_info_inst.get_current_version.return_value = "1.1.1"
-        mock_service_info_inst.fetch_current_desired_count.return_value = {"DummyFargateService": 45,
-                                                                           "DummyFargateRunSidekiqsh": 51}
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_fargate_service_config()
@@ -427,12 +344,13 @@ class TestServiceTemplateGenerator(TestCase):
 
         mock_get_account_id.return_value = "12537612"
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
-        mock_iam_role = MagicMock(arn="arn:aws:iam::12537612:role/DummyExecutionRole")
-        mock_boto.resource.return_value = MagicMock()
-        mock_boto.resource.return_value.Role.return_value = mock_iam_role
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample')
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/dummyFargate-repo:1.1.1",
+                                                      desired_counts={"DummyFargateService": 45,
+                                                                      "DummyFargateRunSidekiqsh": 51})
+
         generated_template = template_generator.generate_service()
 
         template_file_path = os.path.join(os.path.dirname(__file__),
@@ -440,19 +358,13 @@ class TestServiceTemplateGenerator(TestCase):
         with(open(template_file_path)) as expected_template_file:
             assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
 
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
-    @patch('cloudlift.deployment.service_template_generator.boto3')
-    def test_generate_fargate_service_should_fail_for_udp_interface(self, mock_boto, mock_region_service,
-                                                                    mock_get_account_id, mock_build_config,
-                                                                    mockServiceInformationFetcher):
+    def test_generate_fargate_service_should_fail_for_udp_interface(self, mock_region_service,
+                                                                    mock_get_account_id, mock_build_config):
         environment = 'staging'
         application_name = 'dummyFargate'
-        mock_service_info_inst = mockServiceInformationFetcher.return_value
-        mock_service_info_inst.get_current_version.return_value = "1.1.1"
-        mock_service_info_inst.fetch_current_desired_count.return_value = {"DummyFargateRunSidekiqsh": 51}
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_udp_fargate_service_config()
@@ -464,28 +376,21 @@ class TestServiceTemplateGenerator(TestCase):
 
         mock_get_account_id.return_value = "12537612"
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
-        mock_iam_role = MagicMock(arn="arn:aws:iam::12537612:role/DummyExecutionRole")
-        mock_boto.resource.return_value = MagicMock()
-        mock_boto.resource.return_value.Role.return_value = mock_iam_role
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample')
+                                                      './test/templates/test_env.sample',
+                                                      "test-image-repo")
         with self.assertRaises(NotImplementedError) as context:
             template_generator.generate_service()
             self.assertTrue(
                 'udp interface not yet implemented in fargate type, please use ec2 type' in context.exception)
 
-    @patch('cloudlift.deployment.service_template_generator.ServiceInformationFetcher')
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
-    def test_generate_udp_service(self, mock_region_service, mock_get_account_id, mock_build_config,
-                                  mockServiceInformationFetcher):
+    def test_generate_udp_service(self, mock_region_service, mock_get_account_id, mock_build_config):
         environment = 'staging'
         application_name = 'dummy'
-        mock_service_info_inst = mockServiceInformationFetcher.return_value
-        mock_service_info_inst.get_current_version.return_value = "1.1.1"
-        mock_service_info_inst.fetch_current_desired_count.return_value = {"FreeradiusServer": 100}
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_udp_service_config()
@@ -498,12 +403,67 @@ class TestServiceTemplateGenerator(TestCase):
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample')
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      desired_counts={"FreeradiusServer": 100})
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_udp_service_template.yml')
 
         with(open(template_file_path)) as expected_template_file:
             assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
+
+    @patch('cloudlift.deployment.service_template_generator.build_config')
+    @patch('cloudlift.deployment.service_template_generator.get_account_id')
+    @patch('cloudlift.deployment.template_generator.region_service')
+    def test_generate_service_for_ecr(self, mock_region_service, mock_get_account_id, mock_build_config):
+        environment = 'staging'
+        application_name = 'dummy'
+        mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
+                                               environment=environment)
+        mock_service_configuration.get_config.return_value = {
+            "cloudlift_version": 'test-version',
+            "notifications_arn": "some",
+            "ecr_repo": {"name": "main-repo", "assume_role_arn": "arn1234", "account_id": "1234"},
+            "services": {
+                "Dummy": {
+                    "memory_reservation": Decimal(1000),
+                    "secrets_name": "something",
+                    "command": None,
+                },
+            }
+        }
+
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, sec_name):
+            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
+
+        mock_build_config.side_effect = mock_build_config_impl
+
+        mock_get_account_id.return_value = "12537612"
+        mock_region_service.get_region_for_environment.return_value = "us-west-2"
+        mock_region_service.get_ssl_certification_for_environment.return_value = "certificateARN1234"
+
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      desired_counts={"Dummy": 1})
+
+        generated_template = template_generator.generate_service()
+        loaded_template = load(to_json(generated_template))
+
+        self.assertGreaterEqual(len(loaded_template), 1, "no template generated")
+        generated = loaded_template[0]
+        self.check_in_outputs(generated, 'ECRRepoName', 'main-repo')
+        self.check_in_outputs(generated, 'ECRAccountID', '1234')
+        self.check_in_outputs(generated, 'ECRAssumeRoleARN', 'arn1234')
+
+    def check_in_outputs(self, template, key, value):
+        self.assertIn('Outputs', template)
+        self.assertTrue(key in template['Outputs'])
+
+        self.assertEqual(
+            value,
+            template['Outputs'][key].get('Value', None),
+        )
 
     @staticmethod
     def _get_env_stack():

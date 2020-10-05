@@ -5,21 +5,21 @@ retrieving service configuration.
 
 import json
 
-import boto3
 import dictdiffer
 from botocore.exceptions import ClientError
 from click import confirm, edit
-from cloudlift.exceptions import UnrecoverableException
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
-from stringcase import pascalcase
+from stringcase import pascalcase, spinalcase
+from os import getcwd
+from os.path import basename
 
-from cloudlift.config import DecimalEncoder, print_json_changes, DynamodbConfig
+from cloudlift.config import DecimalEncoder, DynamodbConfig
 # import config.mfa as mfa
-from cloudlift.config import get_resource_for
-from cloudlift.config.logging import log_bold, log_err, log_warning
+from cloudlift.config import print_json_changes
+from cloudlift.config.logging import log_bold, log_warning
+from cloudlift.exceptions import UnrecoverableException
 from cloudlift.version import VERSION
-
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY = 30
@@ -28,7 +28,6 @@ DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT = 2
 DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT = 3
 DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS = 30
 DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS = 10
-
 
 
 class ServiceConfiguration(DynamodbConfig):
@@ -90,7 +89,7 @@ class ServiceConfiguration(DynamodbConfig):
         except ClientError:
             raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
 
-    def get_config(self):
+    def get_config(self, strip_cloudlift_version=True):
         '''
             Get configuration from DynamoDB
         '''
@@ -98,8 +97,8 @@ class ServiceConfiguration(DynamodbConfig):
         if not existing_configuration:
             existing_configuration = self._default_service_configuration()
             self.new_service = True
-
-        existing_configuration.pop("cloudlift_version", None)
+        if strip_cloudlift_version:
+            existing_configuration.pop("cloudlift_version", None)
         return existing_configuration
 
     def set_config(self, config):
@@ -115,6 +114,10 @@ class ServiceConfiguration(DynamodbConfig):
         '''
         config = self.get_config()
         self.set_config(config)
+
+    def validate(self):
+        log_bold("Running post-save validation:")
+        self._validate_changes(self.get_config(strip_cloudlift_version=False))
 
     def _validate_changes(self, configuration):
         service_schema = {
@@ -189,7 +192,7 @@ class ServiceConfiguration(DynamodbConfig):
                         "enum": ["round_robin", "least_outstanding_requests"]
                     },
                     "deregistration_delay": {
-                      "type": "number"
+                        "type": "number"
                     },
                     "required": [
                         "internal",
@@ -347,11 +350,20 @@ class ServiceConfiguration(DynamodbConfig):
                         "^[a-zA-Z]+$": service_schema
                     }
                 },
+                "ecr_repo": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": {"type": "string"},
+                        "assume_role_arn": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
+                    "required": ["name"]
+                },
                 "cloudlift_version": {
                     "type": "string"
                 }
             },
-            "required": ["cloudlift_version", "services"]
+            "required": ["cloudlift_version", "services", "ecr_repo"]
         }
         try:
             validate(configuration, schema)
@@ -362,7 +374,11 @@ class ServiceConfiguration(DynamodbConfig):
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
+        cwd = basename(getcwd())
         return {
+            u'ecr_repo': {
+                u'name': spinalcase("{}-repo".format(cwd)),
+            },
             u'services': {
                 pascalcase(self.service_name): {
                     u'http_interface': {

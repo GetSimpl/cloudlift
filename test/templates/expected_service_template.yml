@@ -1,11 +1,12 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "services":
-      {"Dummy": {"memory_reservation": 1000, "command": null, "http_interface": {"internal":
-      false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check", "deregistration_delay": 88, "load_balancing_algorithm": "round_robin",
-      "health_check_interval_seconds": 43, "health_check_timeout_seconds": 24, "health_check_healthy_threshold_count":
+    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
+      {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
+      1000, "command": null, "http_interface": {"internal": false, "container_port":
+      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check",
+      "deregistration_delay": 88, "load_balancing_algorithm": "round_robin", "health_check_interval_seconds":
+      43, "health_check_timeout_seconds": 24, "health_check_healthy_threshold_count":
       6, "health_check_unhealthy_threshold_count": 4}, "deployment": {"maximum_percent":
       150}, "secrets_name": "dummy-config", "sidecars": [{"name": "redis", "image":
       "redis:latest", "memory_reservation": 256}]}, "DummyRunSidekiqsh": {"memory_reservation":
@@ -24,6 +25,9 @@ Outputs:
   DummySecretsName:
     Description: AWS secrets manager name to pull the secrets from
     Value: dummy-config
+  ECRRepoName:
+    Description: ECR repo to for docker images
+    Value: test-service-repo
   StackId:
     Description: The unique ID of the stack. To be supplied to circle CI environment
       variables to validate during deployment.
@@ -127,7 +131,7 @@ Resources:
             - Name: PORT
               Value: '80'
           Essential: 'true'
-          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -182,7 +186,7 @@ Resources:
             - Name: PORT
               Value: '80'
           Essential: 'true'
-          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummy-repo:1.1.1
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1
           Links:
             - redisContainer:redis
           LogConfiguration:

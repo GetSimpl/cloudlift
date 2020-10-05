@@ -20,11 +20,24 @@ class TestServiceInformationFetcher(unittest.TestCase):
         sif = ServiceInformationFetcher(service, env)
 
         expected_service_info = {
-            'ServiceTwo': {'ecs_service_name': 'dummy-sen-test-ServiceTwo-45E0C5QX2HUV', 'secrets_name': 'dummy-test'},
+            'ServiceTwo': {'ecs_service_name': 'dummy-sen-test-ServiceTwo-45E0C5QX2HUV',
+                           'secrets_name': 'dummy-test'},
             'ServiceOne': {'ecs_service_name': 'dummy-sen-test-ServiceOne-X9NCSHOSMM5S',
                            'secrets_name': 'dummy-test'}}
         self.assertDictEqual(expected_service_info, sif.service_info)
         mock_cfn_client.describe_stacks.assert_called_once_with(StackName='dummy-test')
+
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_fetch_ecr_info(self, mock_get_client_for):
+        mock_cfn_client = MagicMock()
+        mock_get_client_for.return_value = mock_cfn_client
+        mock_cfn_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+
+        sif = ServiceInformationFetcher(service, env)
+
+        self.assertEqual('dummy-sen-repo', sif.ecr_repo_name)
+        self.assertEqual('test-assume-role-arn', sif.ecr_assume_role_arn)
+        self.assertEqual('12345', sif.ecr_account_id)
 
 
 def _describe_stacks_output():
@@ -62,6 +75,18 @@ def _describe_stacks_output():
             {'OutputKey': 'ServiceOneEcsServiceName', 'OutputValue': 'dummy-sen-test-ServiceOne-X9NCSHOSMM5S',
              'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'StackId',
                                                                         'OutputValue': 'arn:aws:cloudformation:us-west-2:408750594584:stack/dummy-sen-test/3eeaa640-edcf-11ea-9f4d-0a3d9b1fa9c6',
-                                                                        'Description': 'The unique ID of the stack. To be supplied to circle CI environment variables to validate during deployment.'}],
+                                                                        'Description': 'The unique ID of the stack. To be supplied to circle CI environment variables to validate during deployment.'},
+            {'OutputKey': 'ECRRepoName', 'OutputValue': 'dummy-sen-repo'}
+        ],
         'Tags': [], 'EnableTerminationProtection': False,
         'DriftInformation': {'StackDriftStatus': 'NOT_CHECKED'}}]}
+
+
+def _describe_stacks_output_with_ecr_repo_config():
+    stack_configs = _describe_stacks_output()
+    assert len(stack_configs.get('Stacks', [])) == 1
+    outputs = stack_configs['Stacks'][0].get('Outputs', [])
+    outputs.append({'OutputKey': 'ECRAssumeRoleARN', 'OutputValue': 'test-assume-role-arn'})
+    outputs.append({'OutputKey': 'ECRAccountID', 'OutputValue': '12345'})
+    stack_configs['Stacks'][0]['Outputs'] = outputs
+    return stack_configs

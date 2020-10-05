@@ -5,15 +5,15 @@ import click
 from botocore.exceptions import ClientError
 
 from cloudlift.config import highlight_production
-from cloudlift.deployment.configs import deduce_name
-from cloudlift.deployment import EnvironmentCreator, editor
 from cloudlift.config.logging import log_err
+from cloudlift.deployment import EnvironmentCreator, editor
+from cloudlift.deployment.configs import deduce_name
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
+from cloudlift.exceptions import UnrecoverableException
 from cloudlift.session import SessionCreator
 from cloudlift.version import VERSION
-from cloudlift.exceptions import UnrecoverableException
 
 
 def _require_environment(func):
@@ -69,9 +69,17 @@ AWS_DEFAULT_REGION env vars are set OR run 'aws configure'")
 ECS services")
 @_require_environment
 @_require_name
+@click.option('--version', default=None,
+              help='local image version tag')
+@click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
+                                                                  "as --build-args. Supports multiple.\
+                                                                   Please leave space between name and value")
+@click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
-def create_service(name, environment, env_sample_file):
-    ServiceCreator(name, environment, env_sample_file).create()
+def create_service(name, environment, version, build_arg, dockerfile, env_sample_file):
+    ServiceCreator(name, environment, env_sample_file).create(
+        version=version, build_arg=dict(build_arg), dockerfile=dockerfile,
+    )
 
 
 @cli.command(help="Update existing service.")
@@ -135,9 +143,14 @@ def revert_service(name, environment, timeout_seconds):
 @click.option('--local_tag', help='Commit sha for image to be uploaded')
 @click.option('--additional_tags', default=[], multiple=True,
               help='Additional tags for the image apart from commit SHA')
-@_require_name
-def upload_to_ecr(name, local_tag, additional_tags):
-    ServiceUpdater(name, version=local_tag).upload_image(additional_tags)
+@click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
+                                                                  "as --build-args. Supports multiple.\
+                                                                   Please leave space between name and value")
+@click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
+@click.option('--env_sample_file', default='env.sample', help='env sample file path')
+def upload_to_ecr(name, environment, additional_tags, build_arg, dockerfile, env_sample_file):
+    ServiceUpdater(name, environment, env_sample_file, build_args=dict(build_arg), dockerfile=dockerfile) \
+        .upload_to_ecr(additional_tags)
 
 
 @cli.command(help="Get commit information of currently deployed code \
