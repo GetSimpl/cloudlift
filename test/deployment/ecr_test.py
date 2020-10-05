@@ -89,13 +89,14 @@ class TestECR(TestCase):
 
         expected_policy_text = {"Version": "2008-10-17", "Statement": [
             {"Sid": "AllowCrossAccountPull-98765", "Effect": "Allow", "Principal": {"AWS": ["98765"]},
-             "Action": ["ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage"]}]}
+             "Action": ["ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage",
+                        "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
+                        "ecr:CompleteLayerUpload"]}]}
 
         mock_ecr_client.set_repository_policy.assert_called_with(
             repositoryName='test-repo',
             policyText=json.dumps(expected_policy_text),
         )
-
 
     def test_image_uri(self):
         ecr = ECR("aws-region", "target-repo", "acc-id", version="v1")

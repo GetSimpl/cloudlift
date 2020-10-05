@@ -116,7 +116,11 @@ version to be " + self.version + " based on current status")
                                 "Action": [
                                     "ecr:GetDownloadUrlForLayer",
                                     "ecr:BatchCheckLayerAvailability",
-                                    "ecr:BatchGetImage"
+                                    "ecr:BatchGetImage",
+                                    "ecr:InitiateLayerUpload",
+                                    "ecr:PutImage",
+                                    "ecr:UploadLayerPart",
+                                    "ecr:CompleteLayerUpload",
                                 ]
                             }
                         ]
