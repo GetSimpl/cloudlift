@@ -123,8 +123,12 @@ In the repository for the application, run -
 
 This opens the `VISUAL` editor with default config similar to -
 
-```json
+```json5
   {
+      "ecr_repo": {
+        // ECR Repository to use
+        "name": "test-repo"
+      },
       "services": {
           "Test123": {
               "command": null,
@@ -138,6 +142,8 @@ This opens the `VISUAL` editor with default config similar to -
                       "0.0.0.0/0"
                   ]
               },
+              // Use secrets from secrets manager with key test-env
+              "secrets_name": "test-env",
               "memory_reservation": 100
           }
       }

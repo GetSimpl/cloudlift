@@ -20,7 +20,7 @@ DEPLOYMENT_CONCURRENCY = int(os.environ.get('CLOUDLIFT_DEPLOYMENT_CONCURRENCY', 
 
 class ServiceUpdater(object):
     def __init__(self, name, environment='', env_sample_file='', timeout_seconds=None, version=None,
-                 build_args=None, dockerfile=None, working_dir='.'):
+                 build_args=None, dockerfile=None, working_dir='.', ssh=None, cache_from=None):
         self.name = name
         self.environment = environment
         self.env_sample_file = env_sample_file
@@ -41,6 +41,8 @@ class ServiceUpdater(object):
             build_args,
             dockerfile,
             working_dir,
+            ssh,
+            cache_from
         )
 
     def run(self):

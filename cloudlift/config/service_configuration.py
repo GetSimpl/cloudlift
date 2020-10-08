@@ -392,6 +392,7 @@ class ServiceConfiguration(DynamodbConfig):
                         u'load_balancing_algorithm': DEFAULT_LOAD_BALANCING_ALGORITHM,
                         u'deregistartion_delay': DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY
                     },
+                    u'secrets_name': spinalcase("{}-{}".format(self.service_name, self.environment)),
                     u'system_controls': [],
                     u'memory_reservation': 1000,
                     u'command': None

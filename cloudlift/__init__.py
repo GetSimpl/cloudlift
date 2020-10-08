@@ -76,9 +76,11 @@ ECS services")
                                                                    Please leave space between name and value")
 @click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
-def create_service(name, environment, version, build_arg, dockerfile, env_sample_file):
+@click.option('--ssh', default=None, help='SSH agent socket or keys to expose to the docker build')
+@click.option('--cache-from', multiple=True, help='Images to consider as cache sources')
+def create_service(name, environment, version, build_arg, dockerfile, env_sample_file, ssh, cache_from):
     ServiceCreator(name, environment, env_sample_file).create(
-        version=version, build_arg=dict(build_arg), dockerfile=dockerfile,
+        version=version, build_arg=dict(build_arg), dockerfile=dockerfile, ssh=ssh, cache_from=list(cache_from),
     )
 
 
@@ -127,8 +129,12 @@ def edit_config(name, environment, sidecar):
                                                                    Please leave space between name and value")
 @click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
-def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile, env_sample_file):
-    ServiceUpdater(name, environment, env_sample_file, timeout_seconds, version, dict(build_arg), dockerfile).run()
+@click.option('--ssh', default=None, help='SSH agent socket or keys to expose to the docker build')
+@click.option('--cache-from', multiple=True, help='Images to consider as cache sources')
+def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile, env_sample_file, ssh, cache_from):
+    ServiceUpdater(
+        name, environment, env_sample_file, timeout_seconds, version, dict(build_arg), dockerfile, ssh, list(cache_from),
+    ).run()
 
 
 @cli.command()
@@ -140,7 +146,8 @@ def revert_service(name, environment, timeout_seconds):
 
 
 @cli.command()
-@click.option('--local_tag', help='Commit sha for image to be uploaded')
+@_require_name
+@_require_environment
 @click.option('--additional_tags', default=[], multiple=True,
               help='Additional tags for the image apart from commit SHA')
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
@@ -148,19 +155,20 @@ def revert_service(name, environment, timeout_seconds):
                                                                    Please leave space between name and value")
 @click.option('--dockerfile', default=None, help='The Dockerfile path used to build')
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
-def upload_to_ecr(name, environment, additional_tags, build_arg, dockerfile, env_sample_file):
-    ServiceUpdater(name, environment, env_sample_file, build_args=dict(build_arg), dockerfile=dockerfile) \
-        .upload_to_ecr(additional_tags)
+@click.option('--ssh', default=None, help='SSH agent socket or keys to expose to the docker build')
+@click.option('--cache-from', multiple=True, help='Images to consider as cache sources')
+def upload_to_ecr(name, environment, additional_tags, build_arg, dockerfile, env_sample_file, ssh, cache_from):
+    ServiceUpdater(name, environment, env_sample_file, build_args=dict(build_arg), dockerfile=dockerfile,
+                   ssh=ssh, cache_from=list(cache_from)).upload_to_ecr(additional_tags)
 
 
 @cli.command(help="Get commit information of currently deployed code \
 from commit hash")
 @_require_environment
 @_require_name
-@click.option('--short', '-s', is_flag=True,
-              help='Pass this when you just need the version tag')
-def get_version(name, environment, short):
-    ServiceInformationFetcher(name, environment).get_version(short)
+@click.option('--image', is_flag=True, help='Print image with version')
+def get_version(name, environment, image):
+    ServiceInformationFetcher(name, environment).get_version(image)
 
 
 @cli.command(help="Start SSH session in instance running a current \

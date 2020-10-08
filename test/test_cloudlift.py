@@ -117,6 +117,7 @@ def test_cloudlift_can_revert_service(keep_resources):
 def test_cloudlift_service_with_secrets_manager_config(keep_resources):
     print("adding configuration to secrets manager")
     _set_secrets_manager_config(f"{service_name}-{environment_name}", {'LABEL': 'Value from secret manager v1'})
+    secrets_manager.clear_cache()
     mocked_config = mocked_service_with_secrets_manager_config
     stack_name = f'{service_name}-{environment_name}'
     cfn_client = boto3.client('cloudformation')

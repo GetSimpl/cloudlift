@@ -4,17 +4,19 @@ import subprocess
 import boto3
 import json
 from stringcase import spinalcase
+import os
 
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_warning
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config.account import get_account_id
 
 ECR_DOCKER_PATH = "{}.dkr.ecr.{}.amazonaws.com/{}"
+DEFAULT_DOCKER_FILE = "Dockerfile"
 
 
 class ECR:
     def __init__(self, region, repo_name, account_id=None, assume_role_arn=None, version=None,
-                 build_args=None, dockerfile=None, working_dir='.'):
+                 build_args=None, dockerfile=None, working_dir='.', ssh=None, cache_from=None):
         self.repo_name = repo_name
         self.region = region
         self.account_id = account_id or get_account_id()
@@ -23,34 +25,31 @@ class ECR:
         self.build_args = build_args
         self.dockerfile = dockerfile
         self.working_dir = working_dir
+        self.ssh = ssh
+        self.cache_from = cache_from
 
     def ensure_image_in_ecr(self):
         if self.version:
-            try:
-                commit_sha = self._find_commit_sha(self.version)
-            except:
-                commit_sha = self.version
-            log_intent("Using commit hash " + commit_sha + " to find image")
-            image = self._find_image_in_ecr(commit_sha)
+            log_intent("Using commit hash " + self.version + " to find image")
+            image = self._find_image_in_ecr(self.version)
             if not image:
                 log_warning("Please build, tag and upload the image for the \
-commit " + commit_sha)
+commit " + self.version)
                 raise UnrecoverableException("Image for given version could not be found.")
         else:
             dirty = subprocess.check_output(
                 ["git", "status", "--short"]
             ).decode("utf-8")
             if dirty:
-                self.version = 'dirty'
-                log_intent("Version parameter was not provided. Determined \
-version to be " + self.version + " based on current status")
+                log_intent("Repository has uncommitted changes. Marking version as dirty.")
+                self.version = '{}-dirty'.format(self._derive_version())
                 image = None
             else:
-                self.version = self._find_commit_sha()
-                log_intent("Version parameter was not provided. Determined \
-version to be " + self.version + " based on current status")
+                self.version = self._derive_version()
                 image = self._find_image_in_ecr(self.version)
 
+            log_intent("Version parameter was not provided. Determined version to be " +
+                       self.version + " based on current status")
             if image:
                 log_intent("Image found in ECR")
             else:
@@ -158,14 +157,18 @@ version to be " + self.version + " based on current status")
                                "-p", auth_token, ecr_url])
         log_intent('Docker login to ECR succeeded.')
 
-    def _find_commit_sha(self, version=None):
+    def _derive_version(self, git_version=None):
         log_intent("Finding commit SHA")
         try:
-            version_to_find = version or "HEAD"
+            version_to_find = git_version or "HEAD"
             commit_sha = subprocess.check_output(
                 ["git", "rev-list", "-n", "1", version_to_find]
             ).strip().decode("utf-8")
             log_intent("Found commit SHA " + commit_sha)
+            if self.dockerfile is not None and self.dockerfile != DEFAULT_DOCKER_FILE:
+                log_intent("Found custom dockerfile " + self.dockerfile)
+                return "{}-{}".format(commit_sha, self.dockerfile)
+
             return commit_sha
         except:
             raise UnrecoverableException("Commit SHA not found. Given version is not a git tag, \
@@ -207,19 +210,54 @@ branch or commit SHA")
         except:
             return None
 
+    def _should_enable_buildkit(self):
+        if self.ssh:
+            return True
+        if self.cache_from and len(self.cache_from) > 0:
+            return True
+        return False
+
     def _build_image(self):
         image_name = self.local_image_uri
         log_bold(
             f'Building docker image {image_name} using {"default Dockerfile" if self.dockerfile is None else self.dockerfile}')
         command = self._build_command(image_name)
-        subprocess.check_call(command, shell=True)
+        env = os.environ
+        if self._should_enable_buildkit():
+            env['DOCKER_BUILDKIT'] = '1'
+        try:
+            subprocess.check_call(command, env=env, shell=True)
+        except subprocess.CalledProcessError as e:
+            message = 'docker build exited with status: {}'.format(e.returncode)
+            if e.output:
+                message += '\n'
+                message += e.output
+
+            if e.stderr:
+                message += '\n'
+                message += e.output
+
+            raise UnrecoverableException(message)
         log_bold("Built " + image_name)
 
     def _build_command(self, image_name):
-        dockerfile_opt = '' if self.dockerfile is None else f'-f {self.dockerfile}'
-        build_args_opts = self._build_args_opts()
-        return " ".join(
-            filter(None, ['docker', 'build', dockerfile_opt, '-t', image_name, *build_args_opts, self.working_dir]))
+        command = ['docker', 'build']
+        if self.dockerfile:
+            command.append(f'-f {self.dockerfile}')
+
+        command.append(f'-t {image_name}')
+
+        if self.ssh:
+            command.append(f'--ssh {self.ssh}')
+
+        if self.cache_from and len(self.cache_from) > 0:
+            for cache in self.cache_from:
+                command.append(f'--cache-from {cache}')
+
+        command.extend(self._build_args_opts())
+        command.append(self.working_dir)
+
+        return " ".join(filter(None, command))
 
     def _build_args_opts(self):
         if self.build_args is None:

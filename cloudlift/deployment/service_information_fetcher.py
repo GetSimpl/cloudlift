@@ -86,34 +86,18 @@ class ServiceInformationFetcher(object):
             instance_ids[service] = service_instance_ids
         return instance_ids
 
-    def get_version(self, short):
-        commit_sha = self._fetch_current_task_definition_tag()
-        if commit_sha is None:
-            log_err("Current task definition tag could not be found. \
-Is it deployed?")
-        elif commit_sha == "dirty":
-            log("Dirty version is deployed. Commit information could not be \
-fetched.")
+    def get_version(self, print_image):
+        image = self._fetch_current_image_uri()
+        if print_image:
+            print(image)
         else:
-            log("Currently deployed version: " + commit_sha)
-            if not short:
-                log("Running `git fetch --all`")
-                call(["git", "fetch", "--all"])
-                log_bold("Commit Info:")
-                call([
-                    "git",
-                    "--no-pager",
-                    "show",
-                    "-s",
-                    "--format=medium",
-                    commit_sha
-                ])
-                log_bold("Branch Info:")
-                call(["git", "branch", "-r", "--contains", commit_sha])
-                log("")
+            print(image.split(':').pop())
 
     def _fetch_current_image_uri(self):
         ecs_client = get_client_for('ecs', self.environment)
+        if len(self.ecs_service_names) < 1:
+            raise UnrecoverableException("cannot get running image_uri: no ECS services found")
+
         service = self.ecs_service_names[0]
         task_arns = ecs_client.list_tasks(
             cluster=self.cluster_name,

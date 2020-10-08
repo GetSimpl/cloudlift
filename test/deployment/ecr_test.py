@@ -2,6 +2,7 @@ from cloudlift.deployment import ECR
 from unittest import TestCase
 import boto3
 import json
+import os
 from unittest.mock import patch, MagicMock, call
 
 
@@ -30,6 +31,33 @@ class TestECR(TestCase):
     def test_build_command_with_dockerfile_without_build_args(self):
         ecr = ECR("aws-region", "test-repo", "12345", None, None, dockerfile='CustomDockerfile')
         assert 'docker build -f CustomDockerfile -t test:v1 .' == ecr._build_command("test:v1")
+
+    def test_build_command_with_cache_from(self):
+        ecr = ECR("aws-region", "test-repo", "12345", version="v1", cache_from=['image1', 'image2'])
+        assert 'docker build -t test:v1 --cache-from image1 --cache-from image2 .' == ecr._build_command("test:v1")
+
+    def test_should_enable_buildkit(self):
+        self.assertTrue(
+            ECR("aws-region", "test-repo", "12345",
+                cache_from=['image1', 'image2'])._should_enable_buildkit()
+        )
+        self.assertFalse(
+            ECR("aws-region", "test-repo", "12345")._should_enable_buildkit()
+        )
+        self.assertTrue(
+            ECR("aws-region", "test-repo", "12345", ssh="/tmp/sock")._should_enable_buildkit()
+        )
+
+    @patch("cloudlift.deployment.ecr.subprocess")
+    @patch.dict(os.environ, {"PATH": "/usr/bin"}, clear=True)
+    def test_build_with_ssh(self, mock_subprocess):
+        ecr = ECR("aws-region", "test-repo", version="12345", ssh="default=$SSH_AUTH_SOCK")
+        ecr._build_image()
+
+        mock_subprocess.check_call.assert_called_with(
+            'docker build -t test-repo:12345 --ssh default=$SSH_AUTH_SOCK .', env={'DOCKER_BUILDKIT': '1',
+                                                                                   'PATH': '/usr/bin'}, shell=True,
+        )
 
     @patch("boto3.session.Session")
     @patch("boto3.client")
@@ -112,3 +140,142 @@ class TestECR(TestCase):
         ecr = ECR("aws-region", "target-repo", "acc-id", version="v1")
 
         self.assertEqual("target-repo:v1", ecr.local_image_uri)
+
+    @patch("cloudlift.deployment.ecr.subprocess")
+    @patch("cloudlift.deployment.ecr._create_ecr_client")
+    def test_ensure_image_in_ecr_for_explicit_version(self, mock_create_ecr_client, mock_subprocess):
+        mock_ecr_client = MagicMock()
+        mock_create_ecr_client.return_value = mock_ecr_client
+        mock_ecr_client.batch_get_image.return_value = {'images': 'image-01'}
+        mock_subprocess.check_output.side_effect = Exception('mocked error')
+
+        ecr = ECR("aws-region", "target-repo", "acc-id", version="v1")
+
+        ecr.ensure_image_in_ecr()
+
+        mock_ecr_client.batch_get_image.assert_called_with(
+            imageIds=[{'imageTag': 'v1'}], repositoryName='target-repo',
+        )
+
+    @patch("cloudlift.deployment.ecr.log_intent")
+    @patch("cloudlift.deployment.ecr.subprocess")
+    @patch("cloudlift.deployment.ecr._create_ecr_client")
+    def test_ensure_image_in_ecr_for_derived_version_with_image_in_ecr(self, mock_create_ecr_client,
+                                                                       mock_subprocess, mock_log_intent):
+        mock_ecr_client = MagicMock()
+        mock_create_ecr_client.return_value = mock_ecr_client
+        mock_ecr_client.batch_get_image.return_value = {'images': [{'imageManifest': 'manifest-01'}]}
+
+        def mock_git_calls(cmd):
+            if " ".join(cmd) == "git rev-list -n 1 HEAD":
+                mock = MagicMock()
+                mock.strip.return_value.decode.return_value = "v1"
+                return mock
+
+            if " ".join(cmd) == "git status --short":
+                mock = MagicMock()
+                mock.decode.return_value = None
+                return mock
+
+            mock = MagicMock()
+            mock.decode.return_value = None
+            return mock
+
+        mock_subprocess.check_output.side_effect = mock_git_calls
+
+        ecr = ECR("aws-region", "target-repo", "acc-id")
+
+        ecr.ensure_image_in_ecr()
+
+        mock_log_intent.assert_called_with('Image found in ECR')
+        mock_ecr_client.put_image.assert_called_with(
+            imageManifest='manifest-01', imageTag='v1', repositoryName='target-repo',
+        )
+
+    @patch("cloudlift.deployment.ecr.subprocess")
+    @patch("cloudlift.deployment.ecr._create_ecr_client")
+    @patch.dict(os.environ, {'ENV': 'test'}, clear=True)
+    def test_ensure_image_in_ecr_for_derived_version_with_image_not_in_ecr(self, mock_create_ecr_client,
+                                                                           mock_subprocess):
+        mock_ecr_client = MagicMock()
+        mock_create_ecr_client.return_value = mock_ecr_client
+        mock_ecr_client.batch_get_image.side_effect = [
+            {'images': []},
+            {'images': [{'imageManifest': 'manifest-01'}]},
+        ]
+
+        mock_ecr_client.get_authorization_token.return_value = {
+            'authorizationData': [
+                {'authorizationToken': 'dXNlcjp0b2tlbgo=', 'proxyEndpoint': 'http://proxy'}
+            ]
+        }
+
+        def mock_git_calls(cmd):
+            if " ".join(cmd) == "git rev-list -n 1 HEAD":
+                mock = MagicMock()
+                mock.strip.return_value.decode.return_value = "v1"
+                return mock
+
+            mock = MagicMock()
+            mock.decode.return_value = None
+            return mock
+
+        mock_subprocess.check_output.side_effect = mock_git_calls
+
+        ecr = ECR("aws-region", "target-repo", "acc-id")
+
+        ecr.ensure_image_in_ecr()
+
+        mock_subprocess.check_call.assert_has_calls([
+            call(['docker', 'tag', 'target-repo:v1', 'acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1']),
+        ])
+
+        self.assertEqual('acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1', ecr.image_uri)
+        mock_ecr_client.put_image.assert_called_with(
+            imageManifest='manifest-01', imageTag='v1', repositoryName='target-repo',
+        )
+
+    @patch("cloudlift.deployment.ecr.subprocess")
+    @patch("cloudlift.deployment.ecr._create_ecr_client")
+    @patch.dict(os.environ, {'ENV': 'test'}, clear=True)
+    def test_ensure_image_in_ecr_with_image_not_in_ecr_built_with_custom_dockerfile(self,
+                                                                                    mock_create_ecr_client,
+                                                                                    mock_subprocess):
+        mock_ecr_client = MagicMock()
+        mock_create_ecr_client.return_value = mock_ecr_client
+        mock_ecr_client.batch_get_image.side_effect = [
+            {'images': []},
+            {'images': [{'imageManifest': 'manifest-01'}]},
+        ]
+
+        mock_ecr_client.get_authorization_token.return_value = {
+            'authorizationData': [
+                {'authorizationToken': 'dXNlcjp0b2tlbgo=', 'proxyEndpoint': 'http://proxy'}
+            ]
+        }
+
+        def mock_git_calls(cmd):
+            if " ".join(cmd) == "git rev-list -n 1 HEAD":
+                mock = MagicMock()
+                mock.strip.return_value.decode.return_value = "v1"
+                return mock
+
+            mock = MagicMock()
+            mock.decode.return_value = None
+            return mock
+
+        mock_subprocess.check_output.side_effect = mock_git_calls
+
+        ecr = ECR("aws-region", "target-repo", "acc-id", dockerfile='CustomDockerFile')
+
+        ecr.ensure_image_in_ecr()
+
+        mock_subprocess.check_call.assert_has_calls([
+            call(['docker', 'tag', 'target-repo:v1-CustomDockerFile',
+                  'acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-CustomDockerFile']),
+        ])
+
+        self.assertEqual('acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-CustomDockerFile', ecr.image_uri)
+        mock_ecr_client.put_image.assert_called_with(
+            imageManifest='manifest-01', imageTag='v1-CustomDockerFile', repositoryName='target-repo',
+        )

@@ -37,7 +37,7 @@ class ServiceCreator(object):
         self.service_configuration = ServiceConfiguration(self.name, self.environment)
         self.env_sample_file = env_sample_file
 
-    def create(self, config_body=None, version=None, build_arg=None, dockerfile=None):
+    def create(self, config_body=None, version=None, build_arg=None, dockerfile=None, ssh=None, cache_from=None):
         '''
             Create and execute CloudFormation template for ECS service
             and related dependencies
@@ -58,6 +58,8 @@ class ServiceCreator(object):
             version=version,
             build_args=build_arg,
             dockerfile=dockerfile,
+            ssh=ssh,
+            cache_from=cache_from,
         )
         ecr.upload_artefacts()
 
