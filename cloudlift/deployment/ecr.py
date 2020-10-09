@@ -164,12 +164,15 @@ commit " + self.version)
             commit_sha = subprocess.check_output(
                 ["git", "rev-list", "-n", "1", version_to_find]
             ).strip().decode("utf-8")
-            log_intent("Found commit SHA " + commit_sha)
+            commit_epoch_time = subprocess.check_output(
+                ["git", "show", "-s", "--format=\"%ct\"", version_to_find]
+            ).strip().decode("utf-8").replace('"', '')
+            derived_version = "{}-{}".format(commit_sha, commit_epoch_time)
             if self.dockerfile is not None and self.dockerfile != DEFAULT_DOCKER_FILE:
-                log_intent("Found custom dockerfile " + self.dockerfile)
-                return "{}-{}".format(commit_sha, self.dockerfile)
+                derived_version = "{}-{}".format(derived_version, self.dockerfile)
 
-            return commit_sha
+            log_intent("Derived version is " + derived_version)
+            return derived_version
         except:
             raise UnrecoverableException("Commit SHA not found. Given version is not a git tag, \
 branch or commit SHA")
