@@ -39,6 +39,60 @@ class TestServiceInformationFetcher(unittest.TestCase):
         self.assertEqual('test-assume-role-arn', sif.ecr_assume_role_arn)
         self.assertEqual('12345', sif.ecr_account_id)
 
+    @patch('builtins.print')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_get_version(self, mock_get_client_for, mock_print):
+        mock_client = MagicMock()
+        mock_get_client_for.return_value = mock_client
+        mock_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+        mock_client.list_tasks.return_value = {'taskArns': ['arn1']}
+        mock_client.describe_tasks.return_value = {'tasks': [{'taskDefinitionArn': 'arn1'}]}
+        mock_client.describe_task_definition.return_value = {'taskDefinition': {
+            'containerDefinitions': [{'image': 'repo:v1-12345'}],
+        }}
+
+        sif = ServiceInformationFetcher(service, env)
+
+        sif.get_version()
+
+        mock_print.assert_called_with('v1-12345')
+
+    @patch('builtins.print')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_get_version_with_image(self, mock_get_client_for, mock_print):
+        mock_client = MagicMock()
+        mock_get_client_for.return_value = mock_client
+        mock_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+        mock_client.list_tasks.return_value = {'taskArns': ['arn1']}
+        mock_client.describe_tasks.return_value = {'tasks': [{'taskDefinitionArn': 'arn1'}]}
+        mock_client.describe_task_definition.return_value = {'taskDefinition': {
+            'containerDefinitions': [{'image': 'repo:v1-12345'}],
+        }}
+
+        sif = ServiceInformationFetcher(service, env)
+
+        sif.get_version(print_image=True)
+
+        mock_print.assert_called_with('repo:v1-12345')
+
+    @patch('builtins.print')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_get_version_with_git(self, mock_get_client_for, mock_print):
+        mock_client = MagicMock()
+        mock_get_client_for.return_value = mock_client
+        mock_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+        mock_client.list_tasks.return_value = {'taskArns': ['arn1']}
+        mock_client.describe_tasks.return_value = {'tasks': [{'taskDefinitionArn': 'arn1'}]}
+        mock_client.describe_task_definition.return_value = {'taskDefinition': {
+            'containerDefinitions': [{'image': 'repo:fedbdf-12345'}],
+        }}
+
+        sif = ServiceInformationFetcher(service, env)
+
+        sif.get_version(print_git=True)
+
+        mock_print.assert_called_with('fedbdf')
+
 
 def _describe_stacks_output():
     return {'Stacks': [{
