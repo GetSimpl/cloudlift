@@ -270,7 +270,7 @@ service is down',
 
         td = TaskDefinition(
             service_name + "TaskDefinition",
-            Family=service_name + "Family",
+            Family=self.env + service_name + "Family",
             ContainerDefinitions=container_definitions,
             TaskRoleArn=Ref(task_role),
             ExecutionRoleArn=Ref(task_execution_role),
