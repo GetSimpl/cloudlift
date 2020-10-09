@@ -7,6 +7,7 @@ from cloudlift.exceptions import UnrecoverableException
 from cloudlift.deployment.ecs import DeployAction, EcsClient
 from cloudlift.config import get_region_for_environment
 from stringcase import spinalcase
+from re import search
 
 
 class ServiceInformationFetcher(object):
@@ -86,12 +87,17 @@ class ServiceInformationFetcher(object):
             instance_ids[service] = service_instance_ids
         return instance_ids
 
-    def get_version(self, print_image):
+    def get_version(self, print_image=False, print_git=False):
         image = self._fetch_current_image_uri()
+        tag = image.split(':').pop()
         if print_image:
             print(image)
-        else:
-            print(image.split(':').pop())
+            return
+        if print_git:
+            print(search("^[0-9a-f]{5,40}", tag).group())
+            return
+
+        print(tag)
 
     def _fetch_current_image_uri(self):
         ecs_client = get_client_for('ecs', self.environment)

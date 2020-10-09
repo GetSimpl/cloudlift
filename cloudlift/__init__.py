@@ -167,8 +167,9 @@ from commit hash")
 @_require_environment
 @_require_name
 @click.option('--image', is_flag=True, help='Print image with version')
-def get_version(name, environment, image):
-    ServiceInformationFetcher(name, environment).get_version(image)
+@click.option('--git', is_flag=True, help='Prints the git revision part of the image')
+def get_version(name, environment, image, git):
+    ServiceInformationFetcher(name, environment).get_version(print_image=image, print_git=git)
 
 
 @cli.command(help="Start SSH session in instance running a current \
