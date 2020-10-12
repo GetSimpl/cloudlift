@@ -66,6 +66,7 @@ commit " + self.version)
             )
         except Exception:
             pass
+        self._add_image_tag(self.version, f'{self.version}-{self._git_epoch_time()}')
 
     def add_tags(self, additional_tags):
         for new_tag in additional_tags:
@@ -157,6 +158,11 @@ commit " + self.version)
                                "-p", auth_token, ecr_url])
         log_intent('Docker login to ECR succeeded.')
 
+    def _git_epoch_time(self, git_version=None):
+        return subprocess.check_output(
+            ["git", "show", "-s", "--format=\"%ct\"", git_version or "HEAD"]
+        ).strip().decode("utf-8").replace('"', '')
+
     def _derive_version(self, git_version=None):
         log_intent("Finding commit SHA")
         try:
@@ -164,10 +170,8 @@ commit " + self.version)
             commit_sha = subprocess.check_output(
                 ["git", "rev-list", "-n", "1", version_to_find]
             ).strip().decode("utf-8")
-            commit_epoch_time = subprocess.check_output(
-                ["git", "show", "-s", "--format=\"%ct\"", version_to_find]
-            ).strip().decode("utf-8").replace('"', '')
-            derived_version = "{}-{}".format(commit_sha, commit_epoch_time)
+
+            derived_version = commit_sha
             if self.dockerfile is not None and self.dockerfile != DEFAULT_DOCKER_FILE:
                 derived_version = "{}-{}".format(derived_version, self.dockerfile)
 
@@ -201,6 +205,7 @@ branch or commit SHA")
                 imageTag=new_tag,
                 imageManifest=image_manifest
             )
+            log_intent(f'Added additional tag: {new_tag}')
         except:
             log_err("Unable to add additional tag " + str(new_tag))
 

@@ -172,10 +172,11 @@ class TestECR(TestCase):
 
         ecr.ensure_image_in_ecr()
 
-        mock_log_intent.assert_called_with('Image found in ECR')
-        mock_ecr_client.put_image.assert_called_with(
-            imageManifest='manifest-01', imageTag='v1-1602236172', repositoryName='target-repo',
-        )
+        mock_log_intent.assert_has_calls([call('Image found in ECR')])
+        mock_ecr_client.put_image.assert_has_calls([
+            call(imageManifest='manifest-01', imageTag='v1', repositoryName='target-repo'),
+            call(imageManifest='manifest-01', imageTag='v1-1602236172', repositoryName='target-repo'),
+        ])
 
     @patch("cloudlift.deployment.ecr.subprocess")
     @patch("cloudlift.deployment.ecr._create_ecr_client")
@@ -186,6 +187,7 @@ class TestECR(TestCase):
         mock_create_ecr_client.return_value = mock_ecr_client
         mock_ecr_client.batch_get_image.side_effect = [
             {'images': []},
+            {'images': [{'imageManifest': 'manifest-01'}]},
             {'images': [{'imageManifest': 'manifest-01'}]},
         ]
 
@@ -201,13 +203,16 @@ class TestECR(TestCase):
 
         ecr.ensure_image_in_ecr()
 
-        self.assertEqual('acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-1602236172', ecr.image_uri)
+        self.assertEqual('acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1', ecr.image_uri)
         mock_subprocess.check_call.assert_has_calls([
-            call(['docker', 'tag', 'target-repo:v1-1602236172',
-                  'acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-1602236172']),
+            call(['docker', 'tag', 'target-repo:v1',
+                  'acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1']),
         ])
-        mock_ecr_client.put_image.assert_called_with(
-            imageManifest='manifest-01', imageTag='v1-1602236172', repositoryName='target-repo',
+        mock_ecr_client.put_image.assert_has_calls([
+            call(imageManifest='manifest-01', imageTag='v1', repositoryName='target-repo'),
+            call(imageManifest='manifest-01', imageTag='v1-1602236172', repositoryName='target-repo'),
+        ]
+
         )
 
     @patch("cloudlift.deployment.ecr.subprocess")
@@ -236,13 +241,13 @@ class TestECR(TestCase):
         ecr.ensure_image_in_ecr()
 
         mock_subprocess.check_call.assert_has_calls([
-            call(['docker', 'tag', 'target-repo:v1-1602236172-CustomDockerFile',
-                  'acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-1602236172-CustomDockerFile']),
+            call(['docker', 'tag', 'target-repo:v1-CustomDockerFile',
+                  'acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-CustomDockerFile']),
         ])
 
-        self.assertEqual('acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-1602236172-CustomDockerFile', ecr.image_uri)
+        self.assertEqual('acc-id.dkr.ecr.aws-region.amazonaws.com/target-repo:v1-CustomDockerFile', ecr.image_uri)
         mock_ecr_client.put_image.assert_called_with(
-            imageManifest='manifest-01', imageTag='v1-1602236172-CustomDockerFile', repositoryName='target-repo',
+            imageManifest='manifest-01', imageTag='v1-CustomDockerFile', repositoryName='target-repo',
         )
 
 
