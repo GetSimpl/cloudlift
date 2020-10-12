@@ -20,9 +20,11 @@ DEPLOYMENT_CONCURRENCY = int(os.environ.get('CLOUDLIFT_DEPLOYMENT_CONCURRENCY', 
 
 class ServiceUpdater(object):
     def __init__(self, name, environment='', env_sample_file='', timeout_seconds=None, version=None,
-                 build_args=None, dockerfile=None, working_dir='.', ssh=None, cache_from=None):
+                 build_args=None, dockerfile=None, ssh=None, cache_from=None,
+                 deployment_identifier=None, working_dir='.'):
         self.name = name
         self.environment = environment
+        self.deployment_identifier = deployment_identifier
         self.env_sample_file = env_sample_file
         self.timeout_seconds = timeout_seconds
         self.version = version
@@ -62,13 +64,15 @@ class ServiceUpdater(object):
                       deploy_version_tag=self.version,
                       service_name=self.name, sample_env_file_path=self.env_sample_file,
                       timeout_seconds=self.timeout_seconds, env_name=self.environment,
-                      complete_image_uri=image_url)
+                      complete_image_uri=image_url,
+                      deployment_identifier=self.deployment_identifier)
         self.run_job_for_all_services("Deploy", target, kwargs)
 
     def revert(self):
-        target = deployer.revert_last_deployment
+        target = deployer.revert_deployment
         ecs_client = EcsClient(None, None, self.region)
-        kwargs = dict(client=ecs_client, cluster_name=self.cluster_name, timeout_seconds=self.timeout_seconds)
+        kwargs = dict(client=ecs_client, cluster_name=self.cluster_name, timeout_seconds=self.timeout_seconds,
+                      deployment_identifier=self.deployment_identifier)
         self.run_job_for_all_services("Revert", target, kwargs)
 
     def upload_to_ecr(self, additional_tags):

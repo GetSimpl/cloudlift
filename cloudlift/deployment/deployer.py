@@ -18,18 +18,18 @@ def find_essential_container(container_definitions):
     raise UnrecoverableException('no essential containers found')
 
 
-def revert_last_deployment(client, cluster_name, ecs_service_name, color, timeout_seconds, **kwargs):
+def revert_deployment(client, cluster_name, ecs_service_name, color, timeout_seconds, deployment_identifier, **kwargs):
     deployment = DeployAction(client, cluster_name, ecs_service_name)
-    previous_task_defn = deployment.get_previous_task_definition(deployment.service)
+    previous_task_defn = deployment.get_previous_task_definition(deployment.service,deployment_identifier)
     deploy_task_definition(client, previous_task_defn, cluster_name, ecs_service_name, color, timeout_seconds, 'Revert')
 
 
-def deploy_new_version(client, cluster_name, ecs_service_name,
+def deploy_new_version(client, cluster_name, ecs_service_name, deployment_identifier,
                        deploy_version_tag, service_name, sample_env_file_path,
                        timeout_seconds, env_name, secrets_name, color='white', complete_image_uri=None):
     task_definition = create_new_task_definition(color, complete_image_uri, deploy_version_tag, ecs_service_name,
                                                  env_name, sample_env_file_path, secrets_name, service_name, client,
-                                                 cluster_name)
+                                                 cluster_name,deployment_identifier)
     deploy_task_definition(client, task_definition, cluster_name, ecs_service_name, color, timeout_seconds, 'Deploy')
 
 
@@ -49,7 +49,7 @@ def deploy_task_definition(client, task_definition, cluster_name, ecs_service_na
 
 
 def create_new_task_definition(color, complete_image_uri, deploy_version_tag, ecs_service_name, env_name,
-                               sample_env_file_path, secrets_name, service_name, client, cluster_name):
+                               sample_env_file_path, secrets_name, service_name, client, cluster_name,deployment_identifier):
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     task_definition = deployment.get_current_task_definition(deployment.service)
     essential_container = find_essential_container(task_definition[u'containerDefinitions'])
@@ -63,7 +63,7 @@ def create_new_task_definition(color, complete_image_uri, deploy_version_tag, ec
         env_config = container_configurations.get(container['name'], {})
         task_definition.apply_container_environment_and_secrets(container, env_config)
     print_task_diff(ecs_service_name, task_definition.diff, color)
-    new_task_definition = deployment.update_task_definition(task_definition)
+    new_task_definition = deployment.update_task_definition(task_definition,deployment_identifier)
     return new_task_definition
 
 

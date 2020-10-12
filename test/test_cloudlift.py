@@ -102,14 +102,10 @@ def test_cloudlift_can_revert_service(keep_resources):
     cfn_client = boto3.client('cloudformation')
     delete_stack(cfn_client, stack_name, wait=True)
     create_service(mocked_config)
-    deploy_service()
-    initial_task_definition_arn = get_current_task_definition_arn(cfn_client, stack_name)
-    deploy_service()  # redeploying service because revert of first deploy doesn't work.
-    deployed_task_definition_arn = get_current_task_definition_arn(cfn_client, stack_name)
-    revert_service()
-    reverted_task_definition_arn = get_current_task_definition_arn(cfn_client, stack_name)
-    assert initial_task_definition_arn == reverted_task_definition_arn
-    assert initial_task_definition_arn != deployed_task_definition_arn
+    deploy_service(deployment_identifier='test')
+    deploy_service(deployment_identifier='pest')  # redeploying service because revert of first deploy doesn't work.
+    revert_service(deployment_identifier='test')
+    assert get_current_task_definition_deployment_identifier(cfn_client, stack_name) == 'test'
     if not keep_resources:
         delete_stack(cfn_client, stack_name, wait=False)
 
@@ -151,23 +147,28 @@ def validate_service(cfn_client, stack_name, expected_string):
     assert content_matched
 
 
-def deploy_service():
+def deploy_service(deployment_identifier):
     os.chdir(f'{TEST_DIR}/dummy')
-    ServiceUpdater(service_name, environment_name, "env.sample", timeout_seconds=600).run()
+    ServiceUpdater(service_name, environment_name, "env.sample", timeout_seconds=600,
+                   deployment_identifier=deployment_identifier).run()
 
 
-def revert_service():
+def revert_service(deployment_identifier):
     os.chdir(f'{TEST_DIR}/dummy')
-    ServiceUpdater(service_name, environment_name, timeout_seconds=600).revert()
+    ServiceUpdater(service_name, environment_name, timeout_seconds=600,
+                   deployment_identifier=deployment_identifier).revert()
 
 
-def get_current_task_definition_arn(cfn_client, stack_name):
+def get_current_task_definition_deployment_identifier(cfn_client, stack_name):
     service_arn = cfn_client.describe_stack_resource(StackName=stack_name, LogicalResourceId='Dummy')[
         'StackResourceDetail']['PhysicalResourceId']
     ecs_client = boto3.client('ecs')
-    return ecs_client.describe_services(cluster='cluster-{}'.format(environment_name),
-                                        services=[service_arn])['services'][0]['taskDefinition']
-
+    td = ecs_client.describe_services(cluster='cluster-{}'.format(environment_name),
+                                      services=[service_arn])['services'][0]['taskDefinition']
+    tags = ecs_client.describe_task_definition(taskDefinition=td, include=[
+        'TAGS',
+    ])['tags']
+    return {tag['key']: tag['value'] for tag in tags}.get('deployment_identifier')
 
 def create_service(mocked_config):
     os.chdir(f'{TEST_DIR}/dummy')

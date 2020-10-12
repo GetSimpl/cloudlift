@@ -121,6 +121,8 @@ def edit_config(name, environment, sidecar):
 @cli.command()
 @_require_environment
 @_require_name
+@click.option('--deployment_identifier', type=str,
+              help='Unique identifier for deployment which can be used for reverting')
 @click.option('--timeout_seconds', default=600, help='The deployment timeout')
 @click.option('--version', default=None,
               help='local image version tag')
@@ -132,7 +134,8 @@ def edit_config(name, environment, sidecar):
 @click.option('--ssh', default=None, help='SSH agent socket or keys to expose to the docker build')
 @click.option('--cache-from', multiple=True, help='Images to consider as cache sources')
 def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile, env_sample_file, ssh,
-                   cache_from):
+                   cache_from,
+                   deployment_identifier):
     ServiceUpdater(
         name,
         environment=environment,
@@ -142,16 +145,19 @@ def deploy_service(name, environment, timeout_seconds, version, build_arg, docke
         build_args=dict(build_arg),
         dockerfile=dockerfile,
         ssh=ssh,
-        cache_from=list(cache_from),
+        cache_from=list(cache_from), deployment_identifier=deployment_identifier
     ).run()
 
 
 @cli.command()
 @_require_environment
 @_require_name
+@click.option('--deployment_identifier', type=str,
+              help='Unique identifier for deployment which can be used for reverting')
 @click.option('--timeout_seconds', default=600, help='The deployment timeout')
-def revert_service(name, environment, timeout_seconds):
-    ServiceUpdater(name, environment, timeout_seconds=timeout_seconds).revert()
+def revert_service(name, environment, timeout_seconds, deployment_identifier):
+    ServiceUpdater(name, environment, deployment_identifier=deployment_identifier,
+                   timeout_seconds=timeout_seconds).revert()
 
 
 @cli.command()
