@@ -147,7 +147,23 @@ class TestECR(TestCase):
         mock_ecr_client = MagicMock()
         mock_create_ecr_client.return_value = mock_ecr_client
         mock_ecr_client.batch_get_image.return_value = {'images': 'image-01'}
-        mock_subprocess.check_output.side_effect = Exception('mocked error')
+
+        def mock_check_output(cmd):
+            if " ".join(cmd) == "git rev-list -n 1 HEAD":
+                mock = MagicMock()
+                mock.strip.return_value.decode.return_value = Exception('mocked error')
+                return mock
+
+            if " ".join(cmd) == 'git show -s --format="%ct" HEAD':
+                mock = MagicMock()
+                mock.strip.return_value.decode.return_value = '"1602236172"'
+                return mock
+
+            mock = MagicMock()
+            mock.decode.return_value = None
+            return mock
+
+        mock_subprocess.check_output.side_effect = mock_check_output
 
         ecr = ECR("aws-region", "target-repo", "acc-id", version="v1")
 
