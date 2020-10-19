@@ -71,31 +71,6 @@ class ServiceTemplateGenerator(TemplateGenerator):
             self._add_service(ecs_service_name, config)
 
     def _add_service_alarms(self, svc):
-        ecs_high_cpu_alarm = Alarm(
-            'EcsHighCPUAlarm' + str(svc.name),
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(
-                    Name='ClusterName',
-                    Value=self.cluster_name
-                ),
-                MetricDimension(
-                    Name='ServiceName',
-                    Value=GetAtt(svc, 'Name')
-                )],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            OKActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Alarm if CPU too high or metric disappears \
-indicating instance is down',
-            Namespace='AWS/ECS',
-            Period=300,
-            ComparisonOperator='GreaterThanThreshold',
-            Statistic='Average',
-            Threshold='80',
-            MetricName='CPUUtilization',
-            TreatMissingData='breaching'
-        )
-        self.template.add_resource(ecs_high_cpu_alarm)
         cloudlift_timedout_deployments_alarm = Alarm(
             'FailedCloudliftDeployments' + str(svc.name),
             EvaluationPeriods=1,

@@ -259,50 +259,6 @@ Resources:
       Path: /
       RoleName: !Sub 'ecs-svc-${AWS::StackName}-${AWS::Region}'
     Type: AWS::IAM::Role
-  EcsHighCPUAlarmDummyFargateRunSidekiqsh:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Alarm if CPU too high or metric disappears indicating instance
-        is down
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
-      EvaluationPeriods: 1
-      MetricName: CPUUtilization
-      Namespace: AWS/ECS
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 300
-      Statistic: Average
-      Threshold: '80'
-      TreatMissingData: breaching
-    Type: AWS::CloudWatch::Alarm
-  EcsHighCPUAlarmDummyFargateService:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Alarm if CPU too high or metric disappears indicating instance
-        is down
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyFargateService.Name'
-      EvaluationPeriods: 1
-      MetricName: CPUUtilization
-      Namespace: AWS/ECS
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 300
-      Statistic: Average
-      Threshold: '80'
-      TreatMissingData: breaching
-    Type: AWS::CloudWatch::Alarm
   EcsNoRunningTasksAlarmDummyFargateRunSidekiqsh:
     Properties:
       AlarmActions:
