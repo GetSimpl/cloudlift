@@ -268,9 +268,10 @@ service is down',
             for constraint in config['placement_constraints']
         ] if 'placement_constraints' in config else []
 
+        task_family_name = f'{self.env}{service_name}Family'[:255]
         td = TaskDefinition(
             service_name + "TaskDefinition",
-            Family=service_name + "Family",
+            Family=task_family_name,
             ContainerDefinitions=container_definitions,
             TaskRoleArn=Ref(task_role),
             ExecutionRoleArn=Ref(task_execution_role),

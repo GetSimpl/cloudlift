@@ -20,6 +20,7 @@ from botocore.config import Config
 from dateutil.tz.tz import tzlocal
 from cloudlift.exceptions import UnrecoverableException
 
+
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
                  region=None, profile=None):
@@ -38,6 +39,14 @@ class EcsClient(object):
             cluster=cluster_name,
             services=[service_name]
         )
+
+    def list_task_definitions(self, family):
+        response = self.boto.list_task_definitions(familyPrefix=family, status='ACTIVE', sort='DESC')
+        return response.get('taskDefinitionArns', []), response.get('nextToken', None)
+
+    def list_task_definitions_for_next_token(self, next_token):
+        response = self.boto.list_task_definitions(next_token=next_token)
+        return response.get('taskDefinitionArns', []), response.get('nextToken', None)
 
     def describe_task_definition(self, task_definition_arn):
         try:
@@ -396,11 +405,27 @@ class EcsAction(object):
         task_definition_arn = service.task_definition
         return self.getEcsTaskDefinitionByArn(task_definition_arn)
 
-    def get_previous_task_definition(self, service):
-        task_definition_arn = self.get_current_task_definition(service).tags.get('previous_task_definition_arn')
-        if task_definition_arn is None:
-            raise UnrecoverableException('previous_task_definition_arn tag does not exist for current task definition')
-        return self.getEcsTaskDefinitionByArn(task_definition_arn)
+    def _find_task_definition_by_deployment_identifier(self, task_definition_arns, deployment_identifier):
+        for task_definition_arn in task_definition_arns:
+            ecs_task_definition = self.getEcsTaskDefinitionByArn(task_definition_arn)
+            if ecs_task_definition.tags.get('deployment_identifier') == deployment_identifier:
+                return ecs_task_definition
+        return None
+
+    def get_task_definition_by_deployment_identifier(self, service, deployment_identifier):
+        current_task_definition = self.get_current_task_definition(service)
+        task_definition_arns, next_token = self._client.list_task_definitions(family=current_task_definition.family)
+        td = self._find_task_definition_by_deployment_identifier(task_definition_arns, deployment_identifier)
+        if td:
+            return td
+
+        while next_token is not None:
+            task_definition_arns, next_token = self._client.list_task_definitions_for_next_token(next_token=next_token)
+            td = self._find_task_definition_by_deployment_identifier(task_definition_arns, deployment_identifier)
+            if td:
+                return td
+
+        raise UnrecoverableException(f'task definition does not exist for deployment_identifier: {deployment_identifier}')
 
     def getEcsTaskDefinitionByArn(self, task_definition_arn):
         task_definition_payload = self._client.describe_task_definition(
@@ -421,7 +446,7 @@ class EcsAction(object):
         )
         return task_definition
 
-    def update_task_definition(self, task_definition):
+    def update_task_definition(self, task_definition, deployment_identifier):
         fargate_td = {}
         if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
             fargate_td = {
@@ -430,12 +455,13 @@ class EcsAction(object):
                 'cpu': task_definition.cpu or u'',
                 'memory': task_definition.memory or u'',
             }
+
         tags = [
             {
-                'key': 'previous_task_definition_arn',
-                'value': task_definition.arn
+                'key': 'deployment_identifier',
+                'value': deployment_identifier
             },
-        ]
+        ] if deployment_identifier is not None else []
 
         response = self._client.register_task_definition(
             family=task_definition.family,

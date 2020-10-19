@@ -111,7 +111,7 @@ Resources:
               ValueFrom: arn_secret_label_v1
       Cpu: '256'
       ExecutionRoleArn: !Ref 'DummyFargateRunSidekiqshTaskExecutionRole'
-      Family: DummyFargateRunSidekiqshFamily
+      Family: stagingDummyFargateRunSidekiqshFamily
       Memory: '512'
       NetworkMode: awsvpc
       PlacementConstraints: []
@@ -206,7 +206,7 @@ Resources:
               ValueFrom: arn_secret_label_v1
       Cpu: '256'
       ExecutionRoleArn: !Ref 'DummyFargateServiceTaskExecutionRole'
-      Family: DummyFargateServiceFamily
+      Family: stagingDummyFargateServiceFamily
       Memory: '512'
       NetworkMode: awsvpc
       PlacementConstraints: []

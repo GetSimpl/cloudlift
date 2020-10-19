@@ -128,7 +128,7 @@ Resources:
             - Name: LABEL
               ValueFrom: arn_secret_label_v1
       ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
-      Family: DummyFamily
+      Family: stagingDummyFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRole'
     Type: AWS::ECS::TaskDefinition
@@ -228,7 +228,7 @@ Resources:
             - Name: LABEL
               ValueFrom: arn_secret_label_v1
       ExecutionRoleArn: !Ref 'DummyWithCustomListenerTaskExecutionRole'
-      Family: DummyWithCustomListenerFamily
+      Family: stagingDummyWithCustomListenerFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyWithCustomListenerRole'
     Type: AWS::ECS::TaskDefinition

@@ -120,7 +120,7 @@ Resources:
             - ContainerPort: 7003
           Secrets: []
       ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
-      Family: DummyFamily
+      Family: stagingDummyFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRole'
     Type: AWS::ECS::TaskDefinition

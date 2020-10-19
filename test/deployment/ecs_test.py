@@ -1,5 +1,8 @@
 import unittest
-from cloudlift.deployment.ecs import EcsTaskDefinition
+from cloudlift.deployment.ecs import EcsTaskDefinition, EcsAction, EcsClient
+from cloudlift.exceptions import UnrecoverableException
+
+from mock import MagicMock, patch, call
 
 
 class TestEcsTaskDefinition(unittest.TestCase):
@@ -76,6 +79,98 @@ class TestEcsTaskDefinition(unittest.TestCase):
         self.assertEqual(diff.field, 'secrets')
         self.assertEqual(diff.value, {"LABEL": 'arn:v2'})
         self.assertEqual(diff.old_value, {"LABEL": 'arn:v1'})
+
+
+class TestEcsAction(unittest.TestCase):
+    def test_get_task_definition_by_deployment_identifier(self):
+        cluster_name = "cluster-1"
+        service_name = MagicMock()
+        service_name.task_definition.return_value.family.return_value = "prodServiceAFamily"
+        client = MagicMock()
+        client.list_task_definitions.return_value = (['arn1', 'arn2', 'arn3', 'arn4'], None)
+
+        def mock_describe_task_definition(task_definition_arn):
+            if task_definition_arn == 'arn3':
+                return {'taskDefinition': {'taskDefinitionArn': task_definition_arn}, 'tags': [
+                    {'key': 'deployment_identifier', 'value': 'id-0'},
+                ]}
+            else:
+                return {'taskDefinition': {'taskDefinitionArn': task_definition_arn}, 'tags': {}}
+
+        client.describe_task_definition.side_effect = mock_describe_task_definition
+
+        action = EcsAction(client, cluster_name, service_name)
+
+        actual_td = action.get_task_definition_by_deployment_identifier(service=service_name, deployment_identifier="id-0")
+
+        self.assertEqual('arn3', actual_td.arn)
+        self.assertEqual({'deployment_identifier': 'id-0'}, actual_td.tags)
+        client.list_task_definitions.assert_called_with = 'prodServiceAFamily'
+
+    @patch("cloudlift.deployment.ecs.Session")
+    def test_get_task_definition_by_deployment_identifier_with_next_token(self, mock_session):
+        cluster_name = "cluster-1"
+        service_name = MagicMock()
+        service_name.task_definition.return_value.family.return_value = "prodServiceAFamily"
+        mock_boto_client = MagicMock()
+        mock_session.return_value.client.return_value = mock_boto_client
+
+        client = EcsClient()
+
+        mock_boto_client.list_task_definitions.side_effect = [
+            {'taskDefinitionArns': ['arn1', 'arn2'], 'nextToken': 'token1'},
+            {'taskDefinitionArns': ['arn3', 'arn3']},
+        ]
+
+        def mock_describe_task_definition(taskDefinition, include):
+            if taskDefinition == 'arn3':
+                return {'taskDefinition': {'taskDefinitionArn': taskDefinition}, 'tags': [
+                    {'key': 'deployment_identifier', 'value': 'id-0'},
+                ]}
+            else:
+                return {'taskDefinition': {'taskDefinitionArn': taskDefinition}, 'tags': {}}
+
+        mock_boto_client.describe_task_definition.side_effect = mock_describe_task_definition
+
+        action = EcsAction(client, cluster_name, service_name)
+
+        actual_td = action.get_task_definition_by_deployment_identifier(service=service_name, deployment_identifier="id-0")
+
+        self.assertEqual('arn3', actual_td.arn)
+        self.assertEqual({'deployment_identifier': 'id-0'}, actual_td.tags)
+        mock_boto_client.list_task_definitions.assert_has_calls([
+            call(familyPrefix=None, status='ACTIVE', sort='DESC'),
+            call(next_token='token1')
+        ])
+
+    @patch("cloudlift.deployment.ecs.Session")
+    def test_get_task_definition_by_deployment_identifier_with_no_matches(self, mock_session):
+        cluster_name = "cluster-1"
+        service_name = MagicMock()
+        service_name.task_definition.return_value.family.return_value = "stgServiceAFamily"
+        mock_boto_client = MagicMock()
+        mock_session.return_value.client.return_value = mock_boto_client
+
+        client = EcsClient()
+
+        mock_boto_client.list_task_definitions.side_effect = [
+            {'taskDefinitionArns': ['arn1', 'arn2'], 'nextToken': 'token1'},
+            {'taskDefinitionArns': ['arn3', 'arn3']},
+        ]
+
+        def mock_describe_task_definition(taskDefinition, include):
+            return {'taskDefinition': {'taskDefinitionArn': taskDefinition}, 'tags': {}}
+
+        mock_boto_client.describe_task_definition.side_effect = mock_describe_task_definition
+
+        action = EcsAction(client, cluster_name, service_name)
+
+        with self.assertRaises(UnrecoverableException) as error:
+            action.get_task_definition_by_deployment_identifier(service=service_name,
+                                                                        deployment_identifier="id-0")
+
+        self.assertEqual("task definition does not exist for deployment_identifier: id-0", error.exception.value)
+
 
 
 def _build_task_definition(container_defn):

@@ -144,7 +144,7 @@ Resources:
             - Name: LABEL
               ValueFrom: arn_secret_label_v1
       ExecutionRoleArn: !Ref 'DummyRunSidekiqshTaskExecutionRole'
-      Family: DummyRunSidekiqshFamily
+      Family: stagingDummyRunSidekiqshFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRunSidekiqshRole'
     Type: AWS::ECS::TaskDefinition
@@ -214,7 +214,7 @@ Resources:
           MemoryReservation: 256
           Name: redisContainer
       ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
-      Family: DummyFamily
+      Family: stagingDummyFamily
       PlacementConstraints: []
       TaskRoleArn: !Ref 'DummyRole'
     Type: AWS::ECS::TaskDefinition

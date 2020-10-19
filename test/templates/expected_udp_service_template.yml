@@ -198,7 +198,7 @@ Resources:
             - Name: LABEL
               ValueFrom: arn_secret_label_v1
       ExecutionRoleArn: !Ref 'FreeradiusServerTaskExecutionRole'
-      Family: FreeradiusServerFamily
+      Family: stagingFreeradiusServerFamily
       NetworkMode: awsvpc
       PlacementConstraints: []
       TaskRoleArn: !Ref 'FreeradiusServerRole'
