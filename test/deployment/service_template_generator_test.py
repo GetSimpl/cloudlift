@@ -212,6 +212,15 @@ class TestServiceTemplateGenerator(TestCase):
                         "container_port": Decimal(7003),
                         "restrict_access_to": ["0.0.0.0/0"],
                         "health_check_path": "/elb-check"
+                    },
+                    "autoscaling": {
+                        "max_capacity": 10,
+                        "min_capacity": 5,
+                        "request_count_per_target": {
+                            "target_value": 10,
+                            "scale_in_cool_down_seconds": 120,
+                            "scale_out_cool_down_seconds": 60
+                        }
                     }
                 },
             }
@@ -261,11 +270,21 @@ class TestServiceTemplateGenerator(TestCase):
                         "internal": False,
                         "alb": {
                             "create_new": False,
-                            "host": "abc.xyz.com"
+                            "host": "abc.xyz.com",
+                            "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"
                         },
                         "container_port": Decimal(7003),
                         "restrict_access_to": ["0.0.0.0/0"],
                         "health_check_path": "/elb-check"
+                    },
+                    "autoscaling": {
+                        "max_capacity": 10,
+                        "min_capacity": 5,
+                        "request_count_per_target": {
+                            "target_value": 10,
+                            "scale_in_cool_down_seconds": 120,
+                            "scale_out_cool_down_seconds": 60
+                        }
                     }
                 },
                 "DummyWithCustomListener": {
@@ -326,6 +345,7 @@ class TestServiceTemplateGenerator(TestCase):
              call(Marker='/next/marker')])
         with(open(template_file_path)) as expected_template_file:
             assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
+
 
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')

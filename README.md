@@ -236,6 +236,31 @@ An example service using `container_health_check`
 }
 ```
 
+`autoscaling` allows to configure ScalingPolicy for ECS Service.
+
+Supported autoscaling policies `request_count_per_target`. It works only if there is a `http_interface`
+
+```json
+{
+  "services": {
+    "Test123": {
+      "command": null,
+      "memory_reservation": 100,
+      "http_interface": {},
+      "autoscaling": {
+        "max_capacity": 10,
+        "min_capacity": 5,
+        "request_count_per_target": {
+          "target_value": 10,
+          "scale_in_cool_down_seconds": 120,
+          "scale_out_cool_down_seconds": 60
+        }
+      }
+    }
+  }
+}
+```
+
 #### 3. Deploy service
 
 This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS

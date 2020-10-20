@@ -8,7 +8,7 @@ from awacs.secretsmanager import GetSecretValue
 from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
 from stringcase import pascalcase
-from troposphere import GetAtt, Output, Parameter, Ref, Sub
+from troposphere import GetAtt, Output, Parameter, Ref, Sub, Split, Select
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
@@ -26,7 +26,10 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroupAttribute)
 from troposphere.elasticloadbalancingv2 import SubnetMapping
 from troposphere.iam import Role, Policy
-
+from troposphere.applicationautoscaling import ScalingPolicy, TargetTrackingScalingPolicyConfiguration, \
+    PredefinedMetricSpecification
+from troposphere.applicationautoscaling import ScalableTarget
+from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_account_id
 from cloudlift.config.region import get_environment_level_alb_listener, get_client_for
@@ -124,6 +127,85 @@ service is down',
             TreatMissingData='breaching'
         )
         self.template.add_resource(ecs_no_running_tasks_alarm)
+
+    def _add_scalable_target(self, ecs_svc, config):
+        resource_id = Sub('service/' + self.cluster_name + '/' + '${service_name}',
+                          service_name=GetAtt(ecs_svc, "Name"))
+        scalable_target = ScalableTarget(
+            str(ecs_svc.name) + "ScalableTarget",
+            MinCapacity=int(config.get('min_capacity')),
+            MaxCapacity=int(config.get('max_capacity')),
+            ResourceId=resource_id,
+            RoleARN=f'arn:aws:iam::{self.account_id}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService',
+            ScalableDimension='ecs:service:DesiredCount',
+            ServiceNamespace='ecs'
+        )
+        self.template.add_resource(scalable_target)
+        return scalable_target
+
+    def _add_scalable_target_alarms(self, ecs_svc, config):
+        max_scalable_target_alarm = Alarm(
+            'MaxScalableTargetAlarm',
+            EvaluationPeriods=1,
+            Dimensions=[
+                MetricDimension(
+                    Name='ServiceName',
+                    Value=GetAtt(ecs_svc, 'Name')
+                ),
+                MetricDimension(
+                    Name='ClusterName',
+                    Value=self.cluster_name
+                )
+            ],
+            AlarmActions=[Ref(self.notification_sns_arn)],
+            OKActions=[Ref(self.notification_sns_arn)],
+            AlarmDescription='Triggers if desired task count of a service is equal to max_capacity,' +
+                             ' review auto scaling configuration if this alarm triggers',
+            Namespace='ECS/ContainerInsights',
+            Period=300,
+            ComparisonOperator='GreaterThanOrEqualToThreshold',
+            Statistic='Maximum',
+            Threshold=int(config.get('max_capacity')),
+            MetricName='DesiredTaskCount',
+            TreatMissingData='notBreaching'
+        )
+        self.template.add_resource(max_scalable_target_alarm)
+
+    def _add_alb_request_count_scaling_policy(self, ecs_svc, alb_arn, target_group, config, scalable_target):
+        try:
+            target_value = int(config.get('target_value'))
+            scale_in_cool_down = int(config.get('scale_in_cool_down_seconds'))
+            scale_out_cool_down = int(config.get('scale_out_cool_down_seconds'))
+        except TypeError as e:
+            raise UnrecoverableException('The following value has to be integer: {}'.format(e))
+
+        if type(alb_arn) == str:
+            alb_name = alb_arn.split('/')[2]
+            alb_id = alb_arn.split('/')[3]
+        else:
+            alb_name = Select(2, Split('/', Ref(alb_arn)))
+            alb_id = Select(3, Split('/', Ref(alb_arn)))
+
+        tg_name = Select(1, Split('/', Ref(target_group)))
+        tg_id = Select(2, Split('/', Ref(target_group)))
+        self.template.add_resource(
+            ScalingPolicy(
+                str(ecs_svc.name) + 'ALBRequestCountPerTargetScalingPolicy',
+                PolicyName='requestCountPerTarget',
+                PolicyType='TargetTrackingScaling',
+                TargetTrackingScalingPolicyConfiguration=TargetTrackingScalingPolicyConfiguration(
+                    ScaleInCooldown=scale_in_cool_down,
+                    ScaleOutCooldown=scale_out_cool_down,
+                    TargetValue=target_value,
+                    PredefinedMetricSpecification=PredefinedMetricSpecification(
+                        PredefinedMetricType='ALBRequestCountPerTarget',
+                        ResourceLabel=Sub("app/${alb_name}/${alb_id}/targetgroup/${tg_name}/${tg_id}", alb_id=alb_id,
+                                          alb_name=alb_name, tg_name=tg_name, tg_id=tg_id)
+                    )
+                ),
+                ScalingTargetId=Ref(scalable_target)
+            )
+        )
 
     def _add_service(self, service_name, config):
         launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
@@ -255,11 +337,13 @@ service is down',
         )
 
         self.template.add_resource(td)
-        desired_count = self._get_desired_task_count_for_service(service_name)
         maximum_percent = config['deployment'].get('maximum_percent', 200) if 'deployment' in config else 200
         deployment_configuration = DeploymentConfiguration(MinimumHealthyPercent=100,
                                                            MaximumPercent=int(maximum_percent))
-
+        autoscaling_config = config['autoscaling'] if 'autoscaling' in config else {}
+        desired_count = self._get_desired_task_count_for_service(service_name,
+                                                                 min_count=int(
+                                                                     autoscaling_config.get('min_capacity', 0)))
         if 'udp_interface' in config:
             lb, target_group_name = self._add_ecs_nlb(cd, service_name, config['udp_interface'], launch_type)
             nlb_enabled = 'nlb_enabled' in config['udp_interface'] and config['udp_interface']['nlb_enabled']
@@ -301,7 +385,7 @@ service is down',
             )
             self.template.add_resource(svc)
         elif 'http_interface' in config:
-            lb, target_group_name = self._add_ecs_lb(cd, service_name, config, launch_type)
+            lb, target_group_name, target_group = self._add_ecs_lb(cd, service_name, config, launch_type)
 
             security_group_ingress = {
                 'IpProtocol': 'TCP',
@@ -368,6 +452,20 @@ service is down',
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
+            if autoscaling_config:
+                scalable_target = self._add_scalable_target(svc, autoscaling_config)
+                self._add_scalable_target_alarms(svc, autoscaling_config)
+                if 'http_interface' not in config:
+                    raise UnrecoverableException(
+                        "scaling based on request_count_per_target is available when http_interface is enabled ")
+                alb_arn = alb if create_new_alb else config['http_interface']['alb']['alb_arn']
+                self._add_alb_request_count_scaling_policy(
+                    svc,
+                    alb_arn,
+                    target_group,
+                    autoscaling_config['request_count_per_target'],
+                    scalable_target
+                )
 
             self.template.add_output(
                 Output(
@@ -572,7 +670,7 @@ service is down',
             ContainerPort=int(config['http_interface']['container_port'])
         )
 
-        return lb, target_group_name
+        return lb, target_group_name, service_target_group
 
     def _add_ecs_nlb(self, cd, service_name, elb_config, launch_type):
         target_group_name = "TargetGroup" + service_name
@@ -1101,11 +1199,11 @@ building this service",
                 return i
         return -1
 
-    def _get_desired_task_count_for_service(self, service_name):
-        if service_name in self.desired_counts:
-            return self.desired_counts[service_name]
-        else:
-            return 1
+    def _add_to_alb_listener_in_subpath(self, service_name, alb_listener_arn, subpath, target_group):
+        priority = self._get_free_priority_from_listener(alb_listener_arn)
+
+    def _get_desired_task_count_for_service(self, service_name, min_count=0):
+        return max(self.desired_counts.get(service_name, 1), min_count)
 
     @property
     def account_id(self):

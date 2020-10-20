@@ -4,12 +4,15 @@ Outputs:
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
       1000, "command": null, "secrets_name": "something", "http_interface": {"internal":
-      false, "alb": {"create_new": false, "host": "abc.xyz.com"}, "container_port":
-      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}},
-      "DummyWithCustomListener": {"memory_reservation": 1000, "command": null, "secrets_name":
-      "something", "http_interface": {"internal": false, "alb": {"create_new": false,
-      "listener_arn": "custom_listener_arn", "path": "/api/*", "priority": 100}, "container_port":
-      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}}}'
+      false, "alb": {"create_new": false, "host": "abc.xyz.com", "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"},
+      "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
+      {"target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
+      60}}}, "DummyWithCustomListener": {"memory_reservation": 1000, "command": null,
+      "secrets_name": "something", "http_interface": {"internal": false, "alb": {"create_new":
+      false, "listener_arn": "custom_listener_arn", "path": "/api/*", "priority":
+      100}, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
@@ -80,6 +83,32 @@ Resources:
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'DummyTaskDefinition'
     Type: AWS::ECS::Service
+  DummyALBRequestCountPerTargetScalingPolicy:
+    Properties:
+      PolicyName: requestCountPerTarget
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref 'DummyScalableTarget'
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Sub
+            - app/${alb_name}/${alb_id}/targetgroup/${tg_name}/${tg_id}
+            - alb_id: alb-id
+              alb_name: alb-name
+              tg_id: !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref 'TargetGroupDummy'
+              tg_name: !Select
+                - 1
+                - !Split
+                  - /
+                  - !Ref 'TargetGroupDummy'
+        ScaleInCooldown: 120
+        ScaleOutCooldown: 60
+        TargetValue: 10
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
   DummyListenerRule:
     Properties:
       Actions:
@@ -105,6 +134,17 @@ Resources:
                 - ecs-tasks.amazonaws.com
       ManagedPolicyArns: []
     Type: AWS::IAM::Role
+  DummyScalableTarget:
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 5
+      ResourceId: !Sub
+        - service/cluster-staging/${service_name}
+        - service_name: !GetAtt 'Dummy.Name'
+      RoleARN: arn:aws:iam::12537612:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
   DummyTaskDefinition:
     Properties:
       ContainerDefinitions:
@@ -361,6 +401,28 @@ Resources:
       Period: 60
       Statistic: Average
       Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  MaxScalableTargetAlarm:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if desired task count of a service is equal to max_capacity,
+        review auto scaling configuration if this alarm triggers
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ServiceName
+          Value: !GetAtt 'Dummy.Name'
+        - Name: ClusterName
+          Value: cluster-staging
+      EvaluationPeriods: 1
+      MetricName: DesiredTaskCount
+      Namespace: ECS/ContainerInsights
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 300
+      Statistic: Maximum
+      Threshold: 10
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
   TargetGroupDummy:

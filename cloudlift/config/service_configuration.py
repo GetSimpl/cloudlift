@@ -139,6 +139,9 @@ class ServiceConfiguration(DynamodbConfig):
                                 "listener_arn": {
                                     "type": "string"
                                 },
+                                "alb_arn": {
+                                    "type": "string"
+                                },
                                 "host": {
                                     "type": "string"
                                 },
@@ -333,6 +336,33 @@ class ServiceConfiguration(DynamodbConfig):
                         "type": "string"
                     }
                 },
+                "autoscaling": {
+                    "type": "object",
+                    "properties": {
+                        "max_capacity": {
+                            "type": "number"
+                        },
+                        "min_capacity": {
+                            "type": "number"
+                        },
+                        "request_count_per_target": {
+                            "type": "object",
+                            "properties": {
+                                "target_value": {
+                                    "type": "number"
+                                },
+                                "scale_in_cool_down_seconds": {
+                                    "type": "number"
+                                },
+                                "scale_out_cool_down_seconds": {
+                                    "type": "number"
+                                }
+                            },
+                            "required": ['target_value', 'scale_in_cool_down_seconds', 'scale_out_cool_down_seconds']
+                        },
+                    },
+                    "required": ['max_capacity', 'min_capacity', 'request_count_per_target']
+                }
             },
             "required": ["memory_reservation", "command", "secrets_name"]
         }
