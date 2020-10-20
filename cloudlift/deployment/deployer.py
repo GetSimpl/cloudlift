@@ -10,16 +10,7 @@ from cloudlift.deployment.ecs import DeployAction
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
 
 
-def deploy_new_version(client, cluster_name, ecs_service_name,
-                       deploy_version_tag, service_name, sample_env_file_path,
-                       env_name, color='white', complete_image_uri=None):
-    env_config = build_config(env_name, service_name, sample_env_file_path)
-    deployment = DeployAction(client, cluster_name, ecs_service_name)
-    if deployment.service.desired_count == 0:
-        desired_count = 1
-    else:
-        desired_count = deployment.service.desired_count
-    deployment.service.set_desired_count(desired_count)
+def update_task_defn(deployment, env_config, deploy_version_tag, color, complete_image_uri=None):
     task_definition = deployment.get_current_task_definition(
         deployment.service
     )
@@ -33,8 +24,21 @@ def deploy_new_version(client, cluster_name, ecs_service_name,
         task_definition.set_images(deploy_version_tag)
     for container in task_definition.containers:
         task_definition.apply_container_environment(container, env_config)
-    print_task_diff(ecs_service_name, task_definition.diff, color)
-    new_task_definition = deployment.update_task_definition(task_definition)
+    print_task_diff(deployment.service_name, task_definition.diff, color)
+    return deployment.update_task_definition(task_definition)
+
+
+def deploy_new_version(client, cluster_name, ecs_service_name,
+                       deploy_version_tag, service_name, sample_env_file_path,
+                       env_name, color='white', complete_image_uri=None):
+    env_config = build_config(env_name, service_name, sample_env_file_path)
+    deployment = DeployAction(client, cluster_name, ecs_service_name)
+    new_task_definition = update_task_defn(deployment, env_config, deploy_version_tag, color, complete_image_uri)
+    if deployment.service.desired_count == 0:
+        desired_count = 1
+    else:
+        desired_count = deployment.service.desired_count
+    deployment.service.set_desired_count(desired_count)
     response = deploy_and_wait(deployment, new_task_definition, color)
     if response:
         log_bold(ecs_service_name + " Deployed successfully.")
@@ -62,11 +66,11 @@ def build_config(env_name, service_name, sample_env_file_path):
     missing_env_config = set(service_config) - set(environment_config)
     if missing_env_config:
         raise UnrecoverableException('There is no config value for the keys ' +
-                str(missing_env_config))
+                                     str(missing_env_config))
     missing_env_sample_config = set(environment_config) - set(service_config)
     if missing_env_sample_config:
         raise UnrecoverableException('There is no config value for the keys in env.sample file ' +
-                str(missing_env_sample_config))
+                                     str(missing_env_sample_config))
 
     return make_container_defn_env_conf(service_config, environment_config)
 
@@ -154,7 +158,7 @@ def print_task_diff(ecs_service_name, diffs, color):
                     Color(
                         '{' + env_var_diff_color + '}' +
                         env_var +
-                        '{/'+env_var_diff_color+'}'
+                        '{/' + env_var_diff_color + '}'
                     ),
                     old_val,
                     current_val
