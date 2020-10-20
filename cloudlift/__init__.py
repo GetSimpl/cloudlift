@@ -24,6 +24,7 @@ def _require_environment(func):
         if kwargs['environment'] == 'production':
             highlight_production()
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -35,7 +36,9 @@ repo')
         if kwargs['name'] is None:
             kwargs['name'] = deduce_name(None)
         return func(*args, **kwargs)
+
     return wrapper
+
 
 class CommandWrapper(click.Group):
     def __call__(self, *args, **kwargs):
@@ -139,6 +142,7 @@ service task")
 @click.option('--mfa', help='MFA code', prompt='MFA Code')
 def start_session(name, environment, mfa):
     SessionCreator(name, environment).start_session(mfa)
+
 
 if __name__ == '__main__':
     cli()
