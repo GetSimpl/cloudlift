@@ -31,11 +31,14 @@ pipeline {
         }
         
         stage('Push to ECR') {
+	    environment {
+                DOCKERHUB_LOGIN = credentials('dockerhub-login')
+    	    }
             steps {
                 sh '''
-                    aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_RIPPLING_ACCOUNT}
-                    docker tag cloudlift:${TAG} ${AWS_RIPPLING_ACCOUNT}/cloudlift-repo:${TAG}
-                    docker push ${AWS_RIPPLING_ACCOUNT}/cloudlift-repo:${TAG}
+                    docker login -u ${DOCKERHUB_LOGIN_USR} -p ${DOCKERHUB_LOGIN_PSW}
+                    docker tag cloudlift:${TAG} rippling/cloudlift:${TAG}
+                    docker push rippling/cloudlift:${TAG}
                 '''
             }
         }
