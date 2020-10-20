@@ -18,6 +18,7 @@ from cloudlift.config import get_cluster_name, get_service_stack_name
 from cloudlift.deployment import deployer
 from cloudlift.deployment.ecs import EcsClient
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_warning
+from cloudlift.deployment.ecs import DeployAction
 
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 
@@ -85,6 +86,27 @@ class ServiceUpdater(object):
 
     def upload_image(self, additional_tags):
         EcrClient(self.name, self.version, self.region, self.build_args).upload_image(additional_tags)
+
+    def update_task_defn(self):
+        log_warning("Update task definition to {self.region}".format(**locals()))
+        self.init_stack_info()
+        if not os.path.exists(self.env_sample_file):
+            raise UnrecoverableException('env.sample not found. Exiting.')
+        ecr_client = EcrClient(self.name, self.version, self.region, self.build_args)
+        log_intent("name: " + self.name + " | environment: " +
+                   self.environment + " | version: " + str(ecr_client.version))
+        log_bold("Checking image in ECR")
+        ecr_client.build_and_upload_image()
+        log_bold("Initiating deployment\n")
+        ecs_client = EcsClient(None, None, self.region)
+
+        service_name = self.ecs_service_names[0]
+        deployment = DeployAction(ecs_client, self.cluster_name, service_name)
+        env_config = deployer.build_config(self.environment, self.name, self.env_sample_file)
+        image_url = ecr_client.ecr_image_uri
+        image_url += (':' + ecr_client.version)
+        deployer.update_task_defn(deployment, env_config, ecr_client.version, 'white', image_url)
+
 
     @property
     def region(self):

@@ -117,6 +117,18 @@ def deploy_service(name, environment, version, build_arg):
 
 
 @cli.command()
+@_require_environment
+@_require_name
+@click.option('--version', default=None,
+              help='local image version tag')
+@click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
+                                                                  "as --build-args. Supports multiple.\
+                                                                   Please leave space between name and value" )
+def update_task_defn(name, environment, version, build_arg):
+    ServiceUpdater(name, environment, None, version, dict(build_arg)).update_task_defn()
+
+
+@cli.command()
 @click.option('--local_tag', help='Commit sha for image to be uploaded')
 @click.option('--additional_tags', default=[], multiple=True,
               help='Additional tags for the image apart from commit SHA')
