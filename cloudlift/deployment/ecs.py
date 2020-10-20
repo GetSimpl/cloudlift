@@ -50,6 +50,10 @@ class EcsClient(object):
             serviceName=service_name
         )
 
+    def list_task_definitions(self, family_prefix, status='ACTIVE', sort='DESC'):
+        response = self.boto.list_task_definitions(familyPrefix=family_prefix, status=status, sort=sort)
+        return response['taskDefinitionArns']
+
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 

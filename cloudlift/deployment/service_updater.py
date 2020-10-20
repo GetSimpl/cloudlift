@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 
 from cloudlift.deployment.ecr_client import EcrClient
 from cloudlift.exceptions import UnrecoverableException
-from stringcase import spinalcase
+from stringcase import spinalcase, capitalcase
 
 from cloudlift.config import get_account_id
 from cloudlift.config import (get_client_for,
@@ -105,8 +105,10 @@ class ServiceUpdater(object):
         env_config = deployer.build_config(self.environment, self.name, self.env_sample_file)
         image_url = ecr_client.ecr_image_uri
         image_url += (':' + ecr_client.version)
-        deployer.update_task_defn(deployment, env_config, ecr_client.version, 'white', image_url)
 
+        task_defn_family = "".join(list(map(capitalcase, self.name.split('-')))) + "Family"
+        task_defns = ecs_client.list_task_definitions(task_defn_family)
+        deployer.update_task_defn(deployment, env_config, ecr_client.version, 'white', image_url, task_defns[0])
 
     @property
     def region(self):
