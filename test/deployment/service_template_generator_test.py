@@ -270,8 +270,7 @@ class TestServiceTemplateGenerator(TestCase):
                         "internal": False,
                         "alb": {
                             "create_new": False,
-                            "host": "abc.xyz.com",
-                            "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"
+                            "host": "abc.xyz.com"
                         },
                         "container_port": Decimal(7003),
                         "restrict_access_to": ["0.0.0.0/0"],
@@ -283,7 +282,8 @@ class TestServiceTemplateGenerator(TestCase):
                         "request_count_per_target": {
                             "target_value": 10,
                             "scale_in_cool_down_seconds": 120,
-                            "scale_out_cool_down_seconds": 60
+                            "scale_out_cool_down_seconds": 60,
+                            "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"
                         }
                     }
                 },

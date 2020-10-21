@@ -4,15 +4,15 @@ Outputs:
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
       1000, "command": null, "secrets_name": "something", "http_interface": {"internal":
-      false, "alb": {"create_new": false, "host": "abc.xyz.com", "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"},
-      "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
+      false, "alb": {"create_new": false, "host": "abc.xyz.com"}, "container_port":
+      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"},
+      "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
       {"target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
-      60}}}, "DummyWithCustomListener": {"memory_reservation": 1000, "command": null,
-      "secrets_name": "something", "http_interface": {"internal": false, "alb": {"create_new":
-      false, "listener_arn": "custom_listener_arn", "path": "/api/*", "priority":
-      100}, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}}}}'
+      60, "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"}}},
+      "DummyWithCustomListener": {"memory_reservation": 1000, "command": null, "secrets_name":
+      "something", "http_interface": {"internal": false, "alb": {"create_new": false,
+      "listener_arn": "custom_listener_arn", "path": "/api/*", "priority": 100}, "container_port":
+      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'

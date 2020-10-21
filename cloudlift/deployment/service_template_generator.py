@@ -458,7 +458,7 @@ service is down',
                 if 'http_interface' not in config:
                     raise UnrecoverableException(
                         "scaling based on request_count_per_target is available when http_interface is enabled ")
-                alb_arn = alb if create_new_alb else config['http_interface']['alb']['alb_arn']
+                alb_arn = alb if create_new_alb else config['autoscaling']['request_count_per_target']['alb_arn']
                 self._add_alb_request_count_scaling_policy(
                     svc,
                     alb_arn,
