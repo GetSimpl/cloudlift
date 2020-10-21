@@ -139,9 +139,6 @@ class ServiceConfiguration(DynamodbConfig):
                                 "listener_arn": {
                                     "type": "string"
                                 },
-                                "alb_arn": {
-                                    "type": "string"
-                                },
                                 "host": {
                                     "type": "string"
                                 },
@@ -348,6 +345,9 @@ class ServiceConfiguration(DynamodbConfig):
                         "request_count_per_target": {
                             "type": "object",
                             "properties": {
+                                "alb_arn": {
+                                    "type": "string"
+                                },
                                 "target_value": {
                                     "type": "number"
                                 },
