@@ -329,7 +329,7 @@ Resources:
       Port: 80
       Protocol: HTTP
     Type: AWS::ElasticLoadBalancingV2::Listener
-  MaxScalableTargetAlarm:
+  MaxScalableTargetAlarmDummy:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'

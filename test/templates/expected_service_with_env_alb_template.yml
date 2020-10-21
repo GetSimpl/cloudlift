@@ -403,7 +403,7 @@ Resources:
       Threshold: '0'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
-  MaxScalableTargetAlarm:
+  MaxScalableTargetAlarmDummy:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'

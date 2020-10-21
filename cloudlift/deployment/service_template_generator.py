@@ -143,9 +143,9 @@ service is down',
         self.template.add_resource(scalable_target)
         return scalable_target
 
-    def _add_scalable_target_alarms(self, ecs_svc, config):
+    def _add_scalable_target_alarms(self, service_name, ecs_svc, config):
         max_scalable_target_alarm = Alarm(
-            'MaxScalableTargetAlarm',
+            'MaxScalableTargetAlarm' + service_name,
             EvaluationPeriods=1,
             Dimensions=[
                 MetricDimension(
@@ -454,7 +454,7 @@ service is down',
             )
             if autoscaling_config:
                 scalable_target = self._add_scalable_target(svc, autoscaling_config)
-                self._add_scalable_target_alarms(svc, autoscaling_config)
+                self._add_scalable_target_alarms(service_name, svc, autoscaling_config)
                 if 'http_interface' not in config:
                     raise UnrecoverableException(
                         "scaling based on request_count_per_target is available when http_interface is enabled ")
