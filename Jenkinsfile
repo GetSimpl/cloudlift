@@ -30,7 +30,7 @@ pipeline {
             }
         }
         
-        stage('Push to ECR') {
+        stage('Push to Dockerhub') {
 	    environment {
                 DOCKERHUB_LOGIN = credentials('dockerhub-login')
     	    }
