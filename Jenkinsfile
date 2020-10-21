@@ -30,7 +30,7 @@ pipeline {
             }
         }
         
-        stage('Push to ECR') {
+        stage('Push to Dockerhub') {
             steps {
                 sh '''
                     aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_RIPPLING_ACCOUNT}
