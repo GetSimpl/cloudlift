@@ -1,0 +1,277 @@
+Outputs:
+  CloudliftOptions:
+    Description: Options used with cloudlift when building this service
+    Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
+      {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
+      1000, "secrets_name": "something", "command": null, "http_interface": {"internal":
+      false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
+      {"alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id",
+      "target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
+      60}}}}}'
+  DummyEcsServiceName:
+    Description: The ECS name which needs to be entered
+    Value: !GetAtt 'Dummy.Name'
+  DummySecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: something
+  ECRRepoName:
+    Description: ECR repo to for docker images
+    Value: test-service-repo
+  StackId:
+    Description: The unique ID of the stack. To be supplied to circle CI environment
+      variables to validate during deployment.
+    Value: !Ref 'AWS::StackId'
+  StackName:
+    Description: The name of the stack
+    Value: !Ref 'AWS::StackName'
+Parameters:
+  Environment:
+    Default: production
+    Description: ''
+    Type: String
+  NotificationSnsArn:
+    Default: some
+    Description: ''
+    Type: String
+  PrivateSubnet1:
+    Default: subnet-09b6cd23af94861cc
+    Description: ''
+    Type: AWS::EC2::Subnet::Id
+  PrivateSubnet2:
+    Default: subnet-0657bc2faa99ce5f7
+    Description: ''
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnet1:
+    Default: subnet-0aeae8fe5e13a7ff7
+    Description: ''
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnet2:
+    Default: subnet-096377a44ccb73aca
+    Description: ''
+    Type: AWS::EC2::Subnet::Id
+  VPC:
+    Default: vpc-00f07c5a6b6c9abdb
+    Description: ''
+    Type: AWS::EC2::VPC::Id
+Resources:
+  Dummy:
+    Properties:
+      Cluster: cluster-staging
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: 100
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: DummyContainer
+          ContainerPort: 7003
+          TargetGroupArn: !Ref 'TargetGroupDummy'
+      PlacementStrategies:
+        - Field: attribute:ecs.availability-zone
+          Type: spread
+      Role: !Ref 'ECSServiceRole'
+      TaskDefinition: !Ref 'DummyTaskDefinition'
+    Type: AWS::ECS::Service
+  DummyALBRequestCountPerTargetScalingPolicy:
+    Properties:
+      PolicyName: requestCountPerTarget
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref 'DummyScalableTarget'
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Sub
+            - app/${alb_name}/${alb_id}/targetgroup/${tg_name}/${tg_id}
+            - alb_id: alb-id
+              alb_name: alb-name
+              tg_id: !Select
+                - 2
+                - !Split
+                  - /
+                  - !Ref 'TargetGroupDummy'
+              tg_name: !Select
+                - 1
+                - !Split
+                  - /
+                  - !Ref 'TargetGroupDummy'
+        ScaleInCooldown: 120
+        ScaleOutCooldown: 60
+        TargetValue: 10
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  DummyRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      ManagedPolicyArns: []
+    Type: AWS::IAM::Role
+  DummyScalableTarget:
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 5
+      ResourceId: !Sub
+        - service/cluster-staging/${service_name}
+        - service_name: !GetAtt 'Dummy.Name'
+      RoleARN: arn:aws:iam::12537612:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+  DummyTaskDefinition:
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 0
+          Environment:
+            - Name: PORT
+              Value: '80'
+          Essential: 'true'
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: staging-logs
+              awslogs-region: us-west-2
+              awslogs-stream-prefix: Dummy
+          MemoryReservation: 1000
+          Name: DummyContainer
+          PortMappings:
+            - ContainerPort: 7003
+          Secrets: []
+      ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
+      Family: stagingDummyFamily
+      PlacementConstraints: []
+      TaskRoleArn: !Ref 'DummyRole'
+    Type: AWS::ECS::TaskDefinition
+  DummyTaskExecutionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:something-??????
+              - Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  - '*'
+          PolicyName: DummyTaskExecutionRolePolicy
+    Type: AWS::IAM::Role
+  ECSServiceRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+      Path: /
+      RoleName: !Sub 'ecs-svc-${AWS::StackName}-${AWS::Region}'
+    Type: AWS::IAM::Role
+  EcsNoRunningTasksAlarmDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if the task count goes to zero, denoting service is
+        down
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'Dummy.Name'
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: SampleCount
+      Threshold: '1'
+      TreatMissingData: breaching
+    Type: AWS::CloudWatch::Alarm
+  FailedCloudliftDeploymentsDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'Dummy.Name'
+      EvaluationPeriods: 1
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Average
+      Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  MaxScalableTargetAlarmDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if desired task count of a service is equal to max_capacity,
+        review auto scaling configuration if this alarm triggers
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ServiceName
+          Value: !GetAtt 'Dummy.Name'
+        - Name: ClusterName
+          Value: cluster-staging
+      EvaluationPeriods: 1
+      MetricName: DesiredTaskCount
+      Namespace: ECS/ContainerInsights
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 300
+      Statistic: Maximum
+      Threshold: 10
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  TargetGroupDummy:
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /elb-check
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200-399
+      Port: 7003
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: load_balancing.algorithm.type
+          Value: least_outstanding_requests
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref 'VPC'
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup

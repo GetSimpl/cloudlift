@@ -246,6 +246,63 @@ class TestServiceTemplateGenerator(TestCase):
         with(open(template_file_path)) as expected_template_file:
             assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
+    @patch('cloudlift.deployment.service_template_generator.build_config')
+    @patch('cloudlift.deployment.service_template_generator.get_account_id')
+    @patch('cloudlift.deployment.template_generator.region_service')
+    def test_generate_service_with_external_alb(self, mock_region_service, mock_get_account_id, mock_build_config):
+        environment = 'staging'
+        application_name = 'dummy'
+        mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
+                                               environment=environment)
+        mock_service_configuration.get_config.return_value = {
+            "cloudlift_version": 'test-version',
+            "notifications_arn": "some",
+            "ecr_repo": {"name": "test-service-repo"},
+            "services": {
+                "Dummy": {
+                    "memory_reservation": Decimal(1000),
+                    "secrets_name": "something",
+                    "command": None,
+                    "http_interface": {
+                        "internal": False,
+                        "container_port": Decimal(7003),
+                        "restrict_access_to": ["0.0.0.0/0"],
+                        "health_check_path": "/elb-check"
+                    },
+                    "autoscaling": {
+                        "max_capacity": 10,
+                        "min_capacity": 5,
+                        "request_count_per_target": {
+                            "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id",
+                            "target_value": 10,
+                            "scale_in_cool_down_seconds": 120,
+                            "scale_out_cool_down_seconds": 60
+                        }
+                    }
+                },
+            }
+        }
+
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, sec_name):
+            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
+
+        mock_build_config.side_effect = mock_build_config_impl
+
+        mock_get_account_id.return_value = "12537612"
+        mock_region_service.get_region_for_environment.return_value = "us-west-2"
+        mock_region_service.get_ssl_certification_for_environment.return_value = "certificateARN1234"
+
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
+
+        generated_template = template_generator.generate_service()
+        template_file_path = os.path.join(os.path.dirname(__file__),
+                                          '../templates/expected_service_with_external_alb_template.yml')
+        with(open(template_file_path)) as expected_template_file:
+            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
+
     @patch('cloudlift.deployment.service_template_generator.get_client_for')
     @patch('cloudlift.deployment.service_template_generator.get_environment_level_alb_listener')
     @patch('cloudlift.deployment.service_template_generator.build_config')

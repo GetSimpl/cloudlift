@@ -455,10 +455,13 @@ service is down',
             if autoscaling_config:
                 scalable_target = self._add_scalable_target(svc, autoscaling_config)
                 self._add_scalable_target_alarms(service_name, svc, autoscaling_config)
-                if 'http_interface' not in config:
-                    raise UnrecoverableException(
-                        "scaling based on request_count_per_target is available when http_interface is enabled ")
-                alb_arn = alb if create_new_alb else autoscaling_config['request_count_per_target']['alb_arn']
+
+                if 'alb_arn' in autoscaling_config['request_count_per_target']:
+                    alb_arn = autoscaling_config['request_count_per_target']['alb_arn']
+                elif 'http_interface' in config and alb_enabled and create_new_alb:
+                    alb_arn = alb
+                else:
+                    raise UnrecoverableException('Unable to fetch alb arn, please provide alb_arn in config')
                 self._add_alb_request_count_scaling_policy(
                     svc,
                     alb_arn,
