@@ -4,7 +4,7 @@ pipeline {
     }
     options { disableConcurrentBuilds() }
     stages {
-        stage("Tag Cloudlift") {
+        stage("Checkout Cloudlift; get latest hash") {
             steps {
                 println params
                 sh '''
@@ -15,9 +15,8 @@ pipeline {
                     fi
                     git fetch --prune origin "+refs/tags/*:refs/tags/*"
                     echo "Tagging this commit: $(git rev-parse HEAD)"
-                    git tag ${TAG}
-                    git push origin refs/tags/${TAG}
-                    echo "List of git tag:\n$(git tag -l)" 
+                    HASH=$(git rev-parse HEAD | cut -c 1:8)
+                    echo $HASH > latest.txt
                 '''
             }
         }
@@ -25,7 +24,14 @@ pipeline {
         stage("Build Docker Image") {
             steps {
                 sh '''
-                    docker build -t cloudlift:${TAG} .
+                    HASH=$(cat latest.txt)
+                    docker build -t cloudlift:${HASH} .
+                    TAG=v$(docker run a00761a170cb "--version" | awk '{ print $3}')
+                    echo $TAG > tag.txt
+                    git tag ${TAG}
+                    git push origin refs/tags/${TAG}
+                    echo "List of git tag:\n$(git tag -l)"
+                    docker tag cloudlift:${HASH} cloudlift:${TAG} .
                 '''
             }
         }
@@ -36,9 +42,13 @@ pipeline {
     	    }
             steps {
                 sh '''
+                    TAG=$(cat tag.txt)
+                    echo "${TAG} is being pushed to dockerhub"
                     docker login -u ${DOCKERHUB_LOGIN_USR} -p ${DOCKERHUB_LOGIN_PSW}
                     docker tag cloudlift:${TAG} rippling/cloudlift:${TAG}
-                    docker push rippling/cloudlift:${TAG}
+                    echo '{"experimental": "enabled"}' > ~/.docker/config.json
+                    docker manifest inspect rippling/cloudlift:${TAG} > /dev/null || docker push rippling/cloudlift:${TAG}
+
                 '''
             }
         }
