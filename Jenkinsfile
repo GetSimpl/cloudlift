@@ -48,7 +48,6 @@ pipeline {
                     docker tag cloudlift:${FOUND_TAG} rippling/cloudlift:${FOUND_TAG}
                     echo '{"experimental": "enabled"}' > ~/.docker/config.json
                     docker manifest inspect rippling/cloudlift:${FOUND_TAG} > /dev/null || docker push rippling/cloudlift:${FOUND_TAG}
-
                 '''
             }
         }
