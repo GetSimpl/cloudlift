@@ -26,12 +26,12 @@ pipeline {
                 sh '''
                     HASH=$(cat latest.txt)
                     docker build -t cloudlift:${HASH} .
-                    TAG=v$(docker run a00761a170cb "--version" | awk '{ print $3}')
-                    echo $TAG > tag.txt
-                    git tag ${TAG}
+                    FOUND_TAG=v$(docker run a00761a170cb "--version" | awk '{ print $3}')
+                    echo $FOUND_TAG > tag.txt
+                    git tag ${FOUND_TAG}
                     git push origin refs/tags/${TAG}
                     echo "List of git tag:\n$(git tag -l)"
-                    docker tag cloudlift:${HASH} cloudlift:${TAG} .
+                    docker tag cloudlift:${HASH} cloudlift:${FOUND_TAG} .
                 '''
             }
         }
@@ -42,12 +42,12 @@ pipeline {
     	    }
             steps {
                 sh '''
-                    TAG=$(cat tag.txt)
-                    echo "${TAG} is being pushed to dockerhub"
+                    FOUND_TAG=$(cat tag.txt)
+                    echo "${FOUND_TAG} is being pushed to dockerhub"
                     docker login -u ${DOCKERHUB_LOGIN_USR} -p ${DOCKERHUB_LOGIN_PSW}
-                    docker tag cloudlift:${TAG} rippling/cloudlift:${TAG}
+                    docker tag cloudlift:${FOUND_TAG} rippling/cloudlift:${FOUND_TAG}
                     echo '{"experimental": "enabled"}' > ~/.docker/config.json
-                    docker manifest inspect rippling/cloudlift:${TAG} > /dev/null || docker push rippling/cloudlift:${TAG}
+                    docker manifest inspect rippling/cloudlift:${FOUND_TAG} > /dev/null || docker push rippling/cloudlift:${FOUND_TAG}
 
                 '''
             }
