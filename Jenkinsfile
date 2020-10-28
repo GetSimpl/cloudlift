@@ -15,7 +15,7 @@ pipeline {
                     fi
                     git fetch --prune origin "+refs/tags/*:refs/tags/*"
                     echo "Tagging this commit: $(git rev-parse HEAD)"
-                    HASH=$(git rev-parse HEAD | cut -c 1:8)
+                    HASH=$(git rev-parse HEAD)
                     echo $HASH > latest.txt
                 '''
             }
