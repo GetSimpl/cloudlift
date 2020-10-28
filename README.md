@@ -261,6 +261,21 @@ Supported autoscaling policies `request_count_per_target`. It works only if ther
 }
 ```
 
+`container_labels` allows to add docker labels
+
+```json5
+{
+  "services": {
+    "Test123": {
+      "command": null,
+      "memory_reservation": 100,
+      // Gets added as docker container labels
+      "container_labels": {"key":  "value"}
+    }
+  }
+}
+```
+
 #### 3. Deploy service
 
 This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS

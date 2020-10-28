@@ -283,6 +283,9 @@ service is down',
                 )
             container_definition_arguments['Links'] = links
 
+        if 'container_labels' in config:
+            container_definition_arguments['DockerLabels'] = config.get('container_labels')
+
         cd = ContainerDefinition(**container_definition_arguments)
         container_definitions = [cd]
         if 'sidecars' in config:

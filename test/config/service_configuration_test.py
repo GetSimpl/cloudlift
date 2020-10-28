@@ -360,3 +360,42 @@ class TestServiceConfigurationValidation(TestCase):
             })
         except UnrecoverableException as e:
             self.fail('Exception thrown: {}'.format(e))
+
+    @mock_dynamodb2
+    def test_container_labels(self):
+        service = ServiceConfiguration('test-service', 'test')
+
+        with self.assertRaises(UnrecoverableException) as error:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'secrets_name': 'secret-config',
+                        "container_labels": {
+                            "key": 1
+                        }
+                    }
+                }
+            })
+
+        self.assertEqual(
+            "1 is not of type 'string' in services.TestService.container_labels.key",
+            error.exception.value)
+
+        service._validate_changes({
+            'cloudlift_version': 'test',
+            'ecr_repo': {'name': 'test-service-repo'},
+            'services': {
+                'TestService': {
+                    'memory_reservation': 1000,
+                    'command': None,
+                    'secrets_name': 'secret-config',
+                    "container_labels": {
+                        "key": "value"
+                    }
+                }
+            }
+        })

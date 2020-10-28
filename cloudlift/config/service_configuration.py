@@ -362,7 +362,14 @@ class ServiceConfiguration(DynamodbConfig):
                         },
                     },
                     "required": ['max_capacity', 'min_capacity', 'request_count_per_target']
-                }
+                },
+                "container_labels": {
+                    "type": "object",
+                    "patternProperties": {
+                        ".*": {"type": "string"}
+                    },
+                    "additionalProperties": False
+                },
             },
             "required": ["memory_reservation", "command", "secrets_name"]
         }

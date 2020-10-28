@@ -43,7 +43,8 @@ def mocked_service_config():
                         "image": "redis:latest",
                         "memory_reservation": 256,
                     }
-                ]
+                ],
+                "container_labels": {"label1": "value1"}
             },
             "DummyRunSidekiqsh": {
                 "memory_reservation": Decimal(1000),

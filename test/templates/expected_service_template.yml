@@ -9,7 +9,8 @@ Outputs:
       43, "health_check_timeout_seconds": 24, "health_check_healthy_threshold_count":
       6, "health_check_unhealthy_threshold_count": 4}, "deployment": {"maximum_percent":
       150}, "secrets_name": "dummy-config", "sidecars": [{"name": "redis", "image":
-      "redis:latest", "memory_reservation": 256}]}, "DummyRunSidekiqsh": {"memory_reservation":
+      "redis:latest", "memory_reservation": 256}], "container_labels": {"label1": "value1"}},
+       "DummyRunSidekiqsh": {"memory_reservation":
       1000, "command": "./run-sidekiq.sh", "deployment": {"maximum_percent": 150},
       "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"],
       "secrets_name": "dummy-sidekiq-config"}}}'
@@ -182,6 +183,8 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Cpu: 0
+          DockerLabels:
+            label1: value1
           Environment:
             - Name: PORT
               Value: '80'
