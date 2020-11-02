@@ -1,10 +1,12 @@
+def VERSION
+
 pipeline {
     agent {
         label 'dockerbuild'
     }
     options { disableConcurrentBuilds() }
     stages {
-        stage("Tag Cloudlift") {
+        stage("Checkout Cloudlift; get latest hash") {
             steps {
                 println params
                 sh '''
@@ -15,31 +17,37 @@ pipeline {
                     fi
                     git fetch --prune origin "+refs/tags/*:refs/tags/*"
                     echo "Tagging this commit: $(git rev-parse HEAD)"
-                    git tag ${TAG}
-                    git push origin refs/tags/${TAG}
-                    echo "List of git tag:\n$(git tag -l)" 
                 '''
             }
         }
         
         stage("Build Docker Image") {
             steps {
-                sh '''
-                    docker build -t cloudlift:${TAG} .
-                '''
+                sh """
+                    docker build -t cloudlift:build .
+                """
+                script {
+                    VERSION = sh(script: "docker run cloudlift:build --version | awk '{ print \$3 }'", returnStdout: true)
+                }
             }
         }
-        
-        stage('Push to Dockerhub') {
-	    environment {
-                DOCKERHUB_LOGIN = credentials('dockerhub-login')
-    	    }
+        stage('Tag git') {
             steps {
-                sh '''
-                    docker login -u ${DOCKERHUB_LOGIN_USR} -p ${DOCKERHUB_LOGIN_PSW}
-                    docker tag cloudlift:${TAG} rippling/cloudlift:${TAG}
-                    docker push rippling/cloudlift:${TAG}
-                '''
+                sh """
+                    git tag ${VERSION}
+                    git push origin refs/tags/${VERSION}
+                """
+            }
+        }
+        stage('Push to ECR') {
+            steps {
+                sh """
+                    echo "v${VERSION} is being pushed to ECR"
+                    aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_RIPPLING_ACCOUNT}
+                    docker tag cloudlift:build cloudlift:v${VERSION}
+                    docker tag cloudlift:v${VERSION} ${AWS_RIPPLING_ACCOUNT}/cloudlift-repo:v${VERSION}
+                    docker push ${AWS_RIPPLING_ACCOUNT}/cloudlift-repo:v${VERSION}
+                """
             }
         }
     }
