@@ -10,12 +10,10 @@ from cloudlift.deployment.ecs import DeployAction
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
 
 
-def update_task_defn(deployment, env_config, deploy_version_tag, color,
-                     complete_image_uri=None, task_definition_arn=None):
-    if task_definition_arn is None:
-        task_definition = deployment.get_current_task_definition(deployment.service)
-    else:
-        task_definition = deployment.get_task_definition(task_definition_arn)
+def update_task_defn(deployment, env_config, deploy_version_tag, color, complete_image_uri=None):
+    task_definition = deployment.get_current_task_definition(
+        deployment.service
+    )
     if complete_image_uri is not None:
         container_name = task_definition['containerDefinitions'][0]['name']
         task_definition.set_images(
