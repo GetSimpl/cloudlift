@@ -31,12 +31,13 @@ class TaskDefinitionService:
                    self.environment + " | version: " + str(ecr_client.version))
         log_bold("Checking image in ECR")
         ecr_client.build_and_upload_image()
-        log_bold("Initiating deployment\n")
+        log_bold("Update task defn\n")
         env_config = build_config(self.environment, self.name, self.env_sample_file)
         ecs_client = EcsClient(region=self.region)
         deployment = DeployAction(ecs_client, self.cluster_name, None)
         task_defn = self._apply_changes_over_current_task_defn(env_config, ecs_client, ecr_client, deployment)
         deployment.update_task_definition(task_defn)
+        log_bold("Task defn successfully updated\n")
 
     def _current_task_defn(self, ecs_client: EcsClient, deployment: DeployAction):
         task_defn_arn = ecs_client.list_task_definitions(self._task_defn_family())[0]
@@ -56,7 +57,7 @@ class TaskDefinitionService:
         return current_task_defn
 
     def _task_defn_family(self):
-        return f"{self._case_convert(self.name)}{self._case_convert(self.environment)}Family"
+        return f"{self._case_convert(self.name)}Family"
 
     def _case_convert(self, str):
         return "".join(list(map(capitalcase, str.split('-'))))
