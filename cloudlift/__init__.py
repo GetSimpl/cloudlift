@@ -126,7 +126,7 @@ def deploy_service(name, environment, version, build_arg):
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
 def create_task_defn(name, environment, version, build_arg):
-    TaskDefinitionService(name, environment, version, build_arg).create()
+    TaskDefinitionService(name, environment, version, dict(build_arg)).create()
 
 
 @cli.command()
@@ -138,7 +138,7 @@ def create_task_defn(name, environment, version, build_arg):
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
 def update_task_defn(name, environment, version, build_arg):
-    TaskDefinitionService(name, environment, version, build_arg).update()
+    TaskDefinitionService(name, environment, version, dict(build_arg)).update()
 
 
 @cli.command()
