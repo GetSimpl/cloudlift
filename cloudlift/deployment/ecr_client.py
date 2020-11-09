@@ -84,6 +84,7 @@ class EcrClient:
                 log_warning("Please build, tag and upload the image for the \
         commit " + commit_sha)
                 raise UnrecoverableException("Image for given version could not be found.")
+            self.version = version
         else:
             dirty = subprocess.check_output(
                 ["git", "status", "--short"]
