@@ -1,11 +1,14 @@
 import os
 
-from troposphere.ecs import LogConfiguration, ContainerDefinition, TaskDefinition
+from stringcase import pascalcase
+from troposphere.ecs import (ContainerDefinition,
+                             Environment,
+                             LogConfiguration,
+                             TaskDefinition)
 
 from cloudlift.config.logging import log_bold, log_intent, log_warning
-from cloudlift.deployment import EcrClient, UnrecoverableException, EcsClient, DeployAction, Environment
+from cloudlift.deployment import EcrClient, UnrecoverableException, EcsClient, DeployAction, EcsTaskDefinition
 from cloudlift.deployment.deployer import build_config, print_task_diff
-from stringcase import pascalcase
 
 
 def _complete_image_url(ecr_client: EcrClient):
@@ -34,24 +37,21 @@ class TaskDefinitionService:
         ecr_client.build_and_upload_image()
         env_config = build_config(self.environment, self.name, self.env_sample_file)
         container_definition_arguments = {
-            "Environment": [
-                Environment(Name=k, Value=v) for (k, v) in env_config
+            "environment": [
+                {
+                    "name": k,
+                    "value": v
+                } for (k, v) in env_config
             ],
-            "Name": self.name_with_env + "Container",
-            "Image": _complete_image_url(ecr_client),
-            "Essential": 'true',
-            "LogConfiguration": self._gen_log_config(self.name_with_env)
+            "name": pascalcase(self.name) + "Container",
+            "image": _complete_image_url(ecr_client),
+            "essential": True,
+            "logConfiguration": self._gen_log_config(pascalcase(self.name)),
+            "memoryReservation": 1024
         }
-        cd = ContainerDefinition(**container_definition_arguments)
 
-        task_defn = TaskDefinition(
-            self.name_with_env + "TaskDefinition",
-            Family=self._task_defn_family(),
-            ContainerDefinitions=[cd]
-        )
         ecs_client = EcsClient(region=self.region)
-        deployment = DeployAction(ecs_client, self.cluster_name, None)
-        deployment.update_task_definition(task_defn)
+        ecs_client.register_task_definition(self._task_defn_family(), [container_definition_arguments], [], None)
 
     def update(self):
         log_warning("Update task definition to {self.region}".format(**locals()))
@@ -91,11 +91,11 @@ class TaskDefinitionService:
         return f"{self.name_with_env}Family"
 
     def _gen_log_config(self, stream_prefix):
-        return LogConfiguration(
-            LogDriver="awslogs",
-            Options={
+        return {
+            'logDriver': 'awslogs',
+            'options': {
                 'awslogs-stream-prefix': stream_prefix,
                 'awslogs-group': '-'.join([self.environment, 'logs']),
                 'awslogs-region': self.region
             }
-        )
+        }
