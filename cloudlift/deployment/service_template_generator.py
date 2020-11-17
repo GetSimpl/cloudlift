@@ -38,7 +38,7 @@ from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGIST
     DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT, DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT
 from cloudlift.deployment.deployer import build_config, container_name
 from cloudlift.deployment.template_generator import TemplateGenerator
-
+import random
 
 class ServiceTemplateGenerator(TemplateGenerator):
     PLACEMENT_STRATEGIES = [
@@ -1196,10 +1196,13 @@ building this service",
             rules.extend(response.get('Rules', []))
 
         priorities = set(rule['Priority'] for rule in rules)
-        for i in range(1, 50001):
-            if str(i) not in priorities:
-                return i
-        return -1
+
+        priorities_not_taken = [i for i in range(1,50001) if i not in priorities]
+
+        if not priorities_not_taken:
+            return -1
+
+        return random.choice(priorities_not_taken)
 
     def _add_to_alb_listener_in_subpath(self, service_name, alb_listener_arn, subpath, target_group):
         priority = self._get_free_priority_from_listener(alb_listener_arn)
