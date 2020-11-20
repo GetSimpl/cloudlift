@@ -15,13 +15,13 @@ class ServiceInformationFetcher(object):
         self.name = name
         self.environment = environment
         self.cluster_name = get_cluster_name(environment)
+        self.cfn_client = get_client_for('cloudformation', self.environment)
         self.init_stack_info()
 
     def init_stack_info(self):
         stack_name = get_service_stack_name(self.environment, self.name)
         try:
-            cfn_client = get_client_for('cloudformation', self.environment)
-            stack = cfn_client.describe_stacks(StackName=stack_name)['Stacks'][0]
+            stack = self.cfn_client.describe_stacks(StackName=stack_name)['Stacks'][0]
             self.stack_found = True
             ecs_service_outputs = list(
                 filter(
@@ -51,6 +51,9 @@ class ServiceInformationFetcher(object):
                     "key": service_output['OutputKey'].replace("EcsServiceName", ""),
                     "value": service_output['OutputValue']
                 })
+            resource_summaries = self._get_stack_resource_summaries()
+            self.listener_rules = [resource_summary for resource_summary in resource_summaries
+                                   if resource_summary['LogicalResourceId'].endswith('ListenerRule')]
         except Exception as e:
             self.ecs_service_names = []
             self.ecs_service_logical_name_mappings = []
@@ -123,6 +126,21 @@ class ServiceInformationFetcher(object):
             taskDefinition=task_definition_arns
         )
         return task_definition['taskDefinition']['containerDefinitions'][0]['image']
+
+    def _get_stack_resource_summaries(self):
+        stack_name = get_service_stack_name(self.environment, self.name)
+        response = self.cfn_client.list_stack_resources(StackName=stack_name)
+        resource_summaries = response['StackResourceSummaries']
+        while 'NextToken' in response:
+            response = self.cfn_client.list_stack_resources(
+                StackName=stack_name,
+                NextToken=response['NextToken'],
+            )
+            resource_summaries.extend(response.get('Rules', []))
+        return resource_summaries
+
+    def get_existing_listener_rule_summary(self, service_name):
+        return next((rule for rule in self.listener_rules if rule['LogicalResourceId'].startswith(service_name)), None)
 
     # TODO: Test cover this. Also this can use boto ecs client describe_services method. That can describe up to 10
     #  services in one call. It would be simpler implementation to test as well. We can also use self.service_info

@@ -13,10 +13,11 @@ from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase, spinalcase
 from os import getcwd
 from os.path import basename
+import random
 
 from cloudlift.config import DecimalEncoder, DynamodbConfig
 # import config.mfa as mfa
-from cloudlift.config import print_json_changes
+from cloudlift.config import print_json_changes, get_environment_level_alb_listener, get_client_for
 from cloudlift.config.logging import log_bold, log_warning
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.version import VERSION
@@ -48,7 +49,7 @@ class ServiceConfiguration(DynamodbConfig):
         super(ServiceConfiguration, self).__init__(SERVICE_CONFIGURATION_TABLE, [
             ('service_name', self.service_name), ('environment', self.environment)])
 
-    def edit_config(self):
+    def edit_config(self, information_fetcher=None):
         '''
             Open editor to update configuration
         '''
@@ -67,8 +68,8 @@ class ServiceConfiguration(DynamodbConfig):
             )
 
             if updated_configuration is None:
+                self.set_config(current_configuration, information_fetcher)
                 if self.new_service:
-                    self.set_config(current_configuration)
                     log_warning("Using default configuration.")
                 else:
                     log_warning("No changes made.")
@@ -80,12 +81,14 @@ class ServiceConfiguration(DynamodbConfig):
                 ))
                 if not differences:
                     log_warning("No changes made.")
+                    self.set_config(current_configuration, information_fetcher)
                 else:
                     print_json_changes(differences)
                     if confirm('Do you want update the config?'):
                         self.set_config(updated_configuration)
                     else:
                         log_warning("Changes aborted.")
+                        self.set_config(current_configuration, information_fetcher)
         except ClientError:
             raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
 
@@ -101,12 +104,51 @@ class ServiceConfiguration(DynamodbConfig):
             existing_configuration.pop("cloudlift_version", None)
         return existing_configuration
 
-    def set_config(self, config):
+    def set_config(self, config, information_fetcher=None):
         '''
             Set configuration in DynamoDB
         '''
         config['cloudlift_version'] = VERSION
+        for service_name, service_config in config['services'].items():
+            reuse_existing_alb = 'alb' in service_config['http_interface'] and (service_config['http_interface']['alb'].get('create_new', False) is False)
+            if reuse_existing_alb and 'priority' not in service_config['http_interface']['alb']:
+                listener_arn = service_config['http_interface']['alb']['listener_arn'] if 'listener_arn' in \
+                                                                                  service_config['http_interface']['alb'] \
+                    else get_environment_level_alb_listener(self.environment)
+                service_config['http_interface']['alb']['priority'] = self._get_listener_rule_priority_for_service(listener_arn, service_name, information_fetcher)
         self.set_config_in_db(config)
+
+    def _get_listener_rule_priority_for_service(self, listener_arn, service_name, information_fetcher):
+        elb_client = get_client_for('elbv2', self.environment)
+        response = elb_client.describe_rules(
+            ListenerArn=listener_arn,
+        )
+        listener_rules = list(response.get('Rules', []))
+
+        while 'NextMarker' in response:
+            response = elb_client.describe_rules(
+                ListenerArn=listener_arn,
+                Marker=response['NextMarker'],
+            )
+            listener_rules.extend(response.get('Rules', []))
+
+        if information_fetcher:
+            service_listener_rule = information_fetcher.get_existing_listener_rule_summary(service_name)
+            if service_listener_rule:
+                matching_priority = next((rule['Priority'] for rule in listener_rules if
+                                          rule['RuleArn'] == service_listener_rule['PhysicalResourceId']), None)
+                if matching_priority:
+                    return int(matching_priority)
+
+        return self._get_random_available_listener_rule_priority(listener_rules, listener_arn)
+
+    @staticmethod
+    def _get_random_available_listener_rule_priority(listener_rules, listener_arn):
+        occupied_priorities = set(rule['Priority'] for rule in listener_rules)
+        available_priorities = set(range(1, 50001)) - occupied_priorities
+        if not available_priorities:
+            raise UnrecoverableException("No listener rule priorities available for listener_arn: {}".format(listener_arn))
+        return int(random.choice(list(available_priorities)))
 
     def update_cloudlift_version(self):
         '''
@@ -371,7 +413,7 @@ class ServiceConfiguration(DynamodbConfig):
                     "additionalProperties": False
                 },
             },
-            "required": ["memory_reservation", "command", "secrets_name"]
+            "required": ["memory_reservation", "command"]
         }
         schema = {
             # "$schema": "http://json-schema.org/draft-04/schema#",

@@ -554,13 +554,12 @@ service is down',
 
         listener_arn = alb_config['listener_arn'] if 'listener_arn' in alb_config \
             else get_environment_level_alb_listener(self.env)
-        priority = int(alb_config['priority']) if 'priority' in alb_config \
-            else self._get_free_priority_from_listener(listener_arn)
+        priority = alb_config['priority']
         self.template.add_resource(
             ListenerRule(
                 service_name + "ListenerRule",
                 ListenerArn=listener_arn,
-                Priority=priority,
+                Priority=int(priority),
                 Conditions=conditions,
                 Actions=[Action(
                     Type="forward",
@@ -1179,30 +1178,6 @@ building this service",
                 self.environment_stack['Outputs']
             )
         )[0]['OutputValue']
-
-    def _get_free_priority_from_listener(self, listener_arn):
-        rules = []
-        elb_client = get_client_for('elbv2', self.env)
-        response = elb_client.describe_rules(
-            ListenerArn=listener_arn,
-        )
-
-        rules.extend(response.get('Rules', []))
-
-        while 'NextMarker' in response:
-            response = elb_client.describe_rules(
-                Marker=response['NextMarker'],
-            )
-            rules.extend(response.get('Rules', []))
-
-        priorities = set(rule['Priority'] for rule in rules)
-        for i in range(1, 50001):
-            if str(i) not in priorities:
-                return i
-        return -1
-
-    def _add_to_alb_listener_in_subpath(self, service_name, alb_listener_arn, subpath, target_group):
-        priority = self._get_free_priority_from_listener(alb_listener_arn)
 
     def _get_desired_task_count_for_service(self, service_name, min_count=0):
         return max(self.desired_counts.get(service_name, 1), min_count)

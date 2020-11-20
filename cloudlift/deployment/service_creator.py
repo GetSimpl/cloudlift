@@ -100,11 +100,11 @@ class ServiceCreator(object):
         '''
 
         log_bold("Starting to update service")
+        information_fetcher = ServiceInformationFetcher(self.service_configuration.service_name, self.environment)
         self.service_configuration.edit_config()
         self.service_configuration.validate()
 
         try:
-            information_fetcher = ServiceInformationFetcher(self.service_configuration.service_name, self.environment)
             current_image_uri = information_fetcher.get_current_image_uri()
             desired_counts = information_fetcher.fetch_current_desired_count()
 

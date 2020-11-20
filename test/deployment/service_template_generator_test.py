@@ -328,7 +328,8 @@ class TestServiceTemplateGenerator(TestCase):
                         "internal": False,
                         "alb": {
                             "create_new": False,
-                            "host": "abc.xyz.com"
+                            "host": "abc.xyz.com",
+                            "priority": 4,
                         },
                         "container_port": Decimal(7003),
                         "restrict_access_to": ["0.0.0.0/0"],
@@ -398,9 +399,6 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_env_alb_template.yml')
-        mock_elbv2_client.describe_rules.assert_has_calls(
-            [call(ListenerArn='listenerARN1234'),
-             call(Marker='/next/marker')])
         with(open(template_file_path)) as expected_template_file:
             assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
