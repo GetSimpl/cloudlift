@@ -20,14 +20,14 @@ pipeline {
                 '''
             }
         }
-        
+
         stage("Build Docker Image") {
             steps {
                 sh """
                     docker build -t cloudlift:build .
                 """
                 script {
-                    VERSION = sh(script: "docker run cloudlift:build --version | awk '{ print \$3 }'", returnStdout: true)
+                    VERSION = sh(script: "docker run cloudlift:build --version | awk '{ print \$3 }'", returnStdout: true).trim()
                 }
             }
         }
