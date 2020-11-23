@@ -110,6 +110,8 @@ class ServiceConfiguration(DynamodbConfig):
         '''
         config['cloudlift_version'] = VERSION
         for service_name, service_config in config['services'].items():
+            if 'http_interface' not in service_config:
+                continue
             reuse_existing_alb = 'alb' in service_config['http_interface'] and (service_config['http_interface']['alb'].get('create_new', False) is False)
             if reuse_existing_alb and 'priority' not in service_config['http_interface']['alb']:
                 listener_arn = service_config['http_interface']['alb']['listener_arn'] if 'listener_arn' in \
