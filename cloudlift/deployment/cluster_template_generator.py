@@ -545,7 +545,6 @@ for cluster for 15 minutes.',
             ScalingAdjustment=1
         )
         self.template.add_resource(self.cluster_scaling_policy)
-        return self.auto_scaling_group
 
     def _add_instance_draining(self, cluster):
         self.sns_asg_role = Role(
