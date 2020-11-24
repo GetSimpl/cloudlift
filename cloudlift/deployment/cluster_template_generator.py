@@ -1,28 +1,32 @@
 import json
 import re
+import pathlib
 
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
-                         cloudformation)
+                         cloudformation, GetAtt, Join)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
-                                     ScalingPolicy)
+                                     ScalingPolicy, LifecycleHook)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
                              SubnetRouteTableAssociation, VPCGatewayAttachment)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
-from troposphere.iam import InstanceProfile, Role
+from troposphere.iam import InstanceProfile, Role, PolicyType, Policy
 from troposphere.logs import LogGroup
 from troposphere.policies import (AutoScalingRollingUpdate, CreationPolicy,
                                   ResourceSignal)
 from troposphere.rds import DBSubnetGroup
-
+from troposphere.awslambda import Function, Code, MEMORY_VALUES, Permission
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.version import VERSION
+from troposphere.sns import Subscription, Topic, SubscriptionResource
+from awacs.aws import Allow, Statement, Principal, PolicyDocument
+from awacs.sts import AssumeRole
 
 
 class ClusterTemplateGenerator(TemplateGenerator):
@@ -305,6 +309,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         cluster = Cluster('Cluster', ClusterName=Ref('AWS::StackName'))
         self.template.add_resource(cluster)
         self._add_ec2_auto_scaling()
+        self._add_instance_draining(cluster)
         self._add_cluster_alarms(cluster)
         return cluster
 
@@ -540,6 +545,107 @@ for cluster for 15 minutes.',
             ScalingAdjustment=1
         )
         self.template.add_resource(self.cluster_scaling_policy)
+        return self.auto_scaling_group
+
+    def _add_instance_draining(self, cluster):
+        self.sns_asg_role = Role(
+            "SNSASGRole",
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Action=[AssumeRole],
+                        Principal=Principal("Service", ["autoscaling.amazonaws.com"])
+                    )
+                ]
+            ),
+            ManagedPolicyArns=["arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole"]
+        )
+        self.template.add_resource(self.sns_asg_role)
+        self.lambda_execution_role = Role(
+            "LambdaExecutionRole",
+            Policies=[Policy(
+                PolicyName="lambda-inline",
+                PolicyDocument={
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                            "autoscaling:CompleteLifecycleAction",
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents",
+                            "ecs:ListContainerInstances",
+                            "ecs:DescribeContainerInstances",
+                            "ecs:UpdateContainerInstancesState",
+                            "sns:Publish"
+                        ],
+                        "Resource": "*"
+                }],
+                }
+            )],
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Action=[AssumeRole],
+                        Principal=Principal("Service", ["lambda.amazonaws.com"])
+                    )
+                ]
+            ),
+            ManagedPolicyArns=["arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole"]
+        )
+        self.template.add_resource(self.lambda_execution_role)
+        with open (str(pathlib.Path(__file__).parent.absolute())+"/ecs_instance_draining_lambda.py", "r") as ecs_instance_draining_lambda:
+            lambda_code=ecs_instance_draining_lambda.readlines()
+        self.lambda_function_for_asg = Function(
+            "LambdaFunctionForASG",
+            Handler="index.lambda_handler",
+            Role=GetAtt(self.lambda_execution_role, "Arn"),
+            Runtime="python3.6",
+            MemorySize=128,
+            Timeout=60,
+            Code=Code(
+                ZipFile=Join("", lambda_code)
+            )
+        )
+        self.template.add_resource(self.lambda_function_for_asg)
+        self.asg_sns_topic = Topic(
+            "ASGSNSTopic",
+            TopicName=Ref('TopicName'),
+            Subscription=[Subscription(
+                Protocol="lambda",
+                Endpoint=GetAtt(self.lambda_function_for_asg, "Arn")
+            )]
+        )
+        self.template.add_resource(self.asg_sns_topic)
+        self.lambda_invoke_permission = Permission(
+            "LambdaInvokePermission",
+            FunctionName=Ref(self.lambda_function_for_asg),
+            Action="lambda:InvokeFunction",
+            Principal="sns.amazonaws.com",
+            SourceArn=Ref(self.asg_sns_topic)
+        )
+        self.template.add_resource(self.lambda_invoke_permission)
+        self.lambda_subscription_to_sns_topic = SubscriptionResource(
+            "LambdaSubscriptionToSNSTopic",
+            Protocol="lambda",
+            Endpoint=GetAtt(self.lambda_function_for_asg, "Arn"),
+            TopicArn=Ref(self.asg_sns_topic)
+        )
+        self.template.add_resource(self.lambda_subscription_to_sns_topic)
+        self.asg_lifecycle_hook=LifecycleHook(
+            "ASGLifecycleHook",
+            AutoScalingGroupName=Ref(self.auto_scaling_group),
+            DefaultResult="ABANDON",
+            HeartbeatTimeout=Ref('HeartbeatTimeout'),
+            LifecycleHookName=Ref('LifecycleHookName'),
+            LifecycleTransition="autoscaling:EC2_INSTANCE_TERMINATING",
+            NotificationMetadata=Ref(cluster),
+            NotificationTargetARN=Ref(self.asg_sns_topic),
+            RoleARN=GetAtt(self.sns_asg_role, "Arn"),
+        )
+        self.template.add_resource(self.asg_lifecycle_hook)
 
     def _add_cluster_parameters(self):
         self.template.add_parameter(Parameter(
@@ -551,6 +657,12 @@ for cluster for 15 minutes.',
         self.key_pair = Parameter(
             "KeyPair", Description='', Type="AWS::EC2::KeyPair::KeyName", Default="")
         self.template.add_parameter(self.key_pair)
+        self.template.add_parameter(Parameter(
+            "TopicName", Description='', Type="String", Default=str(self.configuration['draining']['topic_name'])))
+        self.template.add_parameter(Parameter(
+            "HeartbeatTimeout", Description='', Type="Number", Default=str(self.configuration['draining']['heartbeat_timeout'])))
+        self.template.add_parameter(Parameter(
+            "LifecycleHookName", Description='', Type="String", Default=str(self.configuration['draining']['lifecycle_hook_name'])))
         self.template.add_parameter(Parameter(
             "MinSize", Description='', Type="Number", Default=str(self.configuration['cluster']['min_instances'])))
         self.template.add_parameter(Parameter(
@@ -582,6 +694,9 @@ for cluster for 15 minutes.',
             'max_instances': str(self.configuration['cluster']['max_instances']),
             'instance_type': self.configuration['cluster']['instance_type'],
             'key_name': self.configuration['cluster']['key_name'],
+            'topic_name': self.configuration['draining']['topic_name'],
+            'heartbeat_timeout': str(self.configuration['draining']['heartbeat_timeout']),
+            'lifecycle_hook_name': self.configuration['draining']['lifecycle_hook_name'],
             'cloudlift_version': VERSION
         }
         self.template.add_output(Output(
@@ -667,6 +782,16 @@ for cluster for 15 minutes.',
                             'NotificationSnsArn'
                         ]
                     },
+                    {
+                        'Label': {
+                            'default': 'ECS Draining Configuration'
+                        },
+                        'Parameters': [
+                            'TopicName',
+                            'HeartbeatTimeout',
+                            'LifecycleHookName'
+                        ]
+                    }
                 ],
                 'ParameterLabels': {
                     'Environment': {
@@ -684,7 +809,7 @@ for cluster for 15 minutes.',
                         'default': 'Min. no. of instances in cluster'
                     },
                     'NotificationSnsArn': {
-                        'default': 'The SNS topic to which notifactions has to be triggered'
+                        'default': 'The SNS topic to which notifications has to be triggered'
                     },
                     'Subnet1': {
                         'default': 'Enter the ID of the 1st subnet'
@@ -695,6 +820,15 @@ for cluster for 15 minutes.',
                     'VPC': {
                         'default': 'Enter the VPC in which you want the environment to be setup'
                     },
+                    'LifecycleHookName': {
+                        'default': 'Enter the name for Auto Scaling Group Lifecycle Hook'
+                    },
+                    'HeartbeatTimeout': {
+                        'default': 'Enter the maximum timeout in sec for lifecycle hook'
+                    },
+                    'TopicName': {
+                        'default': 'Enter the name for Lambda SNS topic'
+                    }
                 }
             }
         })

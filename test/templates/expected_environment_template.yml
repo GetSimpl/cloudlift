@@ -1,0 +1,648 @@
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Cluster Configuration
+        Parameters:
+          - KeyPair
+          - Environment
+          - MinSize
+          - MaxSize
+          - InstanceType
+          - VPC
+          - Subnet1
+          - Subnet2
+          - NotificationSnsArn
+      - Label:
+          default: ECS Draining Configuration
+        Parameters:
+          - TopicName
+          - HeartbeatTimeout
+          - LifecycleHookName
+    ParameterLabels:
+      Environment:
+        default: Enter the environment e.g. dev or staging or sandbox or production
+      InstanceType:
+        default: Type of instance
+      KeyPair:
+        default: Select the key with which you want to login to the ec2 instances
+      MaxSize:
+        default: Max. no. of instances in cluster
+      MinSize:
+        default: Min. no. of instances in cluster
+      NotificationSnsArn:
+        default: The SNS topic to which notifications has to be triggered
+      Subnet1:
+        default: Enter the ID of the 1st subnet
+      Subnet2:
+        default: Enter the ID of the 2nd subnet
+      VPC:
+        default: Enter the VPC in which you want the environment to be setup
+      LifecycleHookName:
+        default: Enter the name for Auto Scaling Group Lifecycle Hook
+      HeartbeatTimeout:
+        default: Enter the maximum timeout in sec for lifecycle hook
+      TopicName:
+        default: Enter the name for Lambda SNS topic
+Mappings:
+  AWSRegionToAMI:
+    ap-south-1:
+      AMI: ami-0c42adb42b71cacfc
+Outputs:
+  StackId:
+    Description: The unique ID of the stack. To be supplied to circle CI environment
+      variables to validate during deployment.
+    Value: !Ref 'AWS::StackId'
+  StackName:
+    Description: The name of the stack
+    Value: !Ref 'AWS::StackName'
+  CloudliftOptions:
+    Description: Options used with cloudlift when building this cluster
+    Value: '{"env": "demo", "min_instances": "1", "max_instances": "2", "instance_type":
+      "t3a.micro", "key_name": "praveen-test", "topic_name": "DemoTest", "heartbeat_timeout":
+      "300", "lifecycle_hook_name": "DemoTest", "cloudlift_version": "1.4.4"}'
+  VPC:
+    Description: VPC in which environment is setup
+    Value: !Ref 'demoVpc'
+  PrivateSubnet1:
+    Description: ID of the 1st subnet
+    Value: !Ref 'demoPrivateSubnet2'
+  PrivateSubnet2:
+    Description: ID of the 2nd subnet
+    Value: !Ref 'demoPrivateSubnet1'
+  PublicSubnet1:
+    Description: ID of the 1st subnet
+    Value: !Ref 'demoPublicSubnet2'
+  PublicSubnet2:
+    Description: ID of the 2nd subnet
+    Value: !Ref 'demoPublicSubnet1'
+  AutoScalingGroup:
+    Description: AutoScaling group for ECS container instances
+    Value: !Ref 'AutoScalingGroup'
+  SecurityGroupAlb:
+    Description: Security group ID for ALB
+    Value: !Ref 'SecurityGroupAlb'
+  MinInstances:
+    Description: Minimum instances in cluster
+    Value: '1'
+  MaxInstances:
+    Description: Maximum instances in cluster
+    Value: '2'
+  InstanceType:
+    Description: EC2 instance type
+    Value: t3a.micro
+  KeyName:
+    Description: Key Pair name for accessing the instances
+    Value: praveen-test
+Parameters:
+  Environment:
+    Description: ''
+    Type: String
+    Default: ''
+  KeyPair:
+    Description: ''
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: ''
+  TopicName:
+    Description: ''
+    Type: String
+    Default: DemoTest
+  HeartbeatTimeout:
+    Description: ''
+    Type: Number
+    Default: '300'
+  LifecycleHookName:
+    Description: ''
+    Type: String
+    Default: DemoTest
+  MinSize:
+    Description: ''
+    Type: Number
+    Default: '1'
+  MaxSize:
+    Description: ''
+    Type: Number
+    Default: '2'
+  NotificationSnsArn:
+    Description: ''
+    Type: String
+    Default: arn:aws:sns:ap-south-1:259042324395:Praveen
+  InstanceType:
+    Description: ''
+    Type: String
+    Default: t3a.micro
+Resources:
+  demoVpc:
+    Properties:
+      CidrBlock: 10.7.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+        - Key: category
+          Value: services
+        - Key: environment
+          Value: demo
+        - Key: Name
+          Value: demo-vpc
+    Type: AWS::EC2::VPC
+  demoIg:
+    Properties:
+      Tags:
+        - Key: Name
+          Value: demo-internet-gateway
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::InternetGateway
+  demoAttachment:
+    Properties:
+      InternetGatewayId: !Ref 'demoIg'
+      VpcId: !Ref 'demoVpc'
+    Type: AWS::EC2::VPCGatewayAttachment
+  demoPublic:
+    Properties:
+      VpcId: !Ref 'demoVpc'
+      Tags:
+        - Key: Name
+          Value: demo-public
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::RouteTable
+    DependsOn: demoVpc
+  demoPublicSubnet1:
+    Properties:
+      AvailabilityZone: ap-south-1b
+      CidrBlock: 10.7.0.0/22
+      VpcId: !Ref 'demoVpc'
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: demo-public-1
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::Subnet
+  demoPublicSubnet1Assoc:
+    Properties:
+      RouteTableId: !Ref 'demoPublic'
+      SubnetId: !Ref 'demoPublicSubnet1'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  demoPublicSubnet2:
+    Properties:
+      AvailabilityZone: ap-south-1a
+      CidrBlock: 10.7.4.0/22
+      VpcId: !Ref 'demoVpc'
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: demo-public-2
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::Subnet
+  demoPublicSubnet2Assoc:
+    Properties:
+      RouteTableId: !Ref 'demoPublic'
+      SubnetId: !Ref 'demoPublicSubnet2'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  demoIgRoute:
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'demoIg'
+      RouteTableId: !Ref 'demoPublic'
+    Type: AWS::EC2::Route
+  demoPrivate:
+    Properties:
+      VpcId: !Ref 'demoVpc'
+      Tags:
+        - Key: Name
+          Value: demo-private
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::RouteTable
+  demoPrivateSubnet1:
+    Properties:
+      AvailabilityZone: ap-south-1b
+      CidrBlock: 10.7.8.0/22
+      VpcId: !Ref 'demoVpc'
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: demo-private-1
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::Subnet
+  demoPrivateSubnet1Assoc:
+    Properties:
+      RouteTableId: !Ref 'demoPrivate'
+      SubnetId: !Ref 'demoPrivateSubnet1'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  demoPrivateSubnet2:
+    Properties:
+      AvailabilityZone: ap-south-1a
+      CidrBlock: 10.7.12.0/22
+      VpcId: !Ref 'demoVpc'
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: demo-private-2
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::Subnet
+  demoPrivateSubnet2Assoc:
+    Properties:
+      RouteTableId: !Ref 'demoPrivate'
+      SubnetId: !Ref 'demoPrivateSubnet2'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  demoNat:
+    Properties:
+      AllocationId: eipalloc-0103733acf336d725
+      SubnetId: !Ref 'demoPublicSubnet1'
+      Tags:
+        - Key: Name
+          Value: demo-nat-gateway
+        - Key: environment
+          Value: demo
+    Type: AWS::EC2::NatGateway
+  demoNatRoute:
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref 'demoNat'
+      RouteTableId: !Ref 'demoPrivate'
+    Type: AWS::EC2::Route
+  DBSubnetGroup:
+    Properties:
+      DBSubnetGroupName: demo-subnet
+      Tags:
+        - Key: category
+          Value: services
+        - Key: environment
+          Value: demo
+      DBSubnetGroupDescription: demo subnet group
+      SubnetIds:
+        - !Ref 'demoPrivateSubnet1'
+        - !Ref 'demoPrivateSubnet2'
+    Type: AWS::RDS::DBSubnetGroup
+  ElasticacheSubnetGroup:
+    Properties:
+      CacheSubnetGroupName: demo-subnet
+      Description: demo subnet group
+      SubnetIds:
+        - !Ref 'demoPrivateSubnet1'
+        - !Ref 'demoPrivateSubnet2'
+    Type: AWS::ElastiCache::SubnetGroup
+  demoLogGroup:
+    Properties:
+      LogGroupName: demo-logs
+      RetentionInDays: 365
+    Type: AWS::Logs::LogGroup
+  Cluster:
+    Properties:
+      ClusterName: !Ref 'AWS::StackName'
+    Type: AWS::ECS::Cluster
+  ECSRole:
+    Properties:
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      RoleName: !Sub 'ecs-${AWS::StackName}-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+    Type: AWS::IAM::Role
+  InstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'ECSRole'
+    Type: AWS::IAM::InstanceProfile
+  SecurityGroupAlb:
+    Properties:
+      VpcId: !Ref 'demoVpc'
+      GroupDescription: !Sub '${AWS::StackName}-alb'
+    Type: AWS::EC2::SecurityGroup
+  SecurityGroupEc2Hosts:
+    Properties:
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref 'SecurityGroupAlb'
+          IpProtocol: -1
+      VpcId: !Ref 'demoVpc'
+      GroupDescription: !Sub '${AWS::StackName}-hosts'
+    Type: AWS::EC2::SecurityGroup
+  SecurityGroupDatabases:
+    Properties:
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref 'SecurityGroupEc2Hosts'
+          IpProtocol: -1
+      VpcId: !Ref 'demoVpc'
+      GroupDescription: !Sub '${AWS::StackName}-databases'
+    Type: AWS::EC2::SecurityGroup
+  LaunchConfiguration:
+    Properties:
+      UserData: !Base64
+        Fn::Sub: "#!/bin/bash\nyum update -y\nyum install -y aws-cfn-bootstrap\n/opt/aws/bin/cfn-init\
+          \ -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration\n\
+          /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName}\
+          \ --resource AutoScalingGroup\nyum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm\n\
+          systemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+      IamInstanceProfile: !Ref 'InstanceProfile'
+      SecurityGroups:
+        - !Ref 'SecurityGroupEc2Hosts'
+      InstanceType: !Ref 'InstanceType'
+      ImageId: !FindInMap
+        - AWSRegionToAMI
+        - !Ref 'AWS::Region'
+        - AMI
+      KeyName: !Ref 'KeyPair'
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub "[main]\nstack=${AWS::StackId}\nregion=${AWS::Region}\n"
+              mode: '256'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub "[cfn-auto-reloader-hook]\ntriggers=post.update\npath=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init\n\
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName}\
+                \ --resource LaunchConfiguration\n"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+          commands:
+            '01_add_instance_to_cluster':
+              command: !Sub "echo \"ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\"\
+                \ > /etc/ecs/ecs.config"
+  AutoScalingGroup:
+    Properties:
+      DesiredCapacity: 1
+      Tags:
+        - PropagateAtLaunch: true
+          Value: !Sub '${AWS::StackName} - ECS Host'
+          Key: Name
+      MinSize: !Ref 'MinSize'
+      MaxSize: !Ref 'MaxSize'
+      VPCZoneIdentifier:
+        - !Ref 'demoPrivateSubnet2'
+        - !Ref 'demoPrivateSubnet1'
+      LaunchConfigurationName: !Ref 'LaunchConfiguration'
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy: {}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+  AutoScalingPolicy:
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AutoScalingGroup'
+      Cooldown: 300
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+    Type: AWS::AutoScaling::ScalingPolicy
+  SNSASGRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - autoscaling.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole
+    Type: AWS::IAM::Role
+  LambdaExecutionRole:
+    Properties:
+      Policies:
+        - PolicyName: lambda-inline
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:CompleteLifecycleAction
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - ecs:ListContainerInstances
+                  - ecs:DescribeContainerInstances
+                  - ecs:UpdateContainerInstancesState
+                  - sns:Publish
+                Resource: '*'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole
+    Type: AWS::IAM::Role
+  LambdaFunctionForASG:
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt 'LambdaExecutionRole.Arn'
+      Runtime: python3.6
+      MemorySize: 128
+      Timeout: 60
+      Code:
+        ZipFile: !Join
+          - ''
+          - - "import json\n"
+            - "import time\n"
+            - "import boto3\n"
+            - "import os\n"
+            - "\n"
+            - "ECS = boto3.client('ecs')\n"
+            - "ASG = boto3.client('autoscaling')\n"
+            - "SNS = boto3.client('sns')\n"
+            - "\n"
+            - "def find_ecs_instance_info(instance_id,cluster_name):\n"
+            - "    paginator = ECS.get_paginator('list_container_instances')\n"
+            - "    for list_resp in paginator.paginate(cluster=cluster_name):\n"
+            - "        arns = list_resp['containerInstanceArns']\n"
+            - "        desc_resp = ECS.describe_container_instances(cluster=cluster_name,\n"
+            - "                                                    containerInstances=arns)\n"
+            - "        for container_instance in desc_resp['containerInstances']:\n"
+            - "            if container_instance['ec2InstanceId'] != instance_id:\n"
+            - "                continue\n"
+            - "            print('Found instance: id=%s, arn=%s, status=%s, runningTasksCount=%s'\
+              \ %\n"
+            - "                (instance_id, container_instance['containerInstanceArn'],\n"
+            - "                    container_instance['status'], container_instance['runningTasksCount']))\n"
+            - "            return (container_instance['containerInstanceArn'],\n"
+            - "                    container_instance['status'], container_instance['runningTasksCount'])\n"
+            - "    return None, None, 0\n"
+            - "\n"
+            - "def instance_has_running_tasks(instance_id,cluster_name):\n"
+            - "    (instance_arn, container_status, running_tasks) = find_ecs_instance_info(instance_id,cluster_name)\n"
+            - "    if instance_arn is None:\n"
+            - "        print('Could not find instance ID %s. Letting autoscaling kill\
+              \ the instance.' %\n"
+            - "            (instance_id))\n"
+            - "        return False\n"
+            - "    if container_status != 'DRAINING':\n"
+            - "        print('Setting container instance %s (%s) to DRAINING' %\n"
+            - "            (instance_id, instance_arn))\n"
+            - "        ECS.update_container_instances_state(cluster=cluster_name,\n"
+            - "                                            containerInstances=[instance_arn],\n"
+            - "                                            status='DRAINING')\n"
+            - "    return running_tasks > 0\n"
+            - "    \n"
+            - "def lambda_handler(event, context):\n"
+            - "    msg = json.loads(event['Records'][0]['Sns']['Message'])\n"
+            - "    print(\"Event: \", msg)\n"
+            - "    if 'LifecycleTransition' not in msg.keys() or \\\n"
+            - "        msg['LifecycleTransition'].find('autoscaling:EC2_INSTANCE_TERMINATING')\
+              \ == -1:\n"
+            - "        print('Exiting since the lifecycle transition is not EC2_INSTANCE_TERMINATING.')\n"
+            - "        return\n"
+            - "    if instance_has_running_tasks(msg['EC2InstanceId'], msg['NotificationMetadata']):\n"
+            - "        print('Tasks are still running on instance %s; posting msg\
+              \ to SNS topic %s' %\n"
+            - "            (msg['EC2InstanceId'], event['Records'][0]['Sns']['TopicArn']))\n"
+            - "        time.sleep(5)\n"
+            - "        sns_resp = SNS.publish(TopicArn=event['Records'][0]['Sns']['TopicArn'],\n"
+            - "                                Message=json.dumps(msg),\n"
+            - "                                Subject='Publishing SNS msg to invoke\
+              \ Lambda again.')\n"
+            - "        print('Posted msg %s to SNS topic.' % (sns_resp['MessageId']))\n"
+            - "    else:\n"
+            - "        print('No tasks are running on instance %s; setting lifecycle\
+              \ to complete' %\n"
+            - "            (msg['EC2InstanceId']))\n"
+            - "        ASG.complete_lifecycle_action(LifecycleHookName=msg['LifecycleHookName'],\n"
+            - "                                    AutoScalingGroupName=msg['AutoScalingGroupName'],\n"
+            - "                                    LifecycleActionResult='CONTINUE',\n"
+            - '                                    InstanceId=msg[''EC2InstanceId''])'
+    Type: AWS::Lambda::Function
+  ASGSNSTopic:
+    Properties:
+      TopicName: !Ref 'TopicName'
+      Subscription:
+        - Protocol: lambda
+          Endpoint: !GetAtt 'LambdaFunctionForASG.Arn'
+    Type: AWS::SNS::Topic
+  LambdaInvokePermission:
+    Properties:
+      FunctionName: !Ref 'LambdaFunctionForASG'
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref 'ASGSNSTopic'
+    Type: AWS::Lambda::Permission
+  LambdaSubscriptionToSNSTopic:
+    Properties:
+      Protocol: lambda
+      Endpoint: !GetAtt 'LambdaFunctionForASG.Arn'
+      TopicArn: !Ref 'ASGSNSTopic'
+    Type: AWS::SNS::Subscription
+  ASGLifecycleHook:
+    Properties:
+      AutoScalingGroupName: !Ref 'AutoScalingGroup'
+      DefaultResult: ABANDON
+      HeartbeatTimeout: !Ref 'HeartbeatTimeout'
+      LifecycleHookName: !Ref 'LifecycleHookName'
+      LifecycleTransition: autoscaling:EC2_INSTANCE_TERMINATING
+      NotificationMetadata: !Ref 'Cluster'
+      NotificationTargetARN: !Ref 'ASGSNSTopic'
+      RoleARN: !GetAtt 'SNSASGRole.Arn'
+    Type: AWS::AutoScaling::LifecycleHook
+  Ec2HostsHighCPUAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AutoScalingGroup'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if CPU too high or metric disappears indicating instance
+        is down
+      Namespace: AWS/EC2
+      Period: 60
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: CPUUtilization
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighCPUAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'Cluster'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if CPU is too high for cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: CPUUtilization
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighMemoryAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'Cluster'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if memory is too high for cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: MemoryUtilization
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighMemoryReservationAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'Cluster'
+      AlarmActions:
+        - !Ref 'AutoScalingPolicy'
+      AlarmDescription: Alarm if memory reservation is over 75% for cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '75'
+      MetricName: MemoryReservation
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighMemoryReservationUserNotifcationAlarm:
+    Properties:
+      EvaluationPeriods: 3
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'Cluster'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if memory reservation is over 75% for cluster for 15
+        minutes.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '75'
+      MetricName: MemoryReservation
+    Type: AWS::CloudWatch::Alarm
