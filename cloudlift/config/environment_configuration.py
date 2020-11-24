@@ -128,6 +128,9 @@ class EnvironmentConfiguration(object):
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
         cluster_instance_type = prompt("Instance type", default='m5.xlarge')
+        topic_name = prompt("SNS Topic Name")
+        heartbeat_timeout = prompt("Timeout for Lifecycle Hook", default=300)
+        lifecycle_hook_name = prompt("Lifecycle Hook name")
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
@@ -167,6 +170,11 @@ class EnvironmentConfiguration(object):
                 "environment": {
                     "notifications_arn": notifications_arn,
                     "ssl_certificate_arn": ssl_certificate_arn
+                },
+                "draining":{
+                    "topic_name": topic_name,
+                    "heartbeat_timeout": heartbeat_timeout,
+                    "lifecycle_hook_name": lifecycle_hook_name
                 }
             }
         }
@@ -266,6 +274,19 @@ class EnvironmentConfiguration(object):
                             "required": [
                                 "notifications_arn",
                                 "ssl_certificate_arn"
+                            ]
+                        },
+                        "draining": {
+                            "type": "object",
+                            "properties": {
+                                "topic_name": {"type": "string"},
+                                "heartbeat_timeout": {"type": "integer"},
+                                "lifecycle_hook_name": {"type": "string"},
+                            },
+                            "required": [
+                                "topic_name",
+                                "heartbeat_timeout",
+                                "lifecycle_hook_name"
                             ]
                         },
                         "region": {"type": "string"},
