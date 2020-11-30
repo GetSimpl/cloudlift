@@ -170,11 +170,6 @@ class EnvironmentConfiguration(object):
                 "environment": {
                     "notifications_arn": notifications_arn,
                     "ssl_certificate_arn": ssl_certificate_arn
-                },
-                "draining":{
-                    "topic_name": topic_name,
-                    "heartbeat_timeout": heartbeat_timeout,
-                    "lifecycle_hook_name": lifecycle_hook_name
                 }
             }
         }
@@ -274,19 +269,6 @@ class EnvironmentConfiguration(object):
                             "required": [
                                 "notifications_arn",
                                 "ssl_certificate_arn"
-                            ]
-                        },
-                        "draining": {
-                            "type": "object",
-                            "properties": {
-                                "topic_name": {"type": "string"},
-                                "heartbeat_timeout": {"type": "integer"},
-                                "lifecycle_hook_name": {"type": "string"},
-                            },
-                            "required": [
-                                "topic_name",
-                                "heartbeat_timeout",
-                                "lifecycle_hook_name"
                             ]
                         },
                         "region": {"type": "string"},
