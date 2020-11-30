@@ -611,7 +611,7 @@ for cluster for 15 minutes.',
         self.template.add_resource(self.lambda_function_for_asg)
         self.asg_sns_topic = Topic(
             "ASGSNSTopic",
-            TopicName=Join("", [Ref(cluster),"Topic"]),
+            TopicName=Join("-", [Ref(cluster),"Topic"]),
             Subscription=[Subscription(
                 Protocol="lambda",
                 Endpoint=GetAtt(self.lambda_function_for_asg, "Arn")
@@ -638,7 +638,7 @@ for cluster for 15 minutes.',
             AutoScalingGroupName=Ref(self.auto_scaling_group),
             DefaultResult="ABANDON",
             HeartbeatTimeout=300,
-            LifecycleHookName=Join("", [Ref(cluster),"ASGHook"]),
+            LifecycleHookName=Join("-", [Ref(cluster),"ASG-Hook"]),
             LifecycleTransition="autoscaling:EC2_INSTANCE_TERMINATING",
             NotificationMetadata=Ref(cluster),
             NotificationTargetARN=Ref(self.asg_sns_topic),
