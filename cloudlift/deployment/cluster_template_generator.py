@@ -611,7 +611,7 @@ for cluster for 15 minutes.',
         self.template.add_resource(self.lambda_function_for_asg)
         self.asg_sns_topic = Topic(
             "ASGSNSTopic",
-            TopicName=Ref('TopicName'),
+            TopicName=Join("", [Ref(cluster),"Topic"]),
             Subscription=[Subscription(
                 Protocol="lambda",
                 Endpoint=GetAtt(self.lambda_function_for_asg, "Arn")
@@ -637,8 +637,8 @@ for cluster for 15 minutes.',
             "ASGLifecycleHook",
             AutoScalingGroupName=Ref(self.auto_scaling_group),
             DefaultResult="ABANDON",
-            HeartbeatTimeout=Ref('HeartbeatTimeout'),
-            LifecycleHookName=Ref('LifecycleHookName'),
+            HeartbeatTimeout=300,
+            LifecycleHookName=Join("", [Ref(cluster),"ASGHook"]),
             LifecycleTransition="autoscaling:EC2_INSTANCE_TERMINATING",
             NotificationMetadata=Ref(cluster),
             NotificationTargetARN=Ref(self.asg_sns_topic),
@@ -656,12 +656,6 @@ for cluster for 15 minutes.',
         self.key_pair = Parameter(
             "KeyPair", Description='', Type="AWS::EC2::KeyPair::KeyName", Default="")
         self.template.add_parameter(self.key_pair)
-        self.template.add_parameter(Parameter(
-            "TopicName", Description='', Type="String", Default=str(self.configuration['draining']['topic_name'])))
-        self.template.add_parameter(Parameter(
-            "HeartbeatTimeout", Description='', Type="Number", Default=str(self.configuration['draining']['heartbeat_timeout'])))
-        self.template.add_parameter(Parameter(
-            "LifecycleHookName", Description='', Type="String", Default=str(self.configuration['draining']['lifecycle_hook_name'])))
         self.template.add_parameter(Parameter(
             "MinSize", Description='', Type="Number", Default=str(self.configuration['cluster']['min_instances'])))
         self.template.add_parameter(Parameter(
@@ -693,9 +687,6 @@ for cluster for 15 minutes.',
             'max_instances': str(self.configuration['cluster']['max_instances']),
             'instance_type': self.configuration['cluster']['instance_type'],
             'key_name': self.configuration['cluster']['key_name'],
-            'topic_name': self.configuration['draining']['topic_name'],
-            'heartbeat_timeout': str(self.configuration['draining']['heartbeat_timeout']),
-            'lifecycle_hook_name': self.configuration['draining']['lifecycle_hook_name'],
             'cloudlift_version': VERSION
         }
         self.template.add_output(Output(
@@ -780,16 +771,6 @@ for cluster for 15 minutes.',
                             'Subnet2',
                             'NotificationSnsArn'
                         ]
-                    },
-                    {
-                        'Label': {
-                            'default': 'ECS Draining Configuration'
-                        },
-                        'Parameters': [
-                            'TopicName',
-                            'HeartbeatTimeout',
-                            'LifecycleHookName'
-                        ]
                     }
                 ],
                 'ParameterLabels': {
@@ -818,15 +799,6 @@ for cluster for 15 minutes.',
                     },
                     'VPC': {
                         'default': 'Enter the VPC in which you want the environment to be setup'
-                    },
-                    'LifecycleHookName': {
-                        'default': 'Enter the name for Auto Scaling Group Lifecycle Hook'
-                    },
-                    'HeartbeatTimeout': {
-                        'default': 'Enter the maximum timeout in sec for lifecycle hook'
-                    },
-                    'TopicName': {
-                        'default': 'Enter the name for Lambda SNS topic'
                     }
                 }
             }
