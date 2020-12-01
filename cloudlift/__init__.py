@@ -125,7 +125,7 @@ def deploy_service(name, environment, version, build_arg):
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def create_task_defn(name, environment, version, build_arg):
+def create_task_definition(name, environment, version, build_arg):
     TaskDefinitionService(name, environment, version, dict(build_arg)).create()
 
 
@@ -137,7 +137,7 @@ def create_task_defn(name, environment, version, build_arg):
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def update_task_defn(name, environment, version, build_arg):
+def update_task_definition(name, environment, version, build_arg):
     TaskDefinitionService(name, environment, version, dict(build_arg)).update()
 
 

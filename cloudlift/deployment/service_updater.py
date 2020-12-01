@@ -56,7 +56,6 @@ class ServiceUpdater(object):
             log_bold("Starting to deploy " + service_name)
             color = DEPLOYMENT_COLORS[index % 3]
             image_url = ecr_client.ecr_image_uri
-            print(image_url)
             image_url += (':' + ecr_client.version)
             process = multiprocessing.Process(
                 target=deployer.deploy_new_version,
