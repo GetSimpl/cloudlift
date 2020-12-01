@@ -11,7 +11,7 @@ from cloudlift.config.logging import log_err
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
-from cloudlift.deployment.task_definition_service import TaskDefinitionService
+from cloudlift.deployment.task_definition_creator import TaskDefinitionCreator
 from cloudlift.session import SessionCreator
 from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
@@ -126,7 +126,7 @@ def deploy_service(name, environment, version, build_arg):
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
 def create_task_definition(name, environment, version, build_arg):
-    TaskDefinitionService(name, environment, version, dict(build_arg)).create()
+    TaskDefinitionCreator(name, environment, version, dict(build_arg)).create()
 
 
 @cli.command()
@@ -138,7 +138,7 @@ def create_task_definition(name, environment, version, build_arg):
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
 def update_task_definition(name, environment, version, build_arg):
-    TaskDefinitionService(name, environment, version, dict(build_arg)).update()
+    TaskDefinitionCreator(name, environment, version, dict(build_arg)).update()
 
 
 @cli.command()

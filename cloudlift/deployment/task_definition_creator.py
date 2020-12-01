@@ -15,7 +15,7 @@ def _complete_image_url(ecr_client: EcrClient):
     return ecr_client.ecr_image_uri + ':' + ecr_client.version
 
 
-class TaskDefinitionService:
+class TaskDefinitionCreator:
     def __init__(self, name, environment, version, build_args, region='ap-south-1'):
         self.name = name
         self.environment = environment
