@@ -117,7 +117,8 @@ class TestServiceConfiguration(object):
                                 "alb": {
                                     "create_new": False,
                                     "listener_arn": 'random-listener-arn',
-                                    "host": "host-address.com"
+                                    "host": "host-address.com",
+                                    "target_5xx_error_threshold": 5
                                 },
                                 "internal": True,
                                 "container_port": 80,
@@ -211,6 +212,7 @@ class TestServiceConfiguration(object):
                                 'listener_arn': 'random-listener-arn',
                                 'host': 'host-address.com',
                                 'priority': 23,
+                                'target_5xx_error_threshold': 5
                                 },
                         'internal': True,
                         'container_port': 80,

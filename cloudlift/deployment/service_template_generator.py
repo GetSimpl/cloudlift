@@ -399,7 +399,8 @@ service is down',
 
             alb_enabled = 'alb' in config['http_interface']
             if alb_enabled:
-                create_new_alb = config['http_interface']['alb'].get('create_new', False)
+                alb_config = config['http_interface']['alb']
+                create_new_alb = alb_config.get('create_new', False)
 
                 if create_new_alb:
                     alb, service_listener, alb_sg = self._add_alb(service_name, config, target_group_name)
@@ -416,8 +417,12 @@ service is down',
                         # needed for FARGATE security group creation.
                         security_group_ingress['SourceSecurityGroupId'] = Ref(alb_sg)
                 else:
-                    self.attach_to_existing_listener(config['http_interface']['alb'], service_name, target_group_name)
-
+                    listener_arn = alb_config['listener_arn'] if 'listener_arn' in alb_config \
+                        else get_environment_level_alb_listener(self.env)
+                    self.attach_to_existing_listener(alb_config, service_name, target_group_name,listener_arn)
+                    alb_full_name = self.get_alb_full_name_from_listener_arn(listener_arn)
+                    self.create_target_group_alarms(target_group_name, target_group, alb_full_name,
+                                                    alb_config)
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
@@ -531,7 +536,10 @@ service is down',
             self.template.add_resource(svc)
         self._add_service_alarms(svc)
 
-    def attach_to_existing_listener(self, alb_config, service_name, target_group_name):
+    def get_alb_full_name_from_listener_arn(self, listener_arn):
+        return "/".join(listener_arn.split('/')[1:-1])
+
+    def attach_to_existing_listener(self, alb_config, service_name, target_group_name,listener_arn):
         conditions = []
         if 'host' in alb_config:
             conditions.append(
@@ -552,8 +560,7 @@ service is down',
                 )
             )
 
-        listener_arn = alb_config['listener_arn'] if 'listener_arn' in alb_config \
-            else get_environment_level_alb_listener(self.env)
+
         priority = alb_config['priority']
         self.template.add_resource(
             ListenerRule(
@@ -782,7 +789,6 @@ service is down',
             alb,
             config['http_interface']['internal']
         )
-        self._add_alb_alarms(service_name, alb)
         return alb, service_listener, svc_alb_sg
 
     def _add_nlb(self, service_name, config, target_group_name):
@@ -927,14 +933,18 @@ service is down',
             TreatMissingData='notBreaching'
         )
 
-    def _add_alb_alarms(self, service_name, alb):
+    def create_target_group_alarms(self, target_group_name, target_group, alb_full_name, alb_config):
         unhealthy_alarm = Alarm(
-            'ElbUnhealthyHostAlarm' + service_name,
+            'TargetGroupUnhealthyHostAlarm' + target_group_name,
             EvaluationPeriods=1,
             Dimensions=[
                 MetricDimension(
                     Name='LoadBalancer',
-                    Value=GetAtt(alb, 'LoadBalancerFullName')
+                    Value=alb_full_name
+                ),
+                MetricDimension(
+                    Name='TargetGroup',
+                    Value=GetAtt(target_group, 'TargetGroupFullName')
                 )
             ],
             AlarmActions=[Ref(self.notification_sns_arn)],
@@ -949,6 +959,58 @@ service is down',
             TreatMissingData='notBreaching'
         )
         self.template.add_resource(unhealthy_alarm)
+
+        high_5xx_alarm = Alarm(
+            'HighTarget5XXAlarm' + target_group_name,
+            EvaluationPeriods=1,
+            Dimensions=[
+                MetricDimension(
+                    Name='LoadBalancer',
+                    Value=alb_full_name
+                ),
+                MetricDimension(
+                    Name='TargetGroup',
+                    Value=GetAtt(target_group, 'TargetGroupFullName')
+                )
+            ],
+            AlarmActions=[Ref(self.notification_sns_arn)],
+            OKActions=[Ref(self.notification_sns_arn)],
+            AlarmDescription='Triggers if target returns 5xx error code',
+            Namespace='AWS/ApplicationELB',
+            Period=60,
+            ComparisonOperator='GreaterThanOrEqualToThreshold',
+            Statistic='Sum',
+            Threshold=int(alb_config.get('target_5xx_error_threshold')),
+            MetricName='HTTPCode_Target_5XX_Count',
+            TreatMissingData='notBreaching'
+        )
+        self.template.add_resource(high_5xx_alarm)
+
+    def _add_alb_alarms(self, service_name, alb, alb_config):
+        elb_5XX_error_codes_to_monitor = ["502", "503", "504"]
+        for elb_5xx_error_code in elb_5XX_error_codes_to_monitor:
+            threshold = alb_config.get(f'elb_{elb_5xx_error_code}_error_threshold', "5")
+            self.template.add_resource(Alarm(
+                f'ELB{elb_5xx_error_code}Count' + service_name,
+                EvaluationPeriods=1,
+                Dimensions=[
+                    MetricDimension(
+                        Name='LoadBalancer',
+                        Value=GetAtt(alb, 'LoadBalancerFullName')
+                    )
+                ],
+                AlarmActions=[Ref(self.notification_sns_arn)],
+                OKActions=[Ref(self.notification_sns_arn)],
+                AlarmDescription=f'Triggers if {elb_5xx_error_code} response originated from load balancer',
+                Namespace='AWS/ApplicationELB',
+                Period=60,
+                ComparisonOperator='GreaterThanOrEqualToThreshold',
+                Statistic='Sum',
+                Threshold=threshold,
+                MetricName=f'HTTPCode_ELB_{elb_5xx_error_code}_Count',
+                TreatMissingData='notBreaching'
+            ))
+
         rejected_connections_alarm = Alarm(
             'ElbRejectedConnectionsAlarm' + service_name,
             EvaluationPeriods=1,
@@ -972,28 +1034,6 @@ had reached its maximum number of connections.',
             TreatMissingData='notBreaching'
         )
         self.template.add_resource(rejected_connections_alarm)
-        http_code_elb5xx_alarm = Alarm(
-            'ElbHTTPCodeELB5xxAlarm' + service_name,
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(
-                    Name='LoadBalancer',
-                    Value=GetAtt(alb, 'LoadBalancerFullName')
-                )
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            OKActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Triggers if 5xx response originated \
-from load balancer',
-            Namespace='AWS/ApplicationELB',
-            Period=60,
-            ComparisonOperator='GreaterThanOrEqualToThreshold',
-            Statistic='Sum',
-            Threshold='3',
-            MetricName='HTTPCode_ELB_5XX_Count',
-            TreatMissingData='notBreaching'
-        )
-        self.template.add_resource(http_code_elb5xx_alarm)
 
     def _generate_alb_security_group_ingress(self, config):
         ingress_rules = []

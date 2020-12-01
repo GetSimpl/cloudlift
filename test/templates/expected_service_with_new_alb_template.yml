@@ -4,10 +4,11 @@ Outputs:
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
       1000, "secrets_name": "something", "command": null, "http_interface": {"internal":
-      false, "alb": {"create_new": true}, "container_port": 7003, "restrict_access_to":
-      ["0.0.0.0/0"], "health_check_path": "/elb-check"}, "autoscaling": {"max_capacity":
-      10, "min_capacity": 5, "request_count_per_target": {"target_value": 10, "scale_in_cool_down_seconds":
-      120, "scale_out_cool_down_seconds": 60}}}}}'
+      false, "alb": {"create_new": true, "target_5xx_error_threshold": 10}, "container_port":
+      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"},
+      "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
+      {"target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
+      60}}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
@@ -237,64 +238,6 @@ Resources:
       Statistic: SampleCount
       Threshold: '1'
       TreatMissingData: breaching
-    Type: AWS::CloudWatch::Alarm
-  ElbHTTPCodeELB5xxAlarmDummy:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if 5xx response originated from load balancer
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
-      EvaluationPeriods: 1
-      MetricName: HTTPCode_ELB_5XX_Count
-      Namespace: AWS/ApplicationELB
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Sum
-      Threshold: '3'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
-  ElbRejectedConnectionsAlarmDummy:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if load balancer has rejected connections because
-        the load balancer had reached its maximum number of connections.
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
-      EvaluationPeriods: 1
-      MetricName: RejectedConnectionCount
-      Namespace: AWS/ApplicationELB
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Sum
-      Threshold: '1'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
-  ElbUnhealthyHostAlarmDummy:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if any host is marked unhealthy
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt 'ALBDummy.LoadBalancerFullName'
-      EvaluationPeriods: 1
-      MetricName: UnHealthyHostCount
-      Namespace: AWS/ApplicationELB
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Sum
-      Threshold: '1'
-      TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
   FailedCloudliftDeploymentsDummy:
     Properties:

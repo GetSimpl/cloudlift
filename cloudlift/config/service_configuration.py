@@ -183,6 +183,9 @@ class ServiceConfiguration(DynamodbConfig):
                                 "listener_arn": {
                                     "type": "string"
                                 },
+                                "target_5xx_error_threshold": {
+                                    "type": "number"
+                                },
                                 "host": {
                                     "type": "string"
                                 },
@@ -194,7 +197,7 @@ class ServiceConfiguration(DynamodbConfig):
                                 }
                             },
                             "required": [
-                                "create_new"
+                                "create_new", "target_5xx_error_threshold"
                             ]
                         },
                         "restrict_access_to": {

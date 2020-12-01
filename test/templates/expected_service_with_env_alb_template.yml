@@ -4,15 +4,16 @@ Outputs:
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
       1000, "command": null, "secrets_name": "something", "http_interface": {"internal":
-      false, "alb": {"create_new": false, "host": "abc.xyz.com", "priority": 4}, "container_port":
-      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"},
-      "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
+      false, "alb": {"create_new": false, "host": "abc.xyz.com", "priority": 4, "target_5xx_error_threshold":
+      10}, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
       {"target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
       60, "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"}}},
       "DummyWithCustomListener": {"memory_reservation": 1000, "command": null, "secrets_name":
       "something", "http_interface": {"internal": false, "alb": {"create_new": false,
-      "listener_arn": "custom_listener_arn", "path": "/api/*", "priority": 100}, "container_port":
-      7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}}}}'
+      "target_5xx_error_threshold": 10, "listener_arn": "arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid",
+      "path": "/api/*", "priority": 100}, "container_port": 7003, "restrict_access_to":
+      ["0.0.0.0/0"], "health_check_path": "/elb-check"}}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
@@ -230,7 +231,7 @@ Resources:
           PathPatternConfig:
             Values:
               - /api/*
-      ListenerArn: custom_listener_arn
+      ListenerArn: arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid
       Priority: 100
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
   DummyWithCustomListenerRole:
@@ -403,6 +404,48 @@ Resources:
       Threshold: '0'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
+  HighTarget5XXAlarmTargetGroupDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if target returns 5xx error code
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: ''
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummy.TargetGroupFullName'
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Sum
+      Threshold: 10
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  HighTarget5XXAlarmTargetGroupDummyWithCustomListener:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if target returns 5xx error code
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Sum
+      Threshold: 10
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
   MaxScalableTargetAlarmDummy:
     Properties:
       AlarmActions:
@@ -461,3 +504,45 @@ Resources:
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  TargetGroupUnhealthyHostAlarmTargetGroupDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if any host is marked unhealthy
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: ''
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummy.TargetGroupFullName'
+      EvaluationPeriods: 1
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Sum
+      Threshold: '1'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  TargetGroupUnhealthyHostAlarmTargetGroupDummyWithCustomListener:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if any host is marked unhealthy
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
+      EvaluationPeriods: 1
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Sum
+      Threshold: '1'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm

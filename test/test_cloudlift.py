@@ -37,7 +37,8 @@ def mocked_service_config(cls, *args, **kwargs):
                 ],
                 "http_interface": {
                     "alb": {
-                        "create_new": True
+                        "create_new": True,
+                        "target_5xx_error_threshold": 10
                     },
                     "container_port": 80,
                     "internal": False,
@@ -66,7 +67,8 @@ def mocked_service_with_secrets_manager_config(cls, *args, **kwargs):
                 ],
                 "http_interface": {
                     "alb": {
-                        "create_new": True
+                        "create_new": True,
+                        "target_5xx_error_threshold": 10
                     },
                     "container_port": 80,
                     "internal": False,

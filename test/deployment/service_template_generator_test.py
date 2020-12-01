@@ -209,6 +209,7 @@ class TestServiceTemplateGenerator(TestCase):
                         "internal": False,
                         "alb": {
                             "create_new": True,
+                            "target_5xx_error_threshold": 10
                         },
                         "container_port": Decimal(7003),
                         "restrict_access_to": ["0.0.0.0/0"],
@@ -330,6 +331,7 @@ class TestServiceTemplateGenerator(TestCase):
                             "create_new": False,
                             "host": "abc.xyz.com",
                             "priority": 4,
+                            "target_5xx_error_threshold": 10
                         },
                         "container_port": Decimal(7003),
                         "restrict_access_to": ["0.0.0.0/0"],
@@ -354,7 +356,8 @@ class TestServiceTemplateGenerator(TestCase):
                         "internal": False,
                         "alb": {
                             "create_new": False,
-                            "listener_arn": "custom_listener_arn",
+                            "target_5xx_error_threshold": 10,
+                            "listener_arn": "arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid",
                             "path": "/api/*",
                             "priority": 100,
                         },
