@@ -44,9 +44,15 @@ pipeline {
                 sh """
                     echo "v${VERSION} is being pushed to ECR"
                     aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_RIPPLING_ACCOUNT}
+                    aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${INFRA_AWS_RIPPLING_ACCOUNT}
+
                     docker tag cloudlift:build cloudlift:v${VERSION}
+
                     docker tag cloudlift:v${VERSION} ${AWS_RIPPLING_ACCOUNT}/cloudlift-repo:v${VERSION}
+                    docker tag cloudlift:v${VERSION} ${INFRA_AWS_RIPPLING_ACCOUNT}/cloudlift-repo:v${VERSION}
+
                     docker push ${AWS_RIPPLING_ACCOUNT}/cloudlift-repo:v${VERSION}
+                    docker push ${INFRA_AWS_RIPPLING_ACCOUNT}/cloudlift-repo:v${VERSION}
                 """
             }
         }
