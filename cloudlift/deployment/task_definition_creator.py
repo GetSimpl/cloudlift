@@ -33,8 +33,9 @@ class TaskDefinitionCreator:
         ecr_client = EcrClient(self.name, self.version, self.region, self.build_args)
         log_intent("name: " + self.name + " | environment: " +
                    self.environment + " | version: " + str(ecr_client.version))
-        log_bold("Uploading image to ECR")
+        log_bold("Checking image in ECR")
         ecr_client.build_and_upload_image()
+        log_bold("Creating task definition\n")
         env_config = build_config(self.environment, self.name, self.env_sample_file)
         container_definition_arguments = {
             "environment": [
@@ -52,6 +53,7 @@ class TaskDefinitionCreator:
 
         ecs_client = EcsClient(region=self.region)
         ecs_client.register_task_definition(self._task_defn_family(), [container_definition_arguments], [], None)
+        log_bold("Task definition successfully created\n")
 
     def update(self):
         log_warning("Update task definition to {self.region}".format(**locals()))
@@ -62,13 +64,13 @@ class TaskDefinitionCreator:
                    self.environment + " | version: " + str(ecr_client.version))
         log_bold("Checking image in ECR")
         ecr_client.build_and_upload_image()
-        log_bold("Update task defn\n")
+        log_bold("Updating task definition\n")
         env_config = build_config(self.environment, self.name, self.env_sample_file)
         ecs_client = EcsClient(region=self.region)
         deployment = DeployAction(ecs_client, self.cluster_name, None)
         task_defn = self._apply_changes_over_current_task_defn(env_config, ecs_client, ecr_client, deployment)
         deployment.update_task_definition(task_defn)
-        log_bold("Task defn successfully updated\n")
+        log_bold("Task definition successfully updated\n")
 
     def _current_task_defn(self, ecs_client: EcsClient, deployment: DeployAction):
         task_defn_arn = ecs_client.list_task_definitions(self._task_defn_family())[0]
