@@ -20,10 +20,19 @@ class EcrClient:
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
 
     def build_and_upload_image(self):
-        self.ensure_repository()
-        self.ensure_image_in_ecr()
+        self._ensure_repository()
+        self._ensure_image_in_ecr()
 
-    def ensure_repository(self):
+    def upload_image(self, additional_tags):
+        image_name = spinalcase(self.name) + ':' + self.version
+        ecr_image_name = self.ecr_image_uri + ':' + self.version
+        self._ensure_repository()
+        self._push_image(image_name, ecr_image_name)
+
+        for new_tag in additional_tags:
+            self._add_image_tag(self.version, new_tag)
+
+    def _ensure_repository(self):
         try:
             self.ecr_client.create_repository(
                 repositoryName=self.repo_name,
@@ -38,7 +47,7 @@ class EcrClient:
             else:
                 raise ex
 
-    def ensure_image_in_ecr(self):
+    def _ensure_image_in_ecr(self):
         if self.version == 'dirty':
             image = None
         else:
@@ -62,15 +71,6 @@ class EcrClient:
             )
         except Exception:
             pass
-
-    def upload_image(self, additional_tags):
-        image_name = spinalcase(self.name) + ':' + self.version
-        ecr_image_name = self.ecr_image_uri + ':' + self.version
-        self.ensure_repository()
-        self._push_image(image_name, ecr_image_name)
-
-        for new_tag in additional_tags:
-            self._add_image_tag(self.version, new_tag)
 
     def _set_version(self, version):
         if version:
