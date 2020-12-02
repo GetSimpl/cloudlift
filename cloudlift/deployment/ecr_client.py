@@ -11,8 +11,7 @@ from cloudlift.config.logging import log_intent, log_warning, log_bold, log_err
 
 
 class EcrClient:
-    def __init__(self, name, version, region, build_args=None, working_dir='.'):
-        self._set_version(version)
+    def __init__(self, name, region, build_args=None, working_dir='.'):
         self.name = name
         self.build_args = build_args
         self.working_dir = working_dir
@@ -23,14 +22,14 @@ class EcrClient:
         self._ensure_repository()
         self._ensure_image_in_ecr()
 
-    def upload_image(self, additional_tags):
-        image_name = spinalcase(self.name) + ':' + self.version
-        ecr_image_name = self.ecr_image_uri + ':' + self.version
+    def upload_image(self, version, additional_tags):
+        image_name = spinalcase(self.name) + ':' + version
+        ecr_image_name = self.ecr_image_uri + ':' + version
         self._ensure_repository()
         self._push_image(image_name, ecr_image_name)
 
         for new_tag in additional_tags:
-            self._add_image_tag(self.version, new_tag)
+            self._add_image_tag(version, new_tag)
 
     def _ensure_repository(self):
         try:
@@ -72,7 +71,7 @@ class EcrClient:
         except Exception:
             pass
 
-    def _set_version(self, version):
+    def set_version(self, version):
         if version:
             try:
                 commit_sha = self._find_commit_sha(version)

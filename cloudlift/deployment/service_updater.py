@@ -43,7 +43,8 @@ class ServiceUpdater(object):
         self.init_stack_info()
         if not os.path.exists(self.env_sample_file):
             raise UnrecoverableException('env.sample not found. Exiting.')
-        ecr_client = EcrClient(self.name, self.version, self.region, self.build_args)
+        ecr_client = EcrClient(self.name, self.region, self.build_args)
+        ecr_client.set_version(self.version)
         log_intent("name: " + self.name + " | environment: " +
                    self.environment + " | version: " + str(ecr_client.version))
         log_bold("Checking image in ECR")
@@ -85,7 +86,7 @@ class ServiceUpdater(object):
             raise UnrecoverableException("Deployment failed")
 
     def upload_image(self, additional_tags):
-        EcrClient(self.name, self.version, self.region, self.build_args).upload_image(additional_tags)
+        EcrClient(self.name, self.region, self.build_args).upload_image(self.version, additional_tags)
 
     @property
     def region(self):

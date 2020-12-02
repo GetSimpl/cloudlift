@@ -30,7 +30,8 @@ class TaskDefinitionCreator:
         log_warning("Create task definition to {self.region}".format(**locals()))
         if not os.path.exists(self.env_sample_file):
             raise UnrecoverableException('env.sample not found. Exiting.')
-        ecr_client = EcrClient(self.name, self.version, self.region, self.build_args)
+        ecr_client = EcrClient(self.name, self.region, self.build_args)
+        ecr_client.set_version(self.version)
         log_intent("name: " + self.name + " | environment: " +
                    self.environment + " | version: " + str(ecr_client.version))
         log_bold("Checking image in ECR")
@@ -59,7 +60,8 @@ class TaskDefinitionCreator:
         log_warning("Update task definition to {self.region}".format(**locals()))
         if not os.path.exists(self.env_sample_file):
             raise UnrecoverableException('env.sample not found. Exiting.')
-        ecr_client = EcrClient(self.name, self.version, self.region, self.build_args)
+        ecr_client = EcrClient(self.name, self.region, self.build_args)
+        ecr_client.set_version(self.version)
         log_intent("name: " + self.name + " | environment: " +
                    self.environment + " | version: " + str(ecr_client.version))
         log_bold("Checking image in ECR")
