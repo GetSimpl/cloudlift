@@ -101,7 +101,8 @@ class TestEcsAction(unittest.TestCase):
 
         action = EcsAction(client, cluster_name, service_name)
 
-        actual_td = action.get_task_definition_by_deployment_identifier(service=service_name, deployment_identifier="id-0")
+        actual_td = action.get_task_definition_by_deployment_identifier(service=service_name,
+                                                                        deployment_identifier="id-0")
 
         self.assertEqual('arn3', actual_td.arn)
         self.assertEqual({'deployment_identifier': 'id-0'}, actual_td.tags)
@@ -124,23 +125,24 @@ class TestEcsAction(unittest.TestCase):
 
         def mock_describe_task_definition(taskDefinition, include):
             if taskDefinition == 'arn3':
-                return {'taskDefinition': {'taskDefinitionArn': taskDefinition}, 'tags': [
+                return {'taskDefinition': {'taskDefinitionArn': taskDefinition, 'family': 'tdFamily'}, 'tags': [
                     {'key': 'deployment_identifier', 'value': 'id-0'},
                 ]}
             else:
-                return {'taskDefinition': {'taskDefinitionArn': taskDefinition}, 'tags': {}}
+                return {'taskDefinition': {'taskDefinitionArn': taskDefinition, 'family': 'tdFamily'}, 'tags': {}}
 
         mock_boto_client.describe_task_definition.side_effect = mock_describe_task_definition
 
         action = EcsAction(client, cluster_name, service_name)
 
-        actual_td = action.get_task_definition_by_deployment_identifier(service=service_name, deployment_identifier="id-0")
+        actual_td = action.get_task_definition_by_deployment_identifier(service=service_name,
+                                                                        deployment_identifier="id-0")
 
         self.assertEqual('arn3', actual_td.arn)
         self.assertEqual({'deployment_identifier': 'id-0'}, actual_td.tags)
         mock_boto_client.list_task_definitions.assert_has_calls([
-            call(familyPrefix=None, status='ACTIVE', sort='DESC'),
-            call(next_token='token1')
+            call(familyPrefix='tdFamily', status='ACTIVE', sort='DESC'),
+            call(familyPrefix='tdFamily', status='ACTIVE', sort='DESC', nextToken='token1')
         ])
 
     @patch("cloudlift.deployment.ecs.Session")
@@ -159,7 +161,7 @@ class TestEcsAction(unittest.TestCase):
         ]
 
         def mock_describe_task_definition(taskDefinition, include):
-            return {'taskDefinition': {'taskDefinitionArn': taskDefinition}, 'tags': {}}
+            return {'taskDefinition': {'taskDefinitionArn': taskDefinition, 'family': 'tdFamily'}, 'tags': {}}
 
         mock_boto_client.describe_task_definition.side_effect = mock_describe_task_definition
 
@@ -167,10 +169,9 @@ class TestEcsAction(unittest.TestCase):
 
         with self.assertRaises(UnrecoverableException) as error:
             action.get_task_definition_by_deployment_identifier(service=service_name,
-                                                                        deployment_identifier="id-0")
+                                                                deployment_identifier="id-0")
 
         self.assertEqual("task definition does not exist for deployment_identifier: id-0", error.exception.value)
-
 
 
 def _build_task_definition(container_defn):

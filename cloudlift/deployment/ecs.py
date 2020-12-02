@@ -44,8 +44,8 @@ class EcsClient(object):
         response = self.boto.list_task_definitions(familyPrefix=family, status='ACTIVE', sort='DESC')
         return response.get('taskDefinitionArns', []), response.get('nextToken', None)
 
-    def list_task_definitions_for_next_token(self, next_token):
-        response = self.boto.list_task_definitions(next_token=next_token)
+    def list_task_definitions_for_next_token(self, family, next_token):
+        response = self.boto.list_task_definitions(familyPrefix=family, status='ACTIVE', sort='DESC', nextToken=next_token)
         return response.get('taskDefinitionArns', []), response.get('nextToken', None)
 
     def describe_task_definition(self, task_definition_arn):
@@ -420,7 +420,9 @@ class EcsAction(object):
             return td
 
         while next_token is not None:
-            task_definition_arns, next_token = self._client.list_task_definitions_for_next_token(next_token=next_token)
+            task_definition_arns, next_token = self._client.list_task_definitions_for_next_token(
+                family=current_task_definition.family, next_token=next_token,
+            )
             td = self._find_task_definition_by_deployment_identifier(task_definition_arns, deployment_identifier)
             if td:
                 return td
