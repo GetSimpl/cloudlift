@@ -87,29 +87,6 @@ class ServiceUpdater(object):
     def upload_image(self, additional_tags):
         EcrClient(self.name, self.version, self.region, self.build_args).upload_image(additional_tags)
 
-    def update_task_defn(self):
-        log_warning("Update task definition to {self.region}".format(**locals()))
-        self.init_stack_info()
-        if not os.path.exists(self.env_sample_file):
-            raise UnrecoverableException('env.sample not found. Exiting.')
-        ecr_client = EcrClient(self.name, self.version, self.region, self.build_args)
-        log_intent("name: " + self.name + " | environment: " +
-                   self.environment + " | version: " + str(ecr_client.version))
-        log_bold("Checking image in ECR")
-        ecr_client.build_and_upload_image()
-        log_bold("Initiating deployment\n")
-        ecs_client = EcsClient(None, None, self.region)
-
-        service_name = self.ecs_service_names[0]
-        deployment = DeployAction(ecs_client, self.cluster_name, service_name)
-        env_config = deployer.build_config(self.environment, self.name, self.env_sample_file)
-        image_url = ecr_client.ecr_image_uri
-        image_url += (':' + ecr_client.version)
-
-        task_defn_family = "".join(list(map(capitalcase, self.name.split('-')))) + "Family"
-        task_defns = ecs_client.list_task_definitions(task_defn_family)
-        deployer.update_task_defn(deployment, env_config, ecr_client.version, 'white', image_url, task_defns[0])
-
     @property
     def region(self):
         return get_region_for_environment(self.environment)
