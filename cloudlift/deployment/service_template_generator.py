@@ -1,7 +1,13 @@
 import json
 import re
+import random
+import string
 
 import boto3
+from botocore.exceptions import ClientError
+from cloudlift.exceptions import UnrecoverableException
+from cloudlift.config import get_client_for
+
 from awacs.aws import PolicyDocument, Statement, Allow, Principal
 from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
@@ -54,6 +60,9 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.environment_stack = environment_stack
         self.current_version = ServiceInformationFetcher(
             self.application_name, self.env).get_current_version()
+        self.bucket_name = 'simpl-shoan-test'
+        self.environment = service_configuration.environment
+        self.client = get_client_for('s3', self.environment)
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
@@ -65,7 +74,26 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self._fetch_current_desired_count()
         self._add_ecs_service_iam_role()
         self._add_cluster_services()
-        return to_yaml(self.template.to_json())
+        
+        letters = string.ascii_lowercase
+        key = ''.join(random.choice(letters) for i in range(20)) + '.yml'
+        if len(to_yaml(self.template.to_json())) < 51000:
+            try:
+                self.client.put_object(
+                    Body=to_yaml(self.template.to_json()),
+                    Bucket=self.bucket_name,
+                    Key=key,
+                )
+                TemplateURL = 'https://' + self.bucket_name + '.s3.amazonaws.com/'+ key
+                return TemplateURL , 'TemplateURL', key
+            except ClientError as boto_client_error:
+                error_code = boto_client_error.response['Error']['Code']
+                if error_code == 'AccessDenied':
+                    raise UnrecoverableException("Access Denied")
+                else:
+                    raise boto_client_error
+        else:
+            return to_yaml(self.template.to_json()), 'TemplateBody', ''
 
     def _add_cluster_services(self):
         for ecs_service_name, config in self.configuration['services'].items():

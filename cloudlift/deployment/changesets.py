@@ -6,8 +6,7 @@ import click
 
 from cloudlift.config.logging import log, log_bold, log_err
 
-
-def create_change_set(client, service_template_body, stack_name,
+def create_change_set(client, service_template_body, template_source, stack_name,
                       key_name, environment):
     change_set_parameters = [
         {'ParameterKey': 'Environment', 'ParameterValue': environment}
@@ -17,14 +16,24 @@ def create_change_set(client, service_template_body, stack_name,
             'ParameterKey': 'KeyPair',
             'ParameterValue': key_name
         })
-    create_change_set_res = client.create_change_set(
-        StackName=stack_name,
-        ChangeSetName="cg"+uuid.uuid4().hex,
-        TemplateBody=service_template_body,
-        Parameters=change_set_parameters,
-        Capabilities=['CAPABILITY_NAMED_IAM'],
-        ChangeSetType='UPDATE'
-    )
+    if template_source == 'TemplateBody':
+        create_change_set_res = client.create_change_set(
+            StackName=stack_name,
+            ChangeSetName="cg"+uuid.uuid4().hex,
+            TemplateBody=service_template_body,
+            Parameters=change_set_parameters,
+            Capabilities=['CAPABILITY_NAMED_IAM'],
+            ChangeSetType='UPDATE'
+        )
+    elif template_source == 'TemplateURL':
+        create_change_set_res = client.create_change_set(
+            StackName=stack_name,
+            ChangeSetName="cg"+uuid.uuid4().hex,
+            TemplateURL=service_template_body,
+            Parameters=change_set_parameters,
+            Capabilities=['CAPABILITY_NAMED_IAM'],
+            ChangeSetType='UPDATE'
+        )
     log("Changeset creation initiated. Checking the progress...")
     change_set = client.describe_change_set(
         ChangeSetName=create_change_set_res['Id']
