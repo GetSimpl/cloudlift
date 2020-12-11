@@ -29,7 +29,7 @@ class ServiceCreator(object):
         self.stack_name = get_service_stack_name(environment, name)
         self.client = get_client_for('cloudformation', self.environment)
         self.s3client = get_client_for('s3', self.environment)
-        self.bucket_name = 'simpl-shoan-test'
+        self.bucket_name = 'cloudlift-service-template'
         self.environment_stack = self._get_environment_stack()
         self.existing_events = get_stack_events(self.client, self.stack_name)
         self.service_configuration = ServiceConfiguration(
