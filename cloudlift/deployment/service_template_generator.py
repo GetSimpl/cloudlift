@@ -60,7 +60,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.environment_stack = environment_stack
         self.current_version = ServiceInformationFetcher(
             self.application_name, self.env).get_current_version()
-        self.bucket_name = 'simpl-shoan-test'
+        self.bucket_name = 'cloudlift-service-template'
         self.environment = service_configuration.environment
         self.client = get_client_for('s3', self.environment)
 
@@ -77,7 +77,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
         
         letters = string.ascii_lowercase
         key = ''.join(random.choice(letters) for i in range(20)) + '.yml'
-        if len(to_yaml(self.template.to_json())) < 51000:
+        if len(to_yaml(self.template.to_json())) > 51000:
             try:
                 self.client.put_object(
                     Body=to_yaml(self.template.to_json()),
