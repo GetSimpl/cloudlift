@@ -1,4 +1,4 @@
-boto3>=1.9.89
+boto3>=1.13.1
 awscli
 certifi==2017.7.27.1
 cfn-flip==1.0.3

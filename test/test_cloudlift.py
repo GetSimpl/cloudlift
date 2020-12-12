@@ -45,7 +45,7 @@ def mocked_fargate_service_config(cls, *args, **kwargs):
 
 environment_name = 'staging'
 service_name = 'dummy'
-fargate_service_name = 'dummy-fargate'
+fargate_service_name = f'{service_name}-fargate'
 
 def test_cloudlift_can_deploy_to_ec2(keep_resources):
     cfn_client = boto3.client('cloudformation')

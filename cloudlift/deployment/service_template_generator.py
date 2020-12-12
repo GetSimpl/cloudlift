@@ -184,7 +184,7 @@ service is down',
         cd = ContainerDefinition(**container_definition_arguments)
 
         task_role = self.template.add_resource(Role(
-            service_name + "Role",
+            pascalcase(self.env + service_name + "Role"),
             AssumeRolePolicyDocument=PolicyDocument(
                 Statement=[
                     Statement(

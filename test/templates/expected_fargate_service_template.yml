@@ -1,7 +1,7 @@
 Outputs:
   CloudliftOptions:
     Description: Options used with cloudlift when building this service
-    Value: '{"cloudlift_version": "1.4.3", "services": {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "memory_reservation": 512}, "DummyFargateService": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal": false, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}, "memory_reservation": 512}}}'
+    Value: '{"cloudlift_version": "1.4.4", "services": {"DummyFargateRunSidekiqsh": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "memory_reservation": 512}, "DummyFargateService": {"command": null, "fargate": {"cpu": 256, "memory": 512}, "http_interface": {"container_port": 80, "internal": false, "restrict_access_to": ["0.0.0.0/0"], "health_check_path": "/elb-check"}, "memory_reservation": 512}}}'
   DummyFargateRunSidekiqshEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
@@ -78,17 +78,6 @@ Resources:
             - !Ref 'PrivateSubnet2'
       TaskDefinition: !Ref 'DummyFargateRunSidekiqshTaskDefinition'
     Type: AWS::ECS::Service
-  DummyFargateRunSidekiqshRole:
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-    Type: AWS::IAM::Role
   DummyFargateRunSidekiqshTaskDefinition:
     Properties:
       ContainerDefinitions:
@@ -113,7 +102,7 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      TaskRoleArn: !Ref 'DummyFargateRunSidekiqshRole'
+      TaskRoleArn: !Ref 'stagingDummyFargateRunSidekiqshRole'
     Type: AWS::ECS::TaskDefinition
   DummyFargateService:
     DependsOn: SslLoadBalancerListenerDummyFargateService
@@ -134,17 +123,6 @@ Resources:
             - !Ref 'PrivateSubnet2'
       TaskDefinition: !Ref 'DummyFargateServiceTaskDefinition'
     Type: AWS::ECS::Service
-  DummyFargateServiceRole:
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-    Type: AWS::IAM::Role
   DummyFargateServiceTaskDefinition:
     Properties:
       ContainerDefinitions:
@@ -171,7 +149,7 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      TaskRoleArn: !Ref 'DummyFargateServiceRole'
+      TaskRoleArn: !Ref 'stagingDummyFargateServiceRole'
     Type: AWS::ECS::TaskDefinition
   ECSServiceRole:
     Properties:
@@ -448,3 +426,25 @@ Resources:
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  stagingDummyFargateRunSidekiqshRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
+  stagingDummyFargateServiceRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+    Type: AWS::IAM::Role
