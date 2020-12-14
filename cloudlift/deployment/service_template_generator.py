@@ -230,6 +230,14 @@ service is down',
                                             Description="AWS secrets manager name to pull the secrets from",
                                             Value=secrets_name))
 
+        if 'stop_timeout' in config:
+            container_definition_arguments['StopTimeout'] = int(config['stop_timeout'])
+
+        if 'system_controls' in config:
+            container_definition_arguments['SystemControls'] = [SystemControl(Namespace=system_control['namespace'],
+                                                                              Value=system_control['value']) for
+                                                                system_control in config['system_controls']]
+
         if 'http_interface' in config:
             container_definition_arguments['PortMappings'] = [
                 PortMapping(
@@ -239,15 +247,7 @@ service is down',
                 )
             ]
 
-        if 'stop_timeout' in config:
-            container_definition_arguments['StopTimeout'] = int(config['stop_timeout'])
-
-        if 'system_controls' in config:
-            container_definition_arguments['SystemControls'] = [SystemControl(Namespace=system_control['namespace'],
-                                                                              Value=system_control['value']) for
-                                                                system_control in config['system_controls']]
-
-        if 'udp_interface' in config:
+        elif 'udp_interface' in config:
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 raise NotImplementedError('udp interface not yet implemented in fargate type, please use ec2 type')
             container_definition_arguments['PortMappings'] = [
@@ -256,6 +256,13 @@ service is down',
                 PortMapping(ContainerPort=int(config['udp_interface']['health_check_port']),
                             HostPort=int(config['udp_interface']['health_check_port']), Protocol='tcp')
             ]
+        elif 'tcp_interface' in config:
+            if launch_type == self.LAUNCH_TYPE_FARGATE:
+                raise NotImplementedError('tcp interface not yet implemented in fargate type, please use ec2 type')
+            container_definition_arguments['PortMappings'] = [
+                PortMapping(ContainerPort=int(config['tcp_interface']['container_port']), Protocol='tcp')
+            ]
+
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
 
@@ -313,14 +320,15 @@ service is down',
         task_execution_role = self._add_task_execution_role(service_name, secrets_name)
 
         launch_type_td = {}
-        if launch_type == self.LAUNCH_TYPE_FARGATE:
-            launch_type_td = {
-                'RequiresCompatibilities': ['FARGATE'],
-                'NetworkMode': 'awsvpc',
-                'Cpu': str(config['fargate']['cpu']),
-                'Memory': str(config['fargate']['memory'])
-            }
-        if 'udp_interface' in config:
+        if 'http_interface' in config:
+            if launch_type == self.LAUNCH_TYPE_FARGATE:
+                launch_type_td = {
+                    'RequiresCompatibilities': ['FARGATE'],
+                    'NetworkMode': 'awsvpc',
+                    'Cpu': str(config['fargate']['cpu']),
+                    'Memory': str(config['fargate']['memory'])
+                }
+        elif ('udp_interface' in config) or ('tcp_interface' in config):
             launch_type_td['NetworkMode'] = 'awsvpc'
 
         placement_constraints = [
@@ -486,6 +494,32 @@ service is down',
                 )
             )
 
+            self.template.add_resource(svc)
+        elif 'tcp_interface' in config:
+            launch_type_svc = {}
+            launch_type_svc['NetworkConfiguration'] = NetworkConfiguration(
+                AwsvpcConfiguration=AwsvpcConfiguration(
+                    Subnets=[Ref(self.private_subnet1), Ref(self.private_subnet2)],
+                    SecurityGroups=[config['tcp_interface']['target_security_group']])
+            )
+            svc = Service(
+                service_name,
+                LoadBalancers=[LoadBalancer(ContainerName=cd.Name, TargetGroupArn=config['tcp_interface']['target_group_arn'],
+                                            ContainerPort=int(config['tcp_interface']['container_port']))],
+                Cluster=self.cluster_name,
+                TaskDefinition=Ref(td),
+                DesiredCount=desired_count,
+                LaunchType=launch_type,
+                PlacementStrategies=self.PLACEMENT_STRATEGIES,
+                **launch_type_svc
+            )
+            self.template.add_output(
+                Output(
+                    service_name + 'EcsServiceName',
+                    Description='The ECS name which needs to be entered',
+                    Value=GetAtt(svc, 'Name')
+                )
+            )
             self.template.add_resource(svc)
         else:
             launch_type_svc = {}

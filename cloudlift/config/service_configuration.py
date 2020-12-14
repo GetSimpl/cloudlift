@@ -247,6 +247,20 @@ class ServiceConfiguration(DynamodbConfig):
                         "container_port"
                     ]
                 },
+                "tcp_interface": {
+                    "container_port": {
+                        "type": "number"
+                    },
+                    "target_group_arn": {
+                        "type": "string"
+                    },
+                    "target_security_group": {
+                        "type": "string"
+                    },
+                    "required": ["container_port",
+                                 "target_group_arn",
+                                 "target_security_group"]
+                },
                 "memory_reservation": {
                     "type": "number",
                     "minimum": 10,
