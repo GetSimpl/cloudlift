@@ -455,7 +455,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_fargate_service_template.yml')
         with(open(template_file_path)) as expected_template_file:
-            assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
+            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')

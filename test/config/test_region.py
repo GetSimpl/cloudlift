@@ -4,6 +4,7 @@ from mock import patch, MagicMock
 
 
 class TestRegion(TestCase):
+    @patch("cloudlift.config.region.local_cache", {})
     @patch("cloudlift.config.region.EnvironmentConfiguration")
     def test_get_region_for_environment_without_cache(self, env_config):
         mock = MagicMock()

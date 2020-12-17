@@ -320,15 +320,14 @@ service is down',
         task_execution_role = self._add_task_execution_role(service_name, secrets_name)
 
         launch_type_td = {}
-        if 'http_interface' in config:
-            if launch_type == self.LAUNCH_TYPE_FARGATE:
-                launch_type_td = {
-                    'RequiresCompatibilities': ['FARGATE'],
-                    'NetworkMode': 'awsvpc',
-                    'Cpu': str(config['fargate']['cpu']),
-                    'Memory': str(config['fargate']['memory'])
-                }
-        elif ('udp_interface' in config) or ('tcp_interface' in config):
+        if launch_type == self.LAUNCH_TYPE_FARGATE:
+            launch_type_td = {
+                'RequiresCompatibilities': ['FARGATE'],
+                'NetworkMode': 'awsvpc',
+                'Cpu': str(config['fargate']['cpu']),
+                'Memory': str(config['fargate']['memory'])
+            }
+        if ('udp_interface' in config) or ('tcp_interface' in config):
             launch_type_td['NetworkMode'] = 'awsvpc'
 
         placement_constraints = [
