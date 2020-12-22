@@ -298,6 +298,18 @@ class ServiceConfiguration(DynamodbConfig):
                         {"type": "null"}
                     ]
                 },
+                "task_arn": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
+                "task_execution_arn": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
                 "stop_timeout": {
                     "type": "number"
                 },
@@ -442,6 +454,12 @@ class ServiceConfiguration(DynamodbConfig):
                 "notifications_arn": {
                     "type": "string"
                 },
+                "service_role_arn": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
                 "services": {
                     "type": "object",
                     "patternProperties": {
@@ -477,6 +495,7 @@ class ServiceConfiguration(DynamodbConfig):
             u'ecr_repo': {
                 u'name': spinalcase("{}-repo".format(cwd)),
             },
+            u'service_role_arn': None,
             u'services': {
                 pascalcase(self.service_name): {
                     u'http_interface': {
@@ -493,7 +512,9 @@ class ServiceConfiguration(DynamodbConfig):
                     u'secrets_name': spinalcase("{}-{}".format(self.service_name, self.environment)),
                     u'system_controls': [],
                     u'memory_reservation': 1000,
-                    u'command': None
+                    u'command': None,
+                    u'task_arn': None,
+                    u'task_execution_arn': None,
                 }
             }
         }

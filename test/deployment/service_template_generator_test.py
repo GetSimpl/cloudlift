@@ -2,6 +2,7 @@ import datetime
 import os
 from decimal import Decimal
 from unittest import TestCase
+import dictdiffer
 
 from cfn_flip import to_json, to_yaml, load
 from mock import patch, MagicMock, call
@@ -266,7 +267,10 @@ class TestServiceTemplateGenerator(TestCase):
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_new_alb_template.yml')
         with(open(template_file_path)) as expected_template_file:
-            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
+            expected = load(''.join(expected_template_file.readlines()))
+            generated = load(generated_template)
+            diff = list(dictdiffer.diff(generated, expected))
+            assert diff == []
 
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
@@ -581,6 +585,56 @@ class TestServiceTemplateGenerator(TestCase):
         self.check_in_outputs(generated, 'ECRRepoName', 'main-repo')
         self.check_in_outputs(generated, 'ECRAccountID', '1234')
         self.check_in_outputs(generated, 'ECRAssumeRoleARN', 'arn1234')
+
+    @patch('cloudlift.deployment.service_template_generator.build_config')
+    @patch('cloudlift.deployment.service_template_generator.get_account_id')
+    @patch('cloudlift.deployment.template_generator.region_service')
+    def test_generate_service_for_ecs_with_custom_roles(self, mock_region_service, mock_get_account_id, mock_build_config):
+        environment = 'staging'
+        application_name = 'dummy'
+        mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
+                                               environment=environment)
+        mock_service_configuration.get_config.return_value = {
+            "cloudlift_version": 'test-version',
+            "notifications_arn": "some",
+            "ecr_repo": {"name": "main-repo", "assume_role_arn": "arn1234", "account_id": "1234"},
+            "services": {
+                "Dummy": {
+                    "memory_reservation": Decimal(1000),
+                    "secrets_name": "something",
+                    "command": None,
+                "task_arn": "TASK_ARN",
+                "task_execution_arn": "TASK_EXECUTION_ARN"
+                },
+            }
+        }
+
+        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name,
+                                   sec_name):
+            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
+
+        mock_build_config.side_effect = mock_build_config_impl
+
+        mock_get_account_id.return_value = "12537612"
+        mock_region_service.get_region_for_environment.return_value = "us-west-2"
+        mock_region_service.get_ssl_certification_for_environment.return_value = "certificateARN1234"
+
+        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
+                                                      './test/templates/test_env.sample',
+                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      desired_counts={"Dummy": 1})
+
+        generated_template = template_generator.generate_service()
+        loaded_template = load(to_json(generated_template))
+
+        self.assertGreaterEqual(len(loaded_template), 1, "no template generated")
+        generated = loaded_template[0]
+        assert "DummyRole" in generated['Resources']
+        assert "DummyTaskExecutionRole" in generated['Resources']
+        assert "ECSServiceRole" in generated['Resources']
+        td = generated['Resources']['DummyTaskDefinition']
+        assert td['Properties']['TaskRoleArn'] == 'TASK_ARN'
+        assert td['Properties']['ExecutionRoleArn'] == 'TASK_EXECUTION_ARN'
 
     def check_in_outputs(self, template, key, value):
         self.assertIn('Outputs', template)

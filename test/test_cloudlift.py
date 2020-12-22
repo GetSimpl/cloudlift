@@ -192,6 +192,7 @@ def get_current_task_definition_deployment_identifier(cfn_client, stack_name):
     ])['tags']
     return {tag['key']: tag['value'] for tag in tags}.get('deployment_identifier')
 
+
 def create_service(mocked_config):
     os.chdir(f'{TEST_DIR}/dummy')
     print("adding configuration to parameter store")

@@ -7,9 +7,20 @@ from moto import mock_dynamodb2
 from cloudlift.config import ServiceConfiguration
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.version import VERSION
+from dictdiffer import diff, are_different
 
 
 class TestServiceConfiguration(object):
+    class DictDifferenceException(Exception):
+        pass
+
+    def evaluate_difference(self, dict_a, dict_b):
+        if are_different(dict_a, dict_b, 0):
+            print("Expected response different than actual:")
+            for d in list(diff(dict_a, dict_b)):
+                print(d)
+            raise self.DictDifferenceException("DictDifference")
+
     def setup_existing_params(self):
         client = boto3.resource('dynamodb')
         client.create_table(
@@ -199,7 +210,7 @@ class TestServiceConfiguration(object):
         store_object.set_config(get_response)
         update_response = store_object.get_config()
 
-        assert update_response == {
+        expected_response = {
             'ecr_repo': {
                 'name': 'test-service-repo'
             },
@@ -495,6 +506,33 @@ class TestServiceConfigurationValidation(TestCase):
                 }
             }
         })
+
+    @mock_dynamodb2
+    def test_set_service_and_task_roles(self):
+        service = ServiceConfiguration('test-service', 'test')
+
+        try:
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
+                'service_role_arn': 'foo',
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                        'secrets_name': 'secret-config',
+                        'http_interface': {
+                            'internal': True,
+                            'container_port': 8080,
+                            'restrict_access_to': ['0.0.0.0/0'],
+                        }
+                    },
+                    'task_arn': 'task_arn',
+                    'task_execution_arn': 'task_execution_arn'
+                }
+            })
+        except UnrecoverableException as e:
+            self.fail('Exception thrown: {}'.format(e))
 
     def test_get_random_available_listener_rule_priority(self):
         testing_rules = set(list(range(1, 500)) + list(range(534, 678)) + list(range(1000, 30000)) +

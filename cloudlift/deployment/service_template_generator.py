@@ -64,7 +64,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
     def generate_service(self):
         self._add_service_parameters()
         self._add_service_outputs()
-        self._add_ecs_service_iam_role()
+        self.ecs_service_role = self._add_ecs_service_iam_role()
         self._add_cluster_services()
         self._add_ecr_outputs()
         return to_yaml(self.template.to_json())
@@ -225,6 +225,8 @@ service is down',
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
+        task_role_arn = config.get('task_arn')
+        task_execution_role_arn = config.get('task_execution_arn')
         if secrets_name:
             self.template.add_output(Output(service_name + "SecretsName",
                                             Description="AWS secrets manager name to pull the secrets from",
@@ -304,7 +306,8 @@ service is down',
                                                                 container_configurations.get(sidecar_container_name,
                                                                                              {})),
                 )
-        task_role = self.template.add_resource(Role(
+
+        generated_task_role = self.template.add_resource(Role(
             service_name + "Role",
             ManagedPolicyArns=config.get('task_role_attached_managed_policy_arns', []),
             AssumeRolePolicyDocument=PolicyDocument(
@@ -317,7 +320,10 @@ service is down',
                 ]
             )
         ))
-        task_execution_role = self._add_task_execution_role(service_name, secrets_name)
+
+        task_role = task_role_arn if task_role_arn else generated_task_role
+        generated_task_execution_role = self._add_task_execution_role(service_name, secrets_name)
+        task_execution_role = task_execution_role_arn if task_execution_role_arn else Ref(generated_task_execution_role)
 
         launch_type_td = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
@@ -336,12 +342,16 @@ service is down',
         ] if 'placement_constraints' in config else []
 
         task_family_name = f'{self.env}{service_name}Family'[:255]
+
+        # Use task_role_arn if available
+        task_role = Ref(task_role) if not task_role_arn else task_role_arn
+
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=task_family_name,
             ContainerDefinitions=container_definitions,
-            TaskRoleArn=Ref(task_role),
-            ExecutionRoleArn=Ref(task_execution_role),
+            TaskRoleArn=task_role,
+            ExecutionRoleArn=task_execution_role,
             PlacementConstraints=placement_constraints,
             **launch_type_td
         )
@@ -454,7 +464,7 @@ service is down',
                     )
                 )
             else:
-                launch_type_svc['Role'] = Ref(self.ecs_service_role)
+                launch_type_svc['Role'] = self.ecs_service_role
                 launch_type_svc['PlacementStrategies'] = self.PLACEMENT_STRATEGIES
 
             svc = Service(
@@ -1110,6 +1120,7 @@ had reached its maximum number of connections.',
         return ingress_rules
 
     def _add_ecs_service_iam_role(self):
+        injected_service_role_arn = self.configuration.get('service_role_arn')
         role_name = Sub('ecs-svc-${AWS::StackName}-${AWS::Region}')
         assume_role_policy = {
             u'Statement': [
@@ -1122,7 +1133,7 @@ had reached its maximum number of connections.',
                 }
             ]
         }
-        self.ecs_service_role = Role(
+        ecs_service_role = Role(
             'ECSServiceRole',
             Path='/',
             ManagedPolicyArns=[
@@ -1131,7 +1142,11 @@ had reached its maximum number of connections.',
             RoleName=role_name,
             AssumeRolePolicyDocument=assume_role_policy
         )
-        self.template.add_resource(self.ecs_service_role)
+        self.template.add_resource(ecs_service_role)
+        if injected_service_role_arn:
+            return injected_service_role_arn
+        else:
+            return Ref(ecs_service_role)
 
     def _add_service_outputs(self):
         self.template.add_output(Output(
