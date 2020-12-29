@@ -7,7 +7,8 @@ from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub, GetAtt,
                          cloudformation)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
-                                     ScalingPolicy)
+                                     ScalingPolicy, MixedInstancesPolicy, LaunchTemplateOverrides)
+from troposphere.autoscaling import LaunchTemplate as ASGLaunchTemplate
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
@@ -445,7 +446,7 @@ for cluster for 15 minutes.',
             "#!/bin/bash",
             "yum update -y",
             "yum install -y aws-cfn-bootstrap",
-            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration",
+            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate",
             "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup",
             "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
             "systemctl enable amazon-ssm-agent",
@@ -475,7 +476,7 @@ for cluster for 15 minutes.',
                                 '[cfn-auto-reloader-hook]',
                                 'triggers=post.update',
                                 'path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init',
-                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration',
+                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate',
                                 ''
                             ])
                         ),
@@ -523,7 +524,6 @@ for cluster for 15 minutes.',
                 Arn=GetAtt(instance_profile, 'Arn')
             ),
             SecurityGroupIds=[GetAtt(sg_hosts, 'GroupId')],
-            InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
             KeyName=Ref(self.key_pair)
         )
@@ -533,6 +533,11 @@ for cluster for 15 minutes.',
             Metadata=lc_metadata
         )
         self.template.add_resource(launch_template)
+        
+        overrides_instances = []
+        for instance_type in self.configuration['cluster']['instance_types']:
+            overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
+
         # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
         up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
         # TODO: clean up
@@ -551,9 +556,14 @@ for cluster for 15 minutes.',
             MinSize=Ref('MinSize'),
             MaxSize=Ref('MaxSize'),
             VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
-            LaunchTemplate=LaunchTemplateSpecification(
-                LaunchTemplateId=Ref(launch_template),
-                Version=GetAtt(launch_template, 'LatestVersionNumber')
+            MixedInstancesPolicy=MixedInstancesPolicy(
+                LaunchTemplate=ASGLaunchTemplate(
+                    LaunchTemplateSpecification=LaunchTemplateSpecification(
+                        LaunchTemplateId=Ref(launch_template),
+                        Version=GetAtt(launch_template, 'LatestVersionNumber')
+                    ),
+                    Overrides=overrides_instances
+                )
             ),
             CreationPolicy=CreationPolicy(
                 ResourceSignal=ResourceSignal(Timeout='PT15M')
@@ -589,8 +599,8 @@ for cluster for 15 minutes.',
                                               Type="String",
                                               Default=self.notifications_arn)
         self.template.add_parameter(self.notification_sns_arn)
-        self.template.add_parameter(Parameter(
-            "InstanceType", Description='', Type="String", Default=self.configuration['cluster']['instance_type']))
+        # self.template.add_parameter(Parameter(
+        #     "InstanceType", Description='', Type="String", Default=self.configuration['cluster']['instance_types']))
 
     def _add_mappings(self):
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
@@ -609,7 +619,7 @@ for cluster for 15 minutes.',
             'env': self.env,
             'min_instances': str(self.configuration['cluster']['min_instances']),
             'max_instances': str(self.configuration['cluster']['max_instances']),
-            'instance_type': self.configuration['cluster']['instance_type'],
+            'instance_types': self.configuration['cluster']['instance_types'],
             'key_name': self.configuration['cluster']['key_name'],
             'cloudlift_version': VERSION
         }
@@ -665,11 +675,11 @@ for cluster for 15 minutes.',
             Description="Maximum instances in cluster",
             Value=str(self.configuration['cluster']['max_instances']))
         )
-        self.template.add_output(Output(
-            "InstanceType",
-            Description="EC2 instance type",
-            Value=str(self.configuration['cluster']['instance_type']))
-        )
+        # self.template.add_output(Output(
+        #     "InstanceType",
+        #     Description="EC2 instance type",
+        #     Value=str(self.configuration['cluster']['instance_type']))
+        # )
         self.template.add_output(Output(
             "KeyName",
             Description="Key Pair name for accessing the instances",
