@@ -127,7 +127,8 @@ class EnvironmentConfiguration(object):
             "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
-        cluster_instance_type = prompt("Instance type", default='m5.xlarge')
+        cluster_instance_types = prompt("Instance types", default='t2.micro,m5.xlarge')
+        cluster_instance_types = cluster_instance_types.split(",")
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
@@ -161,7 +162,7 @@ class EnvironmentConfiguration(object):
                 "cluster": {
                     "min_instances": cluster_min_instances,
                     "max_instances": cluster_max_instances,
-                    "instance_type": cluster_instance_type,
+                    "instance_types": cluster_instance_types,
                     "key_name": key_name
                 },
                 "environment": {
@@ -247,13 +248,13 @@ class EnvironmentConfiguration(object):
                             "properties": {
                                 "min_instances": {"type": "integer"},
                                 "max_instances": {"type": "integer"},
-                                "instance_type": {"type": "string"},
+                                "instance_types": {"type": "array"},
                                 "key_name": {"type": "string"},
                             },
                             "required": [
                                 "min_instances",
                                 "max_instances",
-                                "instance_type",
+                                "instance_types",
                                 "key_name"
                             ]
                         },
