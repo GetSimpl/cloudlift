@@ -10,6 +10,7 @@ from colorclass import Color
 from terminaltables import SingleTable
 from cloudlift.config import secrets_manager
 
+HARD_LIMIT_MEMORY_IN_MB = 20480
 
 def find_essential_container(container_definitions):
     for defn in container_definitions:
@@ -63,6 +64,7 @@ def create_new_task_definition(color, complete_image_uri, deploy_version_tag, ec
     for container in task_definition.containers:
         env_config = container_configurations.get(container['name'], {})
         task_definition.apply_container_environment_and_secrets(container, env_config)
+        task_definition.apply_memory_hard_limit(HARD_LIMIT_MEMORY_IN_MB)
     print_task_diff(ecs_service_name, task_definition.diff, color)
     new_task_definition = deployment.update_task_definition(task_definition, deployment_identifier)
     return new_task_definition

@@ -274,6 +274,10 @@ class EcsTaskDefinition(dict):
     def get_overrides_env(env):
         return [{"name": e, "value": env[e]} for e in env]
 
+    def apply_memory_hard_limit(self,memory):
+        for container in self.containers:
+            container['memory'] = memory
+
     def set_images(self, container_to_deploy, tag=None, **images):
         self.validate_container_options(**images)
         for container in self.containers:
