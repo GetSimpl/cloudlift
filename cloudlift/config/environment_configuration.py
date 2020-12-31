@@ -170,8 +170,7 @@ class EnvironmentConfiguration(object):
                     "instance_types": cluster_instance_types,
                     "key_name": key_name,
                     "deployment_type": deployment_type,
-                    "spot_allocation_strategy": spot_allocation_strategy,
-                    "spot_instance_pools": spot_instance_pools
+                    "spot_allocation_strategy": spot_allocation_strategy
                 },
                 "environment": {
                     "notifications_arn": notifications_arn,
@@ -259,8 +258,7 @@ class EnvironmentConfiguration(object):
                                 "instance_types": {"type": "array"},
                                 "key_name": {"type": "string"},
                                 "deployment_type": {"type": "string"},
-                                "spot_allocation_strategy": {"type": "string"},
-                                "spot_instance_pools": {"type": "integer"}
+                                "spot_allocation_strategy": {"type": "string"}
                             },
                             "required": [
                                 "min_instances",
