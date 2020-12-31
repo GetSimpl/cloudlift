@@ -7,7 +7,7 @@ from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub, GetAtt,
                          cloudformation)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
-                                     ScalingPolicy, MixedInstancesPolicy, LaunchTemplateOverrides)
+                                     ScalingPolicy, MixedInstancesPolicy, LaunchTemplateOverrides, InstancesDistribution )
 from troposphere.autoscaling import LaunchTemplate as ASGLaunchTemplate
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
@@ -537,7 +537,6 @@ for cluster for 15 minutes.',
         overrides_instances = []
         for instance_type in self.configuration['cluster']['instance_types']:
             overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
-
         # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
         up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
         # TODO: clean up
@@ -563,6 +562,11 @@ for cluster for 15 minutes.',
                         Version=GetAtt(launch_template, 'LatestVersionNumber')
                     ),
                     Overrides=overrides_instances
+                ),
+                InstancesDistribution=InstancesDistribution(
+                    OnDemandBaseCapacity=0,
+                    OnDemandPercentageAboveBaseCapacity=0 if self.configuration['cluster']['deployment_type'] == 'spot' else 100,
+                    SpotAllocationStrategy="lowest-price" if self.configuration['cluster']['spot_allocation_strategy'] == "lowest-price" else "capacity-optimized"
                 )
             ),
             CreationPolicy=CreationPolicy(
