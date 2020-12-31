@@ -127,6 +127,11 @@ class EnvironmentConfiguration(object):
             "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
+        deployment_type = prompt("Deployment type spot/on-demand", default='on-demand')
+        if deployment_type == 'spot':
+            spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price", default='capacity-optimized')
+        elif deployment_type == 'on-demand':
+            spot_allocation_strategy = 'capacity-optimized'
         cluster_instance_types = prompt("Instance types", default='t2.micro,m5.xlarge')
         cluster_instance_types = cluster_instance_types.split(",")
         key_name = prompt("SSH key name")
@@ -163,7 +168,10 @@ class EnvironmentConfiguration(object):
                     "min_instances": cluster_min_instances,
                     "max_instances": cluster_max_instances,
                     "instance_types": cluster_instance_types,
-                    "key_name": key_name
+                    "key_name": key_name,
+                    "deployment_type": deployment_type,
+                    "spot_allocation_strategy": spot_allocation_strategy,
+                    "spot_instance_pools": spot_instance_pools
                 },
                 "environment": {
                     "notifications_arn": notifications_arn,
@@ -250,6 +258,9 @@ class EnvironmentConfiguration(object):
                                 "max_instances": {"type": "integer"},
                                 "instance_types": {"type": "array"},
                                 "key_name": {"type": "string"},
+                                "deployment_type": {"type": "string"},
+                                "spot_allocation_strategy": {"type": "string"},
+                                "spot_instance_pools": {"type": "integer"}
                             },
                             "required": [
                                 "min_instances",
