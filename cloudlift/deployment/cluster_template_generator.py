@@ -442,147 +442,131 @@ for cluster for 15 minutes.',
             GroupDescription=Sub("${AWS::StackName}-databases")
         )
         self.template.add_resource(database_security_group)
-        user_data = Base64(Sub('\n'.join([
-            "#!/bin/bash",
-            "yum update -y",
-            "yum install -y aws-cfn-bootstrap",
-            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate",
-            "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup",
-            "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
-            "systemctl enable amazon-ssm-agent",
-            "systemctl start amazon-ssm-agent",
-            ""])))
-        with open (str(pathlib.Path(__file__).parent.absolute())+"/banner/${self.env}-banner.sh", "r") as banner:
-            banner_code=banner.readlines()
-        lc_metadata = cloudformation.Init({
-            "config": cloudformation.InitConfig(
-                files=cloudformation.InitFiles({
-                    "/etc/cfn/cfn-hup.conf": cloudformation.InitFile(
-                        content=Sub(
-                            '\n'.join([
-                                    '[main]',
-                                    'stack=${AWS::StackId}',
-                                    'region=${AWS::Region}',
+        deployment_types = ['OnDemand', 'Spot']
+        for deployment_type in deployment_types:
+            user_data = Base64(Sub('\n'.join([
+                "#!/bin/bash",
+                "yum update -y",
+                "yum install -y aws-cfn-bootstrap",
+                "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate"+deployment_type,
+                "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup"+deployment_type,
+                "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
+                "systemctl enable amazon-ssm-agent",
+                "systemctl start amazon-ssm-agent",
+                ""])))
+            lc_metadata = cloudformation.Init({
+                "config": cloudformation.InitConfig(
+                    files=cloudformation.InitFiles({
+                        "/etc/cfn/cfn-hup.conf": cloudformation.InitFile(
+                            content=Sub(
+                                '\n'.join([
+                                        '[main]',
+                                        'stack=${AWS::StackId}',
+                                        'region=${AWS::Region}',
+                                        ''
+                                    ])
+                                ),
+                            mode='256',  # TODO: Why 256
+                            owner="root",
+                            group="root"
+                        ),
+                        "/etc/cfn/hooks.d/cfn-auto-reloader.conf": cloudformation.InitFile(
+                            content=Sub(
+                                '\n'.join([
+                                    '[cfn-auto-reloader-hook]',
+                                    'triggers=post.update',
+                                    'path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init',
+                                    'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate'+deployment_type,
                                     ''
                                 ])
                             ),
-                        mode='256',  # TODO: Why 256
-                        owner="root",
-                        group="root"
-                    ),
-                    "/etc/cfn/hooks.d/cfn-auto-reloader.conf": cloudformation.InitFile(
-                        content=Sub(
-                            '\n'.join([
-                                '[cfn-auto-reloader-hook]',
-                                'triggers=post.update',
-                                'path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init',
-                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate',
-                                ''
-                            ])
-                        ),
-                    ),
-                    "/etc/update-motd.d/99-banner": cloudformation.InitFile(
-                        content=Sub(
-                            '\n'.join([
-                                "",
-                                banner_code
-                            ])
-                        ),
-                        mode='0755',
-                        owner="root",
-                        group="root"
-                    )
-                }),
-                services={
-                    "sysvinit": cloudformation.InitServices({
-                        "cfn-hup": cloudformation.InitService(
-                            enabled=True,
-                            ensureRunning=True,
-                            files=['/etc/cfn/cfn-hup.conf',
-                                   '/etc/cfn/hooks.d/cfn-auto-reloader.conf']
                         )
-                    })
-                },
-                commands={
-                    '01_add_instance_to_cluster': {
-                        'command': Sub(
-                            'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256" > /etc/ecs/ecs.config'
-                        )
+                    }),
+                    services={
+                        "sysvinit": cloudformation.InitServices({
+                            "cfn-hup": cloudformation.InitService(
+                                enabled=True,
+                                ensureRunning=True,
+                                files=['/etc/cfn/cfn-hup.conf',
+                                    '/etc/cfn/hooks.d/cfn-auto-reloader.conf']
+                            )
+                        })
                     },
-                    '02_update_hostname': {
-                        'command': Sub(
-                            'hostnamectl set-hostname ${self.env}-`hostname -s`'
-                        )
+                    commands={
+                        '01_add_instance_to_cluster': {
+                            'command': Sub(
+                                "echo 'ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\nECS_INSTANCE_ATTRIBUTES={\"deployment_type\": \""+ deployment_type +"\"}' > /etc/ecs/ecs.config"
+                            )
+                        }
                     }
-                }
-            )
-        })
-        launch_template_data = LaunchTemplateData(
-            'LaunchTemplateData',
-            UserData=user_data,
-            IamInstanceProfile=IamInstanceProfile(
-                Arn=GetAtt(instance_profile, 'Arn')
-            ),
-            SecurityGroupIds=[GetAtt(sg_hosts, 'GroupId')],
-            ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
-            KeyName=Ref(self.key_pair)
-        )
-        launch_template = LaunchTemplate(
-            "LaunchTemplate",
-            LaunchTemplateData=launch_template_data,
-            Metadata=lc_metadata
-        )
-        self.template.add_resource(launch_template)
-        
-        overrides_instances = []
-        for instance_type in self.configuration['cluster']['instance_types']:
-            overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
-        # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
-        up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
-        # TODO: clean up
-        subnets = list(self.private_subnets)
-        self.auto_scaling_group = AutoScalingGroup(
-            "AutoScalingGroup",
-            UpdatePolicy=up,
-            DesiredCapacity=self.desired_instances,
-            Tags=[
-                {
-                    'PropagateAtLaunch': True,
-                    'Value': Sub('${AWS::StackName} - ECS Host'),
-                    'Key': 'Name'
-                }
-            ],
-            MinSize=Ref('MinSize'),
-            MaxSize=Ref('MaxSize'),
-            VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
-            MixedInstancesPolicy=MixedInstancesPolicy(
-                LaunchTemplate=ASGLaunchTemplate(
-                    LaunchTemplateSpecification=LaunchTemplateSpecification(
-                        LaunchTemplateId=Ref(launch_template),
-                        Version=GetAtt(launch_template, 'LatestVersionNumber')
-                    ),
-                    Overrides=overrides_instances
-                ),
-                InstancesDistribution=InstancesDistribution(
-                    OnDemandBaseCapacity=0,
-                    OnDemandPercentageAboveBaseCapacity=0 if self.configuration['cluster']['deployment_type'] == 'spot' else 100,
-                    SpotAllocationStrategy="lowest-price" if self.configuration['cluster']['spot_allocation_strategy'] == "lowest-price" else "capacity-optimized"
                 )
-            ),
-            CreationPolicy=CreationPolicy(
-                ResourceSignal=ResourceSignal(Timeout='PT15M')
+            })
+            launch_template_data = LaunchTemplateData(
+                'LaunchTemplateData',
+                UserData=user_data,
+                IamInstanceProfile=IamInstanceProfile(
+                    Arn=GetAtt(instance_profile, 'Arn')
+                ),
+                SecurityGroupIds=[GetAtt(sg_hosts, 'GroupId')],
+                ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
+                KeyName=Ref(self.key_pair)
             )
-        )
-        self.template.add_resource(self.auto_scaling_group)
-        self.cluster_scaling_policy = ScalingPolicy(
-            'AutoScalingPolicy',
-            AdjustmentType='ChangeInCapacity',
-            AutoScalingGroupName=Ref(self.auto_scaling_group),
-            Cooldown=300,
-            PolicyType='SimpleScaling',
-            ScalingAdjustment=1
-        )
-        self.template.add_resource(self.cluster_scaling_policy)
+            launch_template = LaunchTemplate(
+                "LaunchTemplate"+deployment_type,
+                LaunchTemplateData=launch_template_data,
+                Metadata=lc_metadata
+            )
+            self.template.add_resource(launch_template)
+            
+            overrides_instances = []
+            for instance_type in self.configuration['cluster']['instance_types']:
+                overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
+            # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
+            up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
+            # TODO: clean up
+            subnets = list(self.private_subnets)
+            self.auto_scaling_group = AutoScalingGroup(
+                "AutoScalingGroup"+deployment_type,
+                UpdatePolicy=up,
+                DesiredCapacity=self.desired_instances,
+                Tags=[
+                    {
+                        'PropagateAtLaunch': True,
+                        'Value': Sub('${AWS::StackName} - ECS Host'),
+                        'Key': 'Name'
+                    }
+                ],
+                MinSize=Ref('MinSize'),
+                MaxSize=Ref('MaxSize'),
+                VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
+                MixedInstancesPolicy=MixedInstancesPolicy(
+                    LaunchTemplate=ASGLaunchTemplate(
+                        LaunchTemplateSpecification=LaunchTemplateSpecification(
+                            LaunchTemplateId=Ref(launch_template),
+                            Version=GetAtt(launch_template, 'LatestVersionNumber')
+                        ),
+                        Overrides=overrides_instances
+                    ),
+                    InstancesDistribution=InstancesDistribution(
+                        OnDemandBaseCapacity=0,
+                        OnDemandPercentageAboveBaseCapacity=0 if deployment_type == 'Spot' else 100,
+                        SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster']['spot_allocation_strategy']
+                    )
+                ),
+                CreationPolicy=CreationPolicy(
+                    ResourceSignal=ResourceSignal(Timeout='PT15M')
+                )
+            )
+            self.template.add_resource(self.auto_scaling_group)
+            self.cluster_scaling_policy = ScalingPolicy(
+                'AutoScalingPolicy'+deployment_type,
+                AdjustmentType='ChangeInCapacity',
+                AutoScalingGroupName=Ref(self.auto_scaling_group),
+                Cooldown=300,
+                PolicyType='SimpleScaling',
+                ScalingAdjustment=1
+            )
+            self.template.add_resource(self.cluster_scaling_policy)
 
     def _add_cluster_parameters(self):
         self.template.add_parameter(Parameter(
@@ -603,8 +587,8 @@ for cluster for 15 minutes.',
                                               Type="String",
                                               Default=self.notifications_arn)
         self.template.add_parameter(self.notification_sns_arn)
-        # self.template.add_parameter(Parameter(
-        #     "InstanceType", Description='', Type="String", Default=self.configuration['cluster']['instance_types']))
+        self.template.add_parameter(Parameter(
+            "InstanceTypes", Description='', Type="String", Default=str(self.configuration['cluster']['instance_types'])))
 
     def _add_mappings(self):
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
@@ -660,9 +644,14 @@ for cluster for 15 minutes.',
             Value=Ref(public_subnets.pop()))
         )
         self.template.add_output(Output(
-            "AutoScalingGroup",
+            "AutoScalingGroupSpot",
             Description="AutoScaling group for ECS container instances",
-            Value=Ref('AutoScalingGroup'))
+            Value=Ref('AutoScalingGroupSpot'))
+        )
+        self.template.add_output(Output(
+            "AutoScalingGroupOnDemand",
+            Description="AutoScaling group for ECS container instances",
+            Value=Ref('AutoScalingGroupOnDemand'))
         )
         self.template.add_output(Output(
             "SecurityGroupAlb",
@@ -679,11 +668,11 @@ for cluster for 15 minutes.',
             Description="Maximum instances in cluster",
             Value=str(self.configuration['cluster']['max_instances']))
         )
-        # self.template.add_output(Output(
-        #     "InstanceType",
-        #     Description="EC2 instance type",
-        #     Value=str(self.configuration['cluster']['instance_type']))
-        # )
+        self.template.add_output(Output(
+            "InstanceTypes",
+            Description="EC2 instance type",
+            Value=str(self.configuration['cluster']['instance_types']))
+        )
         self.template.add_output(Output(
             "KeyName",
             Description="Key Pair name for accessing the instances",
@@ -703,7 +692,7 @@ for cluster for 15 minutes.',
                             'Environment',
                             'MinSize',
                             'MaxSize',
-                            'InstanceType',
+                            'InstanceTypes',
                             'VPC',
                             'Subnet1',
                             'Subnet2',
@@ -715,7 +704,7 @@ for cluster for 15 minutes.',
                     'Environment': {
                         'default': 'Enter the environment e.g. dev or staging or sandbox or production'
                     },
-                    'InstanceType': {
+                    'InstanceTypes': {
                         'default': 'Type of instance'
                     },
                     'KeyPair': {
