@@ -195,6 +195,9 @@ class ServiceConfiguration(object):
                         {"type": "string"},
                         {"type": "null"}
                     ]
+                },
+                "interruptable": {
+                    "type": "boolean"
                 }
             },
             "required": ["memory_reservation", "command"]
@@ -237,7 +240,8 @@ class ServiceConfiguration(object):
                         u'health_check_path': u'/elb-check'
                     },
                     u'memory_reservation': 1000,
-                    u'command': None
+                    u'command': None,
+                    u'interruptable': False
                 }
             }
         }
