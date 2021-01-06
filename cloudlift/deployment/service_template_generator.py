@@ -13,7 +13,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition)
+                             PortMapping, Service, TaskDefinition, PlacementConstraint)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -265,6 +265,10 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DependsOn=service_listener.title,
+                PlacementConstraints=[PlacementConstraint(
+                    Type='memberOf',
+                    Expression='attribute:deployment_type == Spot' if config['interruptable'] else 'attribute:deployment_type == OnDemand'
+                )],
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
@@ -319,6 +323,10 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DeploymentConfiguration=deployment_configuration,
+                PlacementConstraints=[PlacementConstraint(
+                    Type='memberOf',
+                    Expression='attribute:deployment_type == Spot' if config['interruptable'] else 'attribute:deployment_type == OnDemand'
+                )],
                 LaunchType=launch_type,
                 **launch_type_svc
             )
