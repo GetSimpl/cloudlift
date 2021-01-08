@@ -51,7 +51,7 @@ class EnvironmentConfiguration(object):
             )
             existing_configuration = configuration_response['Item']['configuration']
             previous_cloudlift_version = existing_configuration.pop("cloudlift_version", None)
-            print(f"Previous cloudlift version in environment config is {previous_cloudlift_version}")
+            # print(f"Previous cloudlift version in environment config is {previous_cloudlift_version}")
             if previous_cloudlift_version and LooseVersion(cloudlift_version) < LooseVersion(previous_cloudlift_version):
                 raise UnrecoverableException(f'Cloudlift Version {previous_cloudlift_version} was used to '
                                              f'create this environment. You are using version {cloudlift_version}, '
@@ -186,8 +186,6 @@ class EnvironmentConfiguration(object):
         '''
             Open editor to update configuration
         '''
-        import pdb
-        pdb.set_trace()
         try:
             current_configuration = self.get_config()
             previous_cloudlift_version = current_configuration.pop('cloudlift_version', None)
@@ -227,9 +225,6 @@ class EnvironmentConfiguration(object):
         '''
             Set configuration in DynamoDB
         '''
-        import pdb
-        pdb.set_trace()
-
         self._validate_changes(config)
         config['cloudlift_version'] = VERSION
 

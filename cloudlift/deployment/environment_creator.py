@@ -90,8 +90,6 @@ class EnvironmentCreator(object):
                 self.key_name,
                 self.environment
             )
-            import pdb
-            pdb.set_trace()
             self.existing_events = get_stack_events(
                 self.client,
                 self.cluster_name
