@@ -236,6 +236,36 @@ An example service using `container_health_check`
 }
 ```
 
+- When reusing ALB, you can configure the following alerts
+
+```json5
+{
+  "alb": {
+    // Setting this to false means, the ALB is managed outside of this service definition.
+    // We can use this mode to attach the target group to one of the listeners of an existing ALB
+    "create_new": false,
+
+    // Fires when target 5xx is greater than threshold
+    // default is 10
+    "target_5xx_error_threshold": 10,
+
+    // Fires when TargetResponseTime.p95 is greater than threshold seconds. (default: 15)
+    "target_p95_latency_threshold_seconds": 15,
+    // number of datapoints to evaluate
+    "target_p95_latency_evaluation_periods": 5,
+    // number of seconds to evaluate
+    "target_p95_latency_period_seconds": 5,
+
+    // Fires when TargetResponseTime.p99 is greater than threshold seconds. (default: 25)
+    "target_p99_latency_threshold_seconds": 25,
+    // number of datapoints to evaluate
+    "target_p99_latency_evaluation_periods": 5,
+    // number of seconds to evaluate
+    "target_p99_latency_period_seconds": 5
+  }
+}
+```
+
 `autoscaling` allows to configure ScalingPolicy for ECS Service.
 
 Supported autoscaling policies `request_count_per_target`. It works only if there is a `http_interface`

@@ -5,6 +5,9 @@ Outputs:
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
       1000, "command": null, "secrets_name": "something", "http_interface": {"internal":
       false, "alb": {"create_new": false, "host": "abc.xyz.com", "priority": 4, "target_5xx_error_threshold":
+      10, "target_p95_latency_evaluation_periods": 3, "target_p95_latency_period_seconds":
+      30, "target_p95_latency_threshold_seconds": 10, "target_p99_latency_evaluation_periods":
+      3, "target_p99_latency_period_seconds": 30, "target_p99_latency_threshold_seconds":
       10}, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
       "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
       {"target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
@@ -402,6 +405,90 @@ Resources:
       Period: 60
       Statistic: Average
       Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  HighP95LatencyAlarmTargetGroupDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if p95 latency of target group is higher than threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: ''
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummy.TargetGroupFullName'
+      EvaluationPeriods: 3
+      ExtendedStatistic: p95
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 30
+      Threshold: 10
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  HighP95LatencyAlarmTargetGroupDummyWithCustomListener:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if p95 latency of target group is higher than threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
+      EvaluationPeriods: 5
+      ExtendedStatistic: p95
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Threshold: 15
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  HighP99LatencyAlarmTargetGroupDummy:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if p99 latency of target group is higher than threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: ''
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummy.TargetGroupFullName'
+      EvaluationPeriods: 3
+      ExtendedStatistic: p99
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 30
+      Threshold: 10
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  HighP99LatencyAlarmTargetGroupDummyWithCustomListener:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if p99 latency of target group is higher than threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
+      EvaluationPeriods: 5
+      ExtendedStatistic: p99
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Threshold: 25
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
   HighTarget5XXAlarmTargetGroupDummy:

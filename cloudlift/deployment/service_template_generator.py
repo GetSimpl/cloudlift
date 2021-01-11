@@ -436,7 +436,7 @@ service is down',
                 else:
                     listener_arn = alb_config['listener_arn'] if 'listener_arn' in alb_config \
                         else get_environment_level_alb_listener(self.env)
-                    self.attach_to_existing_listener(alb_config, service_name, target_group_name,listener_arn)
+                    self.attach_to_existing_listener(alb_config, service_name, target_group_name, listener_arn)
                     alb_full_name = self.get_alb_full_name_from_listener_arn(listener_arn)
                     self.create_target_group_alarms(target_group_name, target_group, alb_full_name,
                                                     alb_config)
@@ -513,8 +513,9 @@ service is down',
             )
             svc = Service(
                 service_name,
-                LoadBalancers=[LoadBalancer(ContainerName=cd.Name, TargetGroupArn=config['tcp_interface']['target_group_arn'],
-                                            ContainerPort=int(config['tcp_interface']['container_port']))],
+                LoadBalancers=[
+                    LoadBalancer(ContainerName=cd.Name, TargetGroupArn=config['tcp_interface']['target_group_arn'],
+                                 ContainerPort=int(config['tcp_interface']['container_port']))],
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
@@ -582,7 +583,7 @@ service is down',
     def get_alb_full_name_from_listener_arn(self, listener_arn):
         return "/".join(listener_arn.split('/')[1:-1])
 
-    def attach_to_existing_listener(self, alb_config, service_name, target_group_name,listener_arn):
+    def attach_to_existing_listener(self, alb_config, service_name, target_group_name, listener_arn):
         conditions = []
         if 'host' in alb_config:
             conditions.append(
@@ -602,7 +603,6 @@ service is down',
                     ),
                 )
             )
-
 
         priority = alb_config['priority']
         self.template.add_resource(
@@ -1028,6 +1028,63 @@ service is down',
             TreatMissingData='notBreaching'
         )
         self.template.add_resource(high_5xx_alarm)
+
+        latency_alarms = self._get_latency_alarms(alb_config, alb_full_name,
+                                                  target_group, target_group_name)
+
+        for alarm in latency_alarms:
+            self.template.add_resource(alarm)
+
+    def _get_latency_alarms(self, alb_config, alb_full_name, target_group, target_group_name):
+        high_p95_latency_alarm = Alarm(
+            'HighP95LatencyAlarm' + target_group_name,
+            EvaluationPeriods=int(alb_config.get('target_p95_latency_evaluation_periods', 5)),
+            Dimensions=[
+                MetricDimension(
+                    Name='LoadBalancer',
+                    Value=alb_full_name
+                ),
+                MetricDimension(
+                    Name='TargetGroup',
+                    Value=GetAtt(target_group, 'TargetGroupFullName')
+                )
+            ],
+            AlarmActions=[Ref(self.notification_sns_arn)],
+            OKActions=[Ref(self.notification_sns_arn)],
+            AlarmDescription='Triggers if p95 latency of target group is higher than threshold',
+            Namespace='AWS/ApplicationELB',
+            Period=int(alb_config.get('target_p95_latency_period_seconds', 60)),
+            ComparisonOperator='GreaterThanOrEqualToThreshold',
+            ExtendedStatistic='p95',
+            Threshold=int(alb_config.get('target_p95_latency_threshold_seconds', 15)),
+            MetricName='TargetResponseTime',
+            TreatMissingData='notBreaching'
+        )
+        high_p99_latency_alarm = Alarm(
+            'HighP99LatencyAlarm' + target_group_name,
+            EvaluationPeriods=int(alb_config.get('target_p99_latency_evaluation_periods', 5)),
+            Dimensions=[
+                MetricDimension(
+                    Name='LoadBalancer',
+                    Value=alb_full_name
+                ),
+                MetricDimension(
+                    Name='TargetGroup',
+                    Value=GetAtt(target_group, 'TargetGroupFullName')
+                )
+            ],
+            AlarmActions=[Ref(self.notification_sns_arn)],
+            OKActions=[Ref(self.notification_sns_arn)],
+            AlarmDescription='Triggers if p99 latency of target group is higher than threshold',
+            Namespace='AWS/ApplicationELB',
+            Period=int(alb_config.get('target_p99_latency_period_seconds', 60)),
+            ComparisonOperator='GreaterThanOrEqualToThreshold',
+            ExtendedStatistic='p99',
+            Threshold=int(alb_config.get('target_p99_latency_threshold_seconds', 25)),
+            MetricName='TargetResponseTime',
+            TreatMissingData='notBreaching'
+        )
+        return [high_p95_latency_alarm, high_p99_latency_alarm]
 
     def _add_alb_alarms(self, service_name, alb, alb_config):
         elb_5XX_error_codes_to_monitor = ["502", "503", "504"]
