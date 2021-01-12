@@ -89,7 +89,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
             except ClientError as boto_client_error:
                 error_code = boto_client_error.response['Error']['Code']
                 if error_code == 'AccessDenied':
-                    raise UnrecoverableException("Unable to store cloudlift service template in S3 at "+ self.bucket_name)
+                    raise UnrecoverableException("Unable to store cloudlift service template in S3 bucket at "+ str(self.bucket_name))
                 else:
                     raise boto_client_error
         else:
