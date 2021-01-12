@@ -164,8 +164,8 @@ Resources:
             - ContainerPort: 1812
               Protocol: tcp
           Secrets:
-            - Name: LABEL
-              ValueFrom: arn_secret_label_v1
+            - Name: CLOUDLIFT_INJECTED_SECRETS
+              ValueFrom: arn_injected_secrets
       ExecutionRoleArn: !Ref 'LdapServerTaskExecutionRole'
       Family: stagingLdapServerFamily
       NetworkMode: awsvpc
@@ -189,6 +189,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummy/LdapServer-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-tcp-config-??????
               - Action:
                   - ecr:GetAuthorizationToken

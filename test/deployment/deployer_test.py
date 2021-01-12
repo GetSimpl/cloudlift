@@ -1,10 +1,15 @@
+import os
 from _datetime import datetime, timedelta
-from dateutil.tz.tz import tzlocal
-import pytest
 from unittest import TestCase
 from unittest.mock import patch, MagicMock, sentinel, mock_open
+
+import pytest
+from dateutil.tz.tz import tzlocal
+
 from cloudlift.deployment.deployer import is_deployed, \
-    record_deployment_failure_metric, deploy_and_wait, build_config
+    record_deployment_failure_metric, deploy_and_wait, build_config, get_env_sample_file_name, \
+    get_env_sample_file_contents, get_namespaces_from_directory, find_duplicate_keys, get_sample_keys, get_secret_name, \
+    get_automated_injected_secret_name
 from cloudlift.deployment.ecs import EcsService, EcsTaskDefinition
 from cloudlift.exceptions import UnrecoverableException
 
@@ -301,8 +306,8 @@ class TestBuildConfig(TestCase):
         mock_parameter_store.return_value = mock_store
         mock_store.get_existing_config.return_value = ({'PORT': '80', 'LABEL': 'Dummy'}, {})
 
-        actual_configurations = build_config(env_name, cloudlift_service_name, sample_env_file_path,
-                                             essential_container_name)
+        actual_configurations = build_config(env_name, cloudlift_service_name, "", sample_env_file_path,
+                                             essential_container_name, None)
 
         expected_configurations = {
             "mainServiceContainer": {
@@ -324,20 +329,20 @@ class TestBuildConfig(TestCase):
         secrets_name = "main"
         mock_store = MagicMock()
         mock_parameter_store.return_value = mock_store
-        mock_store.get_existing_config.return_value = ({'PORT': '80', 'LABEL': 'Dummy'}, {})
-        mock_secrets_manager.get_config.return_value = {"LABEL": "arn_for_secret_at_v1"}
+        mock_store.get_existing_config.return_value = (
+            {'PORT': '80', "LABEL": "arn_for_secret_at_v1"}, {})
+        mock_secrets_manager.get_config.return_value = {}
 
-        actual_configurations = build_config(env_name, cloudlift_service_name, sample_env_file_path,
-                                             essential_container_name, secrets_name)
+        actual_configurations = build_config(env_name, cloudlift_service_name, "", sample_env_file_path,
+                                             essential_container_name, None)
 
         expected_configurations = {
             "mainService": {
-                "secrets": {"LABEL": "arn_for_secret_at_v1"},
-                "environment": {"PORT": "80"}
+                "secrets": {},
+                "environment": {"PORT": "80", "LABEL": "arn_for_secret_at_v1"}
             }
         }
         self.assertDictEqual(expected_configurations, actual_configurations)
-        mock_secrets_manager.get_config.assert_called_once_with(secrets_name, env_name)
 
     @patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test\nADDITIONAL_CONFIG=true"))
     @patch('cloudlift.deployment.deployer.ParameterStore')
@@ -347,23 +352,129 @@ class TestBuildConfig(TestCase):
         service_name = "Dummy"
         sample_env_file_path = "test-env.sample"
         essential_container_name = "mainService"
-        secrets_name = "main"
         mock_store = MagicMock()
         m_parameter_store.return_value = mock_store
-        mock_store.get_existing_config.return_value = ({'PORT': '80'}, {})
-        m_secrets_manager.get_config.return_value = {"LABEL": "arn_for_secret_at_v1"}
+        mock_store.get_existing_config.return_value = ({'PORT': '80', "LABEL": "arn_for_secret_at_v1"}, {})
+        m_secrets_manager.get_config.return_value = {}
 
         with pytest.raises(UnrecoverableException) as pytest_wrapped_e:
-            build_config(env_name, service_name, sample_env_file_path, essential_container_name, secrets_name)
+            build_config(env_name, service_name, "", sample_env_file_path, essential_container_name, None)
 
         self.assertEqual(pytest_wrapped_e.type, UnrecoverableException)
         self.assertEqual(str(pytest_wrapped_e.value), '"There is no config value for the keys {\'ADDITIONAL_CONFIG\'}"')
-        m_secrets_manager.get_config.assert_called_once_with(secrets_name, env_name)
+
+    @patch('cloudlift.deployment.deployer.ParameterStore')
+    @patch('cloudlift.deployment.deployer.secrets_manager')
+    @patch('os.getcwd')
+    def test_build_config_for_secrets_manager_from_multiple_files(self,
+                                                                  mock_getcwd,
+                                                                  m_secrets_manager, m_parameter_store):
+        env_name = "staging"
+        service_name = "Dummy"
+        sample_env_file_path = "test-env.sample"
+        essential_container_name = "mainService"
+        ecs_service_name = "dummy-ecs-service"
+        injected_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
+
+        class MockSecretManager:
+            injected_secret_name_call_count = 0
+
+            @classmethod
+            def get_config(cls, secret_name, env):
+                if secret_name == 'dummy-secrets-staging':
+                    return {'secrets': {
+                        'key1': 'actualValue1',
+                        'key2': 'actualValue2',
+                        'key3': 'actualValue3',
+                    }}
+                if secret_name == 'dummy-secrets-staging/app1':
+                    return {'secrets': {
+                        'key4': 'actualValue4',
+                        'key5': 'actualValue5',
+                    }}
+                if secret_name == injected_secret_name and cls.injected_secret_name_call_count == 0:
+                    cls.injected_secret_name_call_count += 1
+                    raise Exception('not found')
+                if secret_name == injected_secret_name:
+                    return {'ARN': 'injected-secret-arn'}
+                return {'secrets': {}}
+
+        m_secrets_manager.get_config.side_effect = MockSecretManager.get_config
+        mock_getcwd.return_value = os.path.join(
+            os.path.dirname(__file__),
+            '../env_sample_files/env_sample_files_without_duplicate_keys',
+        )
+
+        result = build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
+                              "dummy-secrets-staging")
+
+        m_secrets_manager.set_secrets_manager_config.assert_called_with(
+            env_name,
+            injected_secret_name,
+            {
+                'key1': 'actualValue1',
+                'key2': 'actualValue2',
+                'key3': 'actualValue3',
+                'key4': 'actualValue4',
+            }
+        )
+        self.assertEqual({
+            essential_container_name: {
+                'environment': {},
+                'secrets': {'CLOUDLIFT_INJECTED_SECRETS': 'injected-secret-arn'}}}, result)
+
+    @patch('cloudlift.deployment.deployer.secrets_manager')
+    @patch('os.getcwd')
+    def test_build_config_for_secrets_manager_from_multiple_files_already_present(self,
+                                                                                  mock_getcwd,
+                                                                                  m_secrets_manager):
+        env_name = "staging"
+        service_name = "Dummy"
+        sample_env_file_path = "test-env.sample"
+        essential_container_name = "mainService"
+        ecs_service_name = "dummy-ecs-service"
+        secrets = {
+            'key1': 'actualValue1',
+            'key2': 'actualValue2',
+            'key3': 'actualValue3',
+            'key4': 'actualValue4',
+        }
+
+        def get_config(secret_name, env):
+            if secret_name == 'dummy-secrets-staging':
+                return {'secrets': {
+                    'key1': 'actualValue1',
+                    'key2': 'actualValue2',
+                    'key3': 'actualValue3',
+                }}
+            if secret_name == 'dummy-secrets-staging/app1':
+                return {'secrets': {
+                    'key4': 'actualValue4',
+                    'key5': 'actualValue5',
+                }}
+            if secret_name == get_automated_injected_secret_name(env_name, service_name, ecs_service_name):
+                return {'ARN': 'injected-secret-arn', 'secrets': secrets}
+            return {'secrets': {}}
+
+        m_secrets_manager.get_config.side_effect = get_config
+        mock_getcwd.return_value = os.path.join(
+            os.path.dirname(__file__),
+            '../env_sample_files/env_sample_files_without_duplicate_keys',
+        )
+
+        result = build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
+                              "dummy-secrets-staging")
+
+        m_secrets_manager.set_secrets_manager_config.assert_not_called()
+        self.assertEqual({
+            essential_container_name: {
+                'environment': {},
+                'secrets': {'CLOUDLIFT_INJECTED_SECRETS': 'injected-secret-arn'}}}, result)
 
     @patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test"))
     @patch('cloudlift.deployment.deployer.ParameterStore')
     @patch('cloudlift.deployment.deployer.secrets_manager')
-    def test_build_config_ignores_additional_keys_in_param_store_and_sec_mgr(self, m_secrets_mgr, m_parameter_store):
+    def test_build_config_ignores_additional_keys_in_parameter_store(self, m_secrets_mgr, m_parameter_store):
         env_name = "staging"
         service_name = "Dummy"
         sample_env_file_path = "test-env.sample"
@@ -371,17 +482,61 @@ class TestBuildConfig(TestCase):
         secrets_name = "main"
         mock_store = MagicMock()
         m_parameter_store.return_value = mock_store
-        mock_store.get_existing_config.return_value = ({'PORT': '80', 'ADDITIONAL_KEY_1': 'true'}, {})
-        m_secrets_mgr.get_config.return_value = {"LABEL": "arn_for_secret_at_v1", 'ADDITIONAL_KEY_2': 'true'}
+        mock_store.get_existing_config.return_value = (
+            {"LABEL": "dummyvalue", 'PORT': '80', 'ADDITIONAL_KEY_1': 'true'}, {})
+        m_secrets_mgr.get_config.return_value = {'secrets': {},
+                                                 'ARN': "dummy_arn"}
 
-        actual_configurations = build_config(env_name, service_name, sample_env_file_path,
-                                             essential_container_name, secrets_name)
+        actual_configurations = build_config(env_name, service_name, "", sample_env_file_path,
+                                             essential_container_name, None)
 
         expected_configurations = {
             "mainService": {
-                "secrets": {"LABEL": "arn_for_secret_at_v1"},
-                "environment": {"PORT": "80"}
+                "secrets": {},
+                "environment": {"PORT": "80", "LABEL": "dummyvalue"}
             }
         }
         self.assertDictEqual(expected_configurations, actual_configurations)
-        m_secrets_mgr.get_config.assert_called_once_with(secrets_name, env_name)
+
+
+class TestSecrets(TestCase):
+
+    def test_get_env_sample_file_name_for_default_namespace(self):
+        self.assertEqual(get_env_sample_file_name(''), 'env.sample')
+
+    def test_get_env_sample_file_name_for_non_default_namespace(self):
+        self.assertEqual(get_env_sample_file_name('app2'), 'env.app2.sample')
+
+    def test_get_env_sample_file_contents(self):
+        directory = os.path.join(os.path.dirname(__file__),
+                                 '../env_sample_files/env_sample_files_without_duplicate_keys')
+        self.assertEqual(get_env_sample_file_contents(directory, ''),
+                         "key1=value1\nkey2=value2\nkey3=value3")
+
+    def test_get_sample_keys(self):
+        directory = os.path.join(os.path.dirname(__file__),
+                                 '../env_sample_files/env_sample_files_without_duplicate_keys')
+        self.assertEqual(get_sample_keys(directory, ''), {'key2', 'key1', 'key3'})
+
+    def test_get_namespaces_from_directory(self):
+        directory = os.path.join(os.path.dirname(__file__),
+                                 '../env_sample_files/env_sample_files_without_duplicate_keys')
+        self.assertEqual(get_namespaces_from_directory(directory), {'', 'app1'})
+
+    def test_env_sample_files_with_no_duplicates(self):
+        directory = os.path.join(os.path.dirname(__file__),
+                                 '../env_sample_files/env_sample_files_without_duplicate_keys')
+        self.assertEqual(find_duplicate_keys(directory, get_namespaces_from_directory(directory)), [])
+
+    def test_env_sample_files_with_duplicates(self):
+        directory = os.path.join(os.path.dirname(__file__),
+                                 '../env_sample_files/env_sample_files_with_duplicate_keys')
+        self.assertEqual(find_duplicate_keys(directory, get_namespaces_from_directory(directory)),
+                         [({'key1'}, 'env.app1.sample')])
+
+    def test_get_secret_name_for_default_execution_namespace(self):
+        self.assertEqual(get_secret_name('test-prefix-test', ''), 'test-prefix-test')
+        self.assertEqual(get_secret_name('test-prefix-test', None), 'test-prefix-test')
+
+    def test_get_secret_name_for_non_default_execution_namespace(self):
+        self.assertEqual(get_secret_name('test-prefix-test', 'app1'), 'test-prefix-test/app1')

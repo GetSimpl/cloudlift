@@ -1,17 +1,16 @@
 import os
 import time
+from pathlib import Path
 
 import boto3
 import requests
 import urllib3
 from mock import patch
-import json
 
 from cloudlift.config import ServiceConfiguration, VERSION
+from cloudlift.config import secrets_manager
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_updater import ServiceUpdater
-from pathlib import Path
-from cloudlift.config import secrets_manager
 
 TEST_DIR = Path(__file__).resolve().parent
 
@@ -31,7 +30,7 @@ def mocked_service_config(cls, *args, **kwargs):
         "services": {
             "Dummy": {
                 "command": None,
-                "secrets_name": "{}-{}".format(service_name, environment_name),
+                "secrets_name": f'{service_name}-{environment_name}',
                 "sidecars": [
                     {"name": "redis", "image": "redis", "memory_reservation": 256}
                 ],
@@ -54,14 +53,13 @@ def mocked_service_config(cls, *args, **kwargs):
     }
 
 
-def mocked_service_with_secrets_manager_config(cls, *args, **kwargs):
+def mocked_service_with_parameter_store_config(cls, *args, **kwargs):
     return {
         "cloudlift_version": VERSION,
         'ecr_repo': {'name': 'dummy-repo'},
         "services": {
             "Dummy": {
                 "command": None,
-                "secrets_name": "{}-{}".format(service_name, environment_name),
                 "sidecars": [
                     {"name": "redis", "image": "redis", "memory_reservation": 256}
                 ],
@@ -91,7 +89,10 @@ def test_cloudlift_can_deploy_to_ec2(keep_resources):
     stack_name = f'{service_name}-{environment_name}'
     cfn_client = boto3.client('cloudformation')
     delete_stack(cfn_client, stack_name, wait=True)
-    _set_secrets_manager_config(stack_name, {})
+    secrets_manager.set_secrets_manager_config(environment_name, stack_name,
+                                               {'PORT': '80', 'LABEL': 'Demo'})
+    secrets_manager.set_secrets_manager_config(environment_name, f'{stack_name}/redis',
+                                               {'REDIS_HOST': 'redis'})
     create_service(mocked_config)
     deploy_service(deployment_identifier="id-0")
     validate_service(cfn_client, stack_name, expected_string)
@@ -104,9 +105,12 @@ def test_cloudlift_can_revert_service(keep_resources):
     stack_name = f'{service_name}-{environment_name}'
     cfn_client = boto3.client('cloudformation')
     delete_stack(cfn_client, stack_name, wait=True)
-    create_service(mocked_config)
 
-    _set_secrets_manager_config(f"{service_name}-{environment_name}", {'LABEL': 'Value from secret manager v1'})
+    secrets_manager.set_secrets_manager_config(environment_name, stack_name,
+                                               {'LABEL': 'Value from secret manager v1', 'PORT': '80'})
+    secrets_manager.set_secrets_manager_config(environment_name, f'{stack_name}/redis',
+                                               {'REDIS_HOST': 'redis'})
+    create_service(mocked_config)
     deploy_service(deployment_identifier='id-1')
     validate_service(
         cfn_client,
@@ -114,7 +118,9 @@ def test_cloudlift_can_revert_service(keep_resources):
         'This is dummy app. Label: Value from secret manager v1. Redis PING: PONG. AWS EC2 READ ACCESS: True',
     )
 
-    _set_secrets_manager_config(f"{service_name}-{environment_name}", {'LABEL': 'Value from secret manager v2'})
+    secrets_manager.set_secrets_manager_config(environment_name, f"{service_name}-{environment_name}",
+                                               {'LABEL': 'Value from secret manager v2', 'PORT': '80',
+                                                'REDIS_HOST': 'redis'})
     deploy_service(deployment_identifier='id-2')
     validate_service(
         cfn_client,
@@ -134,29 +140,31 @@ def test_cloudlift_can_revert_service(keep_resources):
         delete_stack(cfn_client, stack_name, wait=False)
 
 
-def test_cloudlift_service_with_secrets_manager_config(keep_resources):
-    print("adding configuration to secrets manager")
-    _set_secrets_manager_config(f"{service_name}-{environment_name}", {'LABEL': 'Value from secret manager v1'})
-    mocked_config = mocked_service_with_secrets_manager_config
+def test_cloudlift_service_with_parameter_store_config(keep_resources):
+    mocked_config = mocked_service_with_parameter_store_config
     stack_name = f'{service_name}-{environment_name}'
     cfn_client = boto3.client('cloudformation')
     delete_stack(cfn_client, stack_name, wait=True)
+    print("adding configuration to parameter store")
+    config = {'PORT': '80', 'LABEL': 'Demo', 'REDIS_HOST': 'redis', 'LABEL': 'Value from parameter store v1'}
+    _set_param_store_env(environment_name, service_name, config)
     create_service(mocked_config)
 
     validate_service(
         cfn_client,
         stack_name,
-        'This is dummy app. Label: Value from secret manager v1. Redis PING: PONG. AWS EC2 READ ACCESS: True',
+        'This is dummy app. Label: Value from parameter store v1. Redis PING: PONG. AWS EC2 READ ACCESS: True',
     )
 
-    print("modifying configuration in secrets manager")
-    _set_secrets_manager_config(f"{service_name}-{environment_name}", {'LABEL': 'Value from secret manager v2'})
+    print("adding configuration to parameter store")
+    config = {'PORT': '80', 'LABEL': 'Demo', 'REDIS_HOST': 'redis', 'LABEL': 'Value from parameter store v2'}
+    _set_param_store_env(environment_name, service_name, config)
 
     deploy_service(deployment_identifier="id-0")
     validate_service(
         cfn_client,
         stack_name,
-        'This is dummy app. Label: Value from secret manager v2. Redis PING: PONG. AWS EC2 READ ACCESS: True',
+        'This is dummy app. Label: Value from parameter store v2. Redis PING: PONG. AWS EC2 READ ACCESS: True',
     )
     if not keep_resources:
         delete_stack(cfn_client, stack_name, wait=False)
@@ -195,8 +203,6 @@ def get_current_task_definition_deployment_identifier(cfn_client, stack_name):
 
 def create_service(mocked_config):
     os.chdir(f'{TEST_DIR}/dummy')
-    print("adding configuration to parameter store")
-    _set_param_store_env(environment_name, service_name, {'PORT': '80', 'LABEL': 'Demo', 'REDIS_HOST': 'redis'})
     with patch.object(ServiceConfiguration, 'edit_config',
                       new=mocked_config):
         with patch.object(ServiceConfiguration, 'get_config',
@@ -240,12 +246,3 @@ def _set_param_store_env(env_name, svc_name, env_config):
             KeyId='alias/aws/ssm', Overwrite=True
         )
 
-
-def _set_secrets_manager_config(secret_name, config):
-    client = boto3.client('secretsmanager')
-    secret_string = json.dumps(config)
-    try:
-        client.put_secret_value(SecretId=secret_name, SecretString=secret_string)
-    except client.exceptions.ResourceNotFoundException:
-        client.create_secret(Name=secret_name, SecretString=secret_string)
-    secrets_manager.clear_cache()

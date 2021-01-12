@@ -107,8 +107,8 @@ Resources:
           MemoryReservation: 512
           Name: DummyFargateRunSidekiqshContainer
           Secrets:
-            - Name: LABEL
-              ValueFrom: arn_secret_label_v1
+            - Name: CLOUDLIFT_INJECTED_SECRETS
+              ValueFrom: arn_injected_secrets
       Cpu: '256'
       ExecutionRoleArn: !Ref 'DummyFargateRunSidekiqshTaskExecutionRole'
       Family: stagingDummyFargateRunSidekiqshFamily
@@ -136,6 +136,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummyFargate/DummyFargateRunSidekiqsh-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-fargate-config-??????
               - Action:
                   - ecr:GetAuthorizationToken
@@ -202,8 +203,8 @@ Resources:
           PortMappings:
             - ContainerPort: 80
           Secrets:
-            - Name: LABEL
-              ValueFrom: arn_secret_label_v1
+            - Name: CLOUDLIFT_INJECTED_SECRETS
+              ValueFrom: arn_injected_secrets
       Cpu: '256'
       ExecutionRoleArn: !Ref 'DummyFargateServiceTaskExecutionRole'
       Family: stagingDummyFargateServiceFamily
@@ -231,6 +232,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummyFargate/DummyFargateService-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-fargate-config-??????
               - Action:
                   - ecr:GetAuthorizationToken

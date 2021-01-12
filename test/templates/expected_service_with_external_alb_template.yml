@@ -3,10 +3,10 @@ Outputs:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
-      1000, "secrets_name": "something", "command": null, "http_interface": {"internal":
-      false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
-      {"alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id",
+      1000, "secrets_name": "something", "command": null, "http_interface":
+      {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"],
+      "health_check_path": "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity":
+      5, "request_count_per_target": {"alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id",
       "target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
       60}}}}}'
   DummyEcsServiceName:
@@ -141,7 +141,9 @@ Resources:
           Name: DummyContainer
           PortMappings:
             - ContainerPort: 7003
-          Secrets: []
+          Secrets:
+            - Name: CLOUDLIFT_INJECTED_SECRETS
+              ValueFrom: arn_injected_secrets
       ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
       Family: stagingDummyFamily
       PlacementConstraints: []
@@ -164,6 +166,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummy/Dummy-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:something-??????
               - Action:
                   - ecr:GetAuthorizationToken

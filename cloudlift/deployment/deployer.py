@@ -1,9 +1,10 @@
 from datetime import datetime
 from time import sleep, time
-
+import os
 import boto3
+from glob import glob
 from cloudlift.config import ParameterStore
-from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color
+from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color, log_warning, log
 from cloudlift.deployment.ecs import DeployAction
 from cloudlift.exceptions import UnrecoverableException
 from colorclass import Color
@@ -11,6 +12,7 @@ from terminaltables import SingleTable
 from cloudlift.config import secrets_manager
 
 HARD_LIMIT_MEMORY_IN_MB = 20480
+
 
 def find_essential_container(container_definitions):
     for defn in container_definitions:
@@ -21,16 +23,18 @@ def find_essential_container(container_definitions):
 
 def revert_deployment(client, cluster_name, ecs_service_name, color, timeout_seconds, deployment_identifier, **kwargs):
     deployment = DeployAction(client, cluster_name, ecs_service_name)
-    previous_task_defn = deployment.get_task_definition_by_deployment_identifier(deployment.service, deployment_identifier)
+    previous_task_defn = deployment.get_task_definition_by_deployment_identifier(deployment.service,
+                                                                                 deployment_identifier)
     deploy_task_definition(client, previous_task_defn, cluster_name, ecs_service_name, color, timeout_seconds, 'Revert')
 
 
-def deploy_new_version(client, cluster_name, ecs_service_name, deployment_identifier,
+def deploy_new_version(client, cluster_name, ecs_service_name, ecs_service_logical_name, deployment_identifier,
                        deploy_version_tag, service_name, sample_env_file_path,
                        timeout_seconds, env_name, secrets_name, color='white', complete_image_uri=None):
     task_definition = create_new_task_definition(color, complete_image_uri, deploy_version_tag, ecs_service_name,
-                                                 env_name, sample_env_file_path, secrets_name, service_name, client,
-                                                 cluster_name, deployment_identifier)
+                                                 env_name, sample_env_file_path, secrets_name, service_name,
+                                                 client,
+                                                 cluster_name, deployment_identifier, ecs_service_logical_name)
     deploy_task_definition(client, task_definition, cluster_name, ecs_service_name, color, timeout_seconds, 'Deploy')
 
 
@@ -51,11 +55,12 @@ def deploy_task_definition(client, task_definition, cluster_name, ecs_service_na
 
 def create_new_task_definition(color, complete_image_uri, deploy_version_tag, ecs_service_name, env_name,
                                sample_env_file_path, secrets_name, service_name, client, cluster_name,
-                               deployment_identifier):
+                               deployment_identifier, ecs_service_logical_name):
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     task_definition = deployment.get_current_task_definition(deployment.service)
     essential_container = find_essential_container(task_definition[u'containerDefinitions'])
-    container_configurations = build_config(env_name, service_name, sample_env_file_path, essential_container,
+    container_configurations = build_config(env_name, service_name, ecs_service_logical_name, sample_env_file_path,
+                                            essential_container,
                                             secrets_name)
     if complete_image_uri is not None:
         task_definition.set_images(essential_container, deploy_version_tag, **{essential_container: complete_image_uri})
@@ -77,16 +82,104 @@ def deploy_and_wait(deployment, new_task_definition, color, timeout_seconds):
     return wait_for_finish(deployment, existing_events, color, deploy_end_time)
 
 
-def build_config(env_name, service_name, sample_env_file_path, essential_container_name, secrets_name=None):
-    env_config_secrets_mgr = secrets_manager.get_config(secrets_name, env_name) if secrets_name else {}
-    env_config_param_store = _get_parameter_store_config(service_name, env_name)
-    keys_not_in_secret_mgr = set(env_config_param_store) - set(env_config_secrets_mgr)
-    env_config = {k: env_config_param_store[k] for k in keys_not_in_secret_mgr}
-    sample_config_keys = set(read_config(open(sample_env_file_path).read()))
-    _validate_config_availability(sample_config_keys, set(env_config_param_store).union(set(env_config_secrets_mgr)))
-    secrets = {k: env_config_secrets_mgr[k] for k in set(env_config_secrets_mgr).intersection(sample_config_keys)}
-    env = {k: env_config[k] for k in set(env_config).intersection(sample_config_keys)}
+def get_env_sample_file_name(namespace):
+    return 'env.{}.sample'.format(namespace) if namespace != '' else 'env.sample'
+
+
+def get_env_sample_file_contents(env_samples_directory, namespace):
+    env_sample_file_name = get_env_sample_file_name(namespace)
+    path = os.path.join(env_samples_directory, env_sample_file_name)
+    with open(path) as f:
+        return f.read()
+
+
+def get_namespaces_from_directory(directory_path):
+    env_files_in_directory = glob(os.path.join(directory_path, 'env*sample'))
+    namespaces = []
+    for filepath in env_files_in_directory:
+        filename = os.path.basename(filepath)
+        if filename.startswith('env.') and filename.endswith('.sample'):
+            namespaces.append(filename.split('env.')[1].split('sample')[0].rstrip('.'))
+    return set(namespaces)
+
+
+def find_duplicate_keys(directory_path, namespaces):
+    duplicates = []
+    all_keys = set()
+    sorted_namespaces = list(namespaces)
+    sorted_namespaces.sort()
+    for ns in sorted_namespaces:
+        keys_for_namespace = get_sample_keys(directory_path, ns)
+        duplicates_for_namespace = all_keys.intersection(keys_for_namespace)
+        if duplicates_for_namespace:
+            duplicates.append(
+                (duplicates_for_namespace, get_env_sample_file_name(ns))
+            )
+        all_keys.update(keys_for_namespace)
+    return duplicates
+
+
+def get_sample_keys(directory_path, namespace):
+    return set(read_config(get_env_sample_file_contents(directory_path, namespace)))
+
+
+def get_secret_name(secrets_name, namespace):
+    return f"{secrets_name}/{namespace}" if namespace and namespace != '' else secrets_name
+
+
+def build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
+                 secrets_name):
+    secrets = {}
+    env = {}
+    if secrets_name is None:
+        sample_config_keys = set(read_config(open(sample_env_file_path).read()))
+        env_config_param_store = _get_parameter_store_config(service_name, env_name)
+        _validate_config_availability(sample_config_keys,
+                                      set(env_config_param_store))
+        env = {k: env_config_param_store[k] for k in sample_config_keys}
+    else:
+        sample_env_folder_path = os.getcwd()
+        secrets = build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path,
+                                                   secrets_name)
     return {essential_container_name: {"secrets": secrets, "environment": env}}
+
+
+def get_automated_injected_secret_name(env_name, service_name, ecs_service_name):
+    return f"cloudlift-injected/{env_name}/{service_name}/{ecs_service_name}"
+
+
+def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name):
+    secrets_across_namespaces = {}
+    namespaces = get_namespaces_from_directory(sample_env_folder_path)
+    duplicates = find_duplicate_keys(sample_env_folder_path, namespaces)
+    if len(duplicates) != 0:
+        raise UnrecoverableException('duplicate keys found in env sample files {} '.format(duplicates))
+    for namespace in namespaces:
+        secrets_for_namespace = _get_secrets_for_namespace(env_name, namespace,
+                                                           sample_env_folder_path,
+                                                           secrets_name)
+        secrets_across_namespaces.update(secrets_for_namespace)
+
+    automated_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
+    existing_secrets = {}
+    try:
+        existing_secrets = secrets_manager.get_config(automated_secret_name, env_name)['secrets']
+    except Exception as err:
+        log_warning(f'secret {automated_secret_name} does not exist. It will be created: {err}')
+    if existing_secrets != secrets_across_namespaces:
+        log(f"Updating {automated_secret_name}")
+        secrets_manager.set_secrets_manager_config(env_name, automated_secret_name,
+                                                   secrets_across_namespaces)
+    arn = secrets_manager.get_config(automated_secret_name, env_name)['ARN']
+    return dict(CLOUDLIFT_INJECTED_SECRETS=arn)
+
+
+def _get_secrets_for_namespace(env_name, namespace, sample_env_folder_path, secrets_name):
+    inferred_secrets_name = get_secret_name(secrets_name, namespace)
+    secrets_for_namespace = secrets_manager.get_config(inferred_secrets_name, env_name)['secrets']
+    sample_config_keys = get_sample_keys(sample_env_folder_path, namespace)
+    _validate_config_availability(sample_config_keys, set(secrets_for_namespace.keys()))
+    return {k: secrets_for_namespace[k] for k in sample_config_keys}
 
 
 def _get_parameter_store_config(service_name, env_name):

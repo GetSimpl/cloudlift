@@ -173,8 +173,8 @@ Resources:
               HostPort: 1814
               Protocol: tcp
           Secrets:
-            - Name: LABEL
-              ValueFrom: arn_secret_label_v1
+            - Name: CLOUDLIFT_INJECTED_SECRETS
+              ValueFrom: arn_injected_secrets
       ExecutionRoleArn: !Ref 'FreeradiusServerTaskExecutionRole'
       Family: stagingFreeradiusServerFamily
       NetworkMode: awsvpc
@@ -198,6 +198,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummy/FreeradiusServer-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-udp-config-??????
               - Action:
                   - ecr:GetAuthorizationToken

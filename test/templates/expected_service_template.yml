@@ -9,11 +9,10 @@ Outputs:
       43, "health_check_timeout_seconds": 24, "health_check_healthy_threshold_count":
       6, "health_check_unhealthy_threshold_count": 4}, "deployment": {"maximum_percent":
       150}, "secrets_name": "dummy-config", "sidecars": [{"name": "redis", "image":
-      "redis:latest", "memory_reservation": 256}], "container_labels": {"label1": "value1"}},
-       "DummyRunSidekiqsh": {"memory_reservation":
-      1000, "command": "./run-sidekiq.sh", "deployment": {"maximum_percent": 150},
-      "task_role_attached_managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"],
-      "secrets_name": "dummy-sidekiq-config"}}}'
+      "redis:latest", "memory_reservation": 256}], "container_labels": {"label1":
+      "value1"}}, "DummyRunSidekiqsh": {"memory_reservation": 1000, "command": "./run-sidekiq.sh",
+      "deployment": {"maximum_percent": 150}, "task_role_attached_managed_policy_arns":
+      ["arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"], "secrets_name": "dummy-sidekiq-config"}}}'
   DummyEcsServiceName:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'Dummy.Name'
@@ -166,6 +165,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummy/DummyRunSidekiqsh-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-sidekiq-config-??????
               - Action:
                   - ecr:GetAuthorizationToken
@@ -238,6 +238,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummy/Dummy-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:dummy-config-??????
               - Action:
                   - ecr:GetAuthorizationToken

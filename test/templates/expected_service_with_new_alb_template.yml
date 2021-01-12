@@ -166,7 +166,9 @@ Resources:
           Name: DummyContainer
           PortMappings:
             - ContainerPort: 7003
-          Secrets: []
+          Secrets:
+            - Name: CLOUDLIFT_INJECTED_SECRETS
+              ValueFrom: arn_injected_secrets
       ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
       Family: stagingDummyFamily
       PlacementConstraints: []
@@ -189,6 +191,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Effect: Allow
                 Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummy/Dummy-??????
                   - arn:aws:secretsmanager:us-west-2:12537612:secret:something-??????
               - Action:
                   - ecr:GetAuthorizationToken

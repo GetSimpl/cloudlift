@@ -16,10 +16,8 @@ class TestSecretsManager(unittest.TestCase):
 
         mock_get_client_for.assert_called_once_with('secretsmanager', 'test')
         mock_client.get_secret_value.assert_called_once_with(SecretId='dummy-test')
-        self.assertEqual(config, {
-            "PORT": "arn:aws:secretsmanager:us-west-2:12345678:secret:dummy-test-QvDJsW:PORT::a1b87fb5-453e-42bd-a4f5-fdc0834854ef",
-            "LABEL": "arn:aws:secretsmanager:us-west-2:12345678:secret:dummy-test-QvDJsW:LABEL::a1b87fb5-453e-42bd-a4f5-fdc0834854ef",
-        })
+        self.assertEqual(config, {'secrets':  {'LABEL': 'L1', 'PORT': '80'},
+                                  'ARN': 'arn:aws:secretsmanager:us-west-2:12345678:secret:dummy-test-QvDJsW:::a1b87fb5-453e-42bd-a4f5-fdc0834854ef'})
 
     @patch('cloudlift.config.secrets_manager.get_client_for')
     def test_get_config_caching(self, mock_get_client_for):

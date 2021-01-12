@@ -9,6 +9,9 @@ from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
 from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub, Split, Select
+from troposphere.applicationautoscaling import ScalableTarget
+from troposphere.applicationautoscaling import ScalingPolicy, TargetTrackingScalingPolicyConfiguration, \
+    PredefinedMetricSpecification
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
@@ -26,18 +29,16 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroupAttribute)
 from troposphere.elasticloadbalancingv2 import SubnetMapping
 from troposphere.iam import Role, Policy
-from troposphere.applicationautoscaling import ScalingPolicy, TargetTrackingScalingPolicyConfiguration, \
-    PredefinedMetricSpecification
-from troposphere.applicationautoscaling import ScalableTarget
-from cloudlift.exceptions import UnrecoverableException
+
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_account_id
 from cloudlift.config.region import get_environment_level_alb_listener, get_client_for
 from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY, \
     DEFAULT_LOAD_BALANCING_ALGORITHM, DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS, DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS, \
     DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT, DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT
-from cloudlift.deployment.deployer import build_config, container_name
+from cloudlift.deployment.deployer import build_config, container_name, get_automated_injected_secret_name
 from cloudlift.deployment.template_generator import TemplateGenerator
+from cloudlift.exceptions import UnrecoverableException
 
 
 class ServiceTemplateGenerator(TemplateGenerator):
@@ -210,7 +211,8 @@ service is down',
     def _add_service(self, service_name, config):
         launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
         secrets_name = config.get('secrets_name')
-        container_configurations = build_config(self.env, self.application_name, self.env_sample_file_path,
+        container_configurations = build_config(self.env, self.application_name, service_name,
+                                                self.env_sample_file_path,
                                                 container_name(service_name), secrets_name)
         env_config = container_configurations[container_name(service_name)]['environment']
         secrets_config = container_configurations[container_name(service_name)]['secrets']
@@ -619,9 +621,14 @@ service is down',
         )
 
     def _add_task_execution_role(self, service_name, secrets_name):
+        automated_injected_secret_name = get_automated_injected_secret_name(self.env,
+                                                                            self.application_name,
+                                                                            service_name)
         # https://docs.aws.amazon.com/code-samples/latest/catalog/iam_policies-secretsmanager-asm-user-policy-grants-access-to-secret-by-name-with-wildcard.json.html
         allow_secrets = [Statement(Effect=Allow, Action=[GetSecretValue], Resource=[
-            f"arn:aws:secretsmanager:{self.region}:{self.account_id}:secret:{secrets_name}-??????"])] \
+            f"arn:aws:secretsmanager:{self.region}:{self.account_id}:secret:{automated_injected_secret_name}-??????",
+            f"arn:aws:secretsmanager:{self.region}:{self.account_id}:secret:{secrets_name}-??????",
+        ])] \
             if secrets_name else []
 
         task_execution_role = self.template.add_resource(Role(

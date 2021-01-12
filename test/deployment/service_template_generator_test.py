@@ -13,6 +13,11 @@ from cloudlift.config import ServiceConfiguration
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
 
 
+def mock_build_config_impl(env_name, cloudlift_service_name, dummy_ecs_service_name, sample_env_file_path,
+                           ecs_service_name, prefix):
+    return {ecs_service_name: {"secrets": {"CLOUDLIFT_INJECTED_SECRETS": 'arn_injected_secrets'}, "environment": {"PORT": "80"}}}
+
+
 def mocked_service_config():
     return {
         "cloudlift_version": 'test-version',
@@ -190,7 +195,7 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_service_config()
 
-        def mock_build_config_impl(env_name, service_name, sample_env_file_path, ecs_service_name, secrets_name):
+        def mock_build_config_impl(env_name, service_name,dummy_ecs_service_name, sample_env_file_path, ecs_service_name, secrets_name):
             expected = "dummy-config" if ecs_service_name == "DummyContainer" else "dummy-sidekiq-config"
             self.assertEqual(secrets_name, expected)
             return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
@@ -249,9 +254,6 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, sec_name):
-            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
-
         mock_build_config.side_effect = mock_build_config_impl
 
         mock_get_account_id.return_value = "12537612"
@@ -309,8 +311,6 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, sec_name):
-            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
@@ -399,9 +399,6 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, s_name):
-            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
-
         mock_build_config.side_effect = mock_build_config_impl
 
         mock_get_account_id.return_value = "12537612"
@@ -446,9 +443,6 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_fargate_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
-            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
-
         mock_build_config.side_effect = mock_build_config_impl
 
         mock_get_account_id.return_value = "12537612"
@@ -478,9 +472,6 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_udp_fargate_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
-            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
-
         mock_build_config.side_effect = mock_build_config_impl
 
         mock_get_account_id.return_value = "12537612"
@@ -504,9 +495,6 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_udp_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
-            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
-
         mock_build_config.side_effect = mock_build_config_impl
         mock_get_account_id.return_value = "12537612"
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
@@ -519,7 +507,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_udp_service_template.yml')
 
         with(open(template_file_path)) as expected_template_file:
-            assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
+            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
@@ -531,8 +519,6 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_tcp_service_config()
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, prefix):
-            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
         mock_get_account_id.return_value = "12537612"
@@ -546,7 +532,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_tcp_service_template.yml')
 
         with(open(template_file_path)) as expected_template_file:
-            assert to_json(''.join(expected_template_file.readlines())) == to_json(generated_template)
+            assert to_json(generated_template) == to_json(''.join(expected_template_file.readlines()))
 
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
@@ -569,8 +555,6 @@ class TestServiceTemplateGenerator(TestCase):
             }
         }
 
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name, sec_name):
-            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
@@ -614,11 +598,6 @@ class TestServiceTemplateGenerator(TestCase):
                 },
             }
         }
-
-        def mock_build_config_impl(env_name, cloudlift_service_name, sample_env_file_path, ecs_service_name,
-                                   sec_name):
-            return {ecs_service_name: {"secrets": {}, "environment": {"PORT": "80"}}}
-
         mock_build_config.side_effect = mock_build_config_impl
 
         mock_get_account_id.return_value = "12537612"

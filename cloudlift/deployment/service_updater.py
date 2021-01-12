@@ -90,6 +90,7 @@ class ServiceUpdater(object):
             color = DEPLOYMENT_COLORS[index % 3]
             kwargs.update(dict(ecs_service_name=ecs_service_info['ecs_service_name'],
                                secrets_name=ecs_service_info.get('secrets_name'),
+                               ecs_service_logical_name=ecs_service_logical_name,
                                color=color))
             process = multiprocessing.Process(
                 target=target,
