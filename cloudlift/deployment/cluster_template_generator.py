@@ -518,8 +518,11 @@ for cluster for 15 minutes.',
             self.template.add_resource(launch_template)
             
             overrides_instances = []
-            for instance_type in self.configuration['cluster']['instance_types']:
-                overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
+            if deployment_type == 'OnDemand':
+                overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(self.configuration['cluster']['instance_types'][0])))
+            elif deployment_type == 'Spot':
+                for instance_type in self.configuration['cluster']['instance_types']:
+                    overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
             # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
             up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
             # TODO: clean up

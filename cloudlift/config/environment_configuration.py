@@ -128,7 +128,7 @@ class EnvironmentConfiguration(object):
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
         spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price", default='capacity-optimized')
-        cluster_instance_types = prompt("Instance types in comma delimited list", default='t2.micro,m5.xlarge')
+        cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand instance type only first instance type will be considered", default='t2.micro,m5.xlarge')
         cluster_instance_types = cluster_instance_types.split(",")
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
