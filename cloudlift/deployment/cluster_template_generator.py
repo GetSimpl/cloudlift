@@ -494,7 +494,12 @@ for cluster for 15 minutes.',
                     commands={
                         '01_add_instance_to_cluster': {
                             'command': Sub(
-                                "echo 'ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\nECS_INSTANCE_ATTRIBUTES={\"deployment_type\": \""+ deployment_type +"\"}' > /etc/ecs/ecs.config"
+                                "\n".join([
+                                "echo 'ECS_CLUSTER=${Cluster}",
+                                "ECS_RESERVED_MEMORY=256",
+                                "ECS_ENABLE_SPOT_INSTANCE_DRAINING=true" if deployment_type == 'Spot' else "",
+                                "ECS_INSTANCE_ATTRIBUTES={\"deployment_type\": \""+ deployment_type +"\"}' > /etc/ecs/ecs.config"
+                                ])
                             )
                         }
                     }
