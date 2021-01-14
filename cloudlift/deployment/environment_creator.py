@@ -85,6 +85,8 @@ class EnvironmentCreator(object):
                 self.client,
                 self.cluster_name
             )
+            if change_set is None:
+                return
             log_bold("Executing changeset. Checking progress...")
             self.client.execute_change_set(
                 ChangeSetName=change_set['ChangeSetId']
