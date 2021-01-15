@@ -542,12 +542,13 @@ Resources:
       AlarmDescription: Triggers if desired task count of a service is equal to max_capacity,
         review auto scaling configuration if this alarm triggers
       ComparisonOperator: GreaterThanOrEqualToThreshold
+      DatapointsToAlarm: 3
       Dimensions:
         - Name: ServiceName
           Value: !GetAtt 'Dummy.Name'
         - Name: ClusterName
           Value: cluster-staging
-      EvaluationPeriods: 1
+      EvaluationPeriods: 3
       MetricName: DesiredTaskCount
       Namespace: ECS/ContainerInsights
       OKActions:

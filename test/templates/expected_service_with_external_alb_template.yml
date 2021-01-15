@@ -3,10 +3,10 @@ Outputs:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
-      1000, "secrets_name": "something", "command": null, "http_interface":
-      {"internal": false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"],
-      "health_check_path": "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity":
-      5, "request_count_per_target": {"alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id",
+      1000, "secrets_name": "something", "command": null, "http_interface": {"internal":
+      false, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
+      "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
+      {"alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id",
       "target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
       60}}}}}'
   DummyEcsServiceName:
@@ -245,12 +245,13 @@ Resources:
       AlarmDescription: Triggers if desired task count of a service is equal to max_capacity,
         review auto scaling configuration if this alarm triggers
       ComparisonOperator: GreaterThanOrEqualToThreshold
+      DatapointsToAlarm: 3
       Dimensions:
         - Name: ServiceName
           Value: !GetAtt 'Dummy.Name'
         - Name: ClusterName
           Value: cluster-staging
-      EvaluationPeriods: 1
+      EvaluationPeriods: 3
       MetricName: DesiredTaskCount
       Namespace: ECS/ContainerInsights
       OKActions:

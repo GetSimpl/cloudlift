@@ -147,7 +147,8 @@ service is down',
     def _add_scalable_target_alarms(self, service_name, ecs_svc, config):
         max_scalable_target_alarm = Alarm(
             'MaxScalableTargetAlarm' + service_name,
-            EvaluationPeriods=1,
+            EvaluationPeriods=3,
+            DatapointsToAlarm=3,
             Dimensions=[
                 MetricDimension(
                     Name='ServiceName',
