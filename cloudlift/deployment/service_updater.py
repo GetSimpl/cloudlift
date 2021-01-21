@@ -4,15 +4,15 @@ from time import sleep
 
 import boto3
 
-from cloudlift.config import get_account_id
-from cloudlift.config import get_cluster_name
-from cloudlift.config import (get_region_for_environment)
+from cloudlift.config import get_account_id, get_cluster_name, \
+    ServiceConfiguration, get_region_for_environment
 from cloudlift.config.logging import log_bold, log_intent, log_warning
 from cloudlift.deployment import deployer, ServiceInformationFetcher
 from cloudlift.deployment.ecs import EcsClient
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.utils import chunks
 from cloudlift.deployment.ecr import ECR
+from stringcase import spinalcase
 
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 DEPLOYMENT_CONCURRENCY = int(os.environ.get('CLOUDLIFT_DEPLOYMENT_CONCURRENCY', 4))
@@ -30,15 +30,17 @@ class ServiceUpdater(object):
         self.version = version
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
         self.cluster_name = get_cluster_name(environment)
-        self.service_info_fetcher = ServiceInformationFetcher(self.name, self.environment)
+        self.service_configuration = ServiceConfiguration(service_name=name, environment=environment).get_config()
+        self.service_info_fetcher = ServiceInformationFetcher(self.name, self.environment, self.service_configuration)
         if not self.service_info_fetcher.stack_found:
             raise UnrecoverableException(
                 "error finding stack in ServiceUpdater: {}-{}".format(self.name, self.environment))
+        ecr_repo_config = self.service_configuration.get('ecr_repo')
         self.ecr = ECR(
             self.region,
-            self.service_info_fetcher.ecr_repo_name,
-            self.service_info_fetcher.ecr_account_id or get_account_id(),
-            self.service_info_fetcher.ecr_assume_role_arn,
+            ecr_repo_config.get('name', spinalcase(self.name + '-repo')),
+            ecr_repo_config.get('account_id', get_account_id()),
+            ecr_repo_config.get('assume_role_arn', None),
             version,
             build_args,
             dockerfile,
@@ -62,11 +64,11 @@ class ServiceUpdater(object):
         image_url = self.ecr.image_uri
         target = deployer.deploy_new_version
         kwargs = dict(client=ecs_client, cluster_name=self.cluster_name,
-                      deploy_version_tag=self.version,
                       service_name=self.name, sample_env_file_path=self.env_sample_file,
                       timeout_seconds=self.timeout_seconds, env_name=self.environment,
-                      complete_image_uri=image_url,
-                      deployment_identifier=self.deployment_identifier)
+                      ecr_image_uri=image_url,
+                      deployment_identifier=self.deployment_identifier,
+                      )
         self.run_job_for_all_services("Deploy", target, kwargs)
 
     def revert(self):
@@ -88,10 +90,14 @@ class ServiceUpdater(object):
             ecs_service_info = service_info[ecs_service_logical_name]
             log_bold(f"Queueing {job_name} of " + ecs_service_info['ecs_service_name'])
             color = DEPLOYMENT_COLORS[index % 3]
+            services_configuration = self.service_configuration['services']
             kwargs.update(dict(ecs_service_name=ecs_service_info['ecs_service_name'],
                                secrets_name=ecs_service_info.get('secrets_name'),
                                ecs_service_logical_name=ecs_service_logical_name,
-                               color=color))
+                               color=color,
+                               service_configuration=services_configuration.get(ecs_service_logical_name),
+                               region=self.region,
+                               ))
             process = multiprocessing.Process(
                 target=target,
                 kwargs=kwargs

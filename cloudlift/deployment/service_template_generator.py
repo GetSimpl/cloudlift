@@ -36,9 +36,11 @@ from cloudlift.config.region import get_environment_level_alb_listener, get_clie
 from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY, \
     DEFAULT_LOAD_BALANCING_ALGORITHM, DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS, DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS, \
     DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT, DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT
-from cloudlift.deployment.deployer import build_config, container_name, get_automated_injected_secret_name
+from cloudlift.deployment.deployer import build_config, get_automated_injected_secret_name
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.exceptions import UnrecoverableException
+from cloudlift.deployment.task_definition_builder import TaskDefinitionBuilder, container_name
+from cloudlift.deployment.launch_types import LAUNCH_TYPE_FARGATE, LAUNCH_TYPE_EC2, get_launch_type
 
 
 class ServiceTemplateGenerator(TemplateGenerator):
@@ -47,8 +49,6 @@ class ServiceTemplateGenerator(TemplateGenerator):
             Type='spread',
             Field='attribute:ecs.availability-zone'
         )]
-    LAUNCH_TYPE_FARGATE = 'FARGATE'
-    LAUNCH_TYPE_EC2 = 'EC2'
 
     def __init__(self, service_configuration, environment_stack, env_sample_file, ecr_image_uri, desired_counts=None):
         super(ServiceTemplateGenerator, self).__init__(service_configuration.environment)
@@ -210,153 +210,31 @@ service is down',
         )
 
     def _add_service(self, service_name, config):
-        launch_type = self.LAUNCH_TYPE_FARGATE if 'fargate' in config else self.LAUNCH_TYPE_EC2
+        launch_type = get_launch_type(config)
         secrets_name = config.get('secrets_name')
         container_configurations = build_config(self.env, self.application_name, service_name,
                                                 self.env_sample_file_path,
                                                 container_name(service_name), secrets_name)
-        env_config = container_configurations[container_name(service_name)]['environment']
-        secrets_config = container_configurations[container_name(service_name)]['secrets']
-        log_config = self._gen_log_config(service_name)
-        container_definition_arguments = {
-            "Environment": [Environment(Name=name, Value=env_config[name]) for name in env_config],
-            "Secrets": [Secret(Name=name, ValueFrom=secrets_config[name]) for name in secrets_config],
-            "Name": container_name(service_name),
-            "Image": self.ecr_image_uri,
-            "Essential": 'true',
-            "LogConfiguration": log_config,
-            "MemoryReservation": int(config['memory_reservation']),
-            "Cpu": 0
-        }
-        task_role_arn = config.get('task_arn')
-        task_execution_role_arn = config.get('task_execution_arn')
         if secrets_name:
             self.template.add_output(Output(service_name + "SecretsName",
                                             Description="AWS secrets manager name to pull the secrets from",
                                             Value=secrets_name))
 
-        if 'stop_timeout' in config:
-            container_definition_arguments['StopTimeout'] = int(config['stop_timeout'])
+        task_role = self._add_task_role(service_name, config.get('task_role_attached_managed_policy_arns', []))
+        task_execution_role = self._add_task_execution_role(service_name, secrets_name)
 
-        if 'system_controls' in config:
-            container_definition_arguments['SystemControls'] = [SystemControl(Namespace=system_control['namespace'],
-                                                                              Value=system_control['value']) for
-                                                                system_control in config['system_controls']]
+        builder = TaskDefinitionBuilder(
+            environment=self.env,
+            service_name=service_name,
+            configuration=config,
+            region=self.region,
+        )
 
-        if 'http_interface' in config:
-            container_definition_arguments['PortMappings'] = [
-                PortMapping(
-                    ContainerPort=int(
-                        config['http_interface']['container_port']
-                    )
-                )
-            ]
-
-        elif 'udp_interface' in config:
-            if launch_type == self.LAUNCH_TYPE_FARGATE:
-                raise NotImplementedError('udp interface not yet implemented in fargate type, please use ec2 type')
-            container_definition_arguments['PortMappings'] = [
-                PortMapping(ContainerPort=int(config['udp_interface']['container_port']),
-                            HostPort=int(config['udp_interface']['container_port']), Protocol='udp'),
-                PortMapping(ContainerPort=int(config['udp_interface']['health_check_port']),
-                            HostPort=int(config['udp_interface']['health_check_port']), Protocol='tcp')
-            ]
-        elif 'tcp_interface' in config:
-            if launch_type == self.LAUNCH_TYPE_FARGATE:
-                raise NotImplementedError('tcp interface not yet implemented in fargate type, please use ec2 type')
-            container_definition_arguments['PortMappings'] = [
-                PortMapping(ContainerPort=int(config['tcp_interface']['container_port']), Protocol='tcp')
-            ]
-
-        if config['command'] is not None:
-            container_definition_arguments['Command'] = [config['command']]
-
-        if 'container_health_check' in config:
-            configured_health_check = config['container_health_check']
-            ecs_health_check = {'Command': ['CMD-SHELL', configured_health_check['command']]}
-            if 'start_period' in configured_health_check:
-                ecs_health_check['StartPeriod'] = int(configured_health_check['start_period'])
-            if 'retries' in configured_health_check:
-                ecs_health_check['Retries'] = int(configured_health_check['retries'])
-            if 'interval' in configured_health_check:
-                ecs_health_check['Interval'] = int(configured_health_check['interval'])
-            if 'timeout' in configured_health_check:
-                ecs_health_check['Timeout'] = int(configured_health_check['timeout'])
-            container_definition_arguments['HealthCheck'] = HealthCheck(
-                **ecs_health_check
-            )
-
-        if 'sidecars' in config:
-            links = []
-            for sidecar in config['sidecars']:
-                sidecar_name = sidecar.get('name')
-                links.append(
-                    "{}:{}".format(container_name(sidecar_name), sidecar_name)
-                )
-            container_definition_arguments['Links'] = links
-
-        if 'container_labels' in config:
-            container_definition_arguments['DockerLabels'] = config.get('container_labels')
-
-        cd = ContainerDefinition(**container_definition_arguments)
-        container_definitions = [cd]
-        if 'sidecars' in config:
-            for sidecar in config['sidecars']:
-                sidecar_container_name = container_name(sidecar.get('name'))
-                container_definitions.append(
-                    self._gen_container_definitions_for_sidecar(sidecar,
-                                                                log_config,
-                                                                container_configurations.get(sidecar_container_name,
-                                                                                             {})),
-                )
-
-        generated_task_role = self.template.add_resource(Role(
-            service_name + "Role",
-            ManagedPolicyArns=config.get('task_role_attached_managed_policy_arns', []),
-            AssumeRolePolicyDocument=PolicyDocument(
-                Statement=[
-                    Statement(
-                        Effect=Allow,
-                        Action=[AssumeRole],
-                        Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
-                    )
-                ]
-            )
-        ))
-
-        task_role = task_role_arn if task_role_arn else generated_task_role
-        generated_task_execution_role = self._add_task_execution_role(service_name, secrets_name)
-        task_execution_role = task_execution_role_arn if task_execution_role_arn else Ref(generated_task_execution_role)
-
-        launch_type_td = {}
-        if launch_type == self.LAUNCH_TYPE_FARGATE:
-            launch_type_td = {
-                'RequiresCompatibilities': ['FARGATE'],
-                'NetworkMode': 'awsvpc',
-                'Cpu': str(config['fargate']['cpu']),
-                'Memory': str(config['fargate']['memory'])
-            }
-        if ('udp_interface' in config) or ('tcp_interface' in config):
-            launch_type_td['NetworkMode'] = 'awsvpc'
-
-        placement_constraints = [
-            PlacementConstraint(Type=constraint['type'], Expression=constraint['expression'])
-            for constraint in config['placement_constraints']
-        ] if 'placement_constraints' in config else []
-
-        task_family_name = f'{self.env}{service_name}Family'[:255]
-
-        # Use task_role_arn if available
-        task_role = Ref(task_role) if not task_role_arn else task_role_arn
-
-        td = TaskDefinition(
-            service_name + "TaskDefinition",
-            Family=task_family_name,
-            ContainerDefinitions=container_definitions,
-            TaskRoleArn=task_role,
-            ExecutionRoleArn=task_execution_role,
-            PlacementConstraints=placement_constraints,
-            **launch_type_td
+        td = builder.build_cloudformation_resource(
+            container_configurations=container_configurations,
+            ecr_image_uri=self.ecr_image_uri,
+            fallback_task_role=Ref(task_role),
+            fallback_task_execution_role=Ref(task_execution_role),
         )
 
         self.template.add_resource(td)
@@ -368,7 +246,7 @@ service is down',
                                                                  min_count=int(
                                                                      autoscaling_config.get('min_capacity', 0)))
         if 'udp_interface' in config:
-            lb, target_group_name = self._add_ecs_nlb(cd, service_name, config['udp_interface'], launch_type)
+            lb, target_group_name = self._add_ecs_nlb(service_name, config['udp_interface'], launch_type)
             nlb_enabled = 'nlb_enabled' in config['udp_interface'] and config['udp_interface']['nlb_enabled']
             launch_type_svc = {}
 
@@ -388,7 +266,7 @@ service is down',
                     )
                 )
 
-            if launch_type == self.LAUNCH_TYPE_EC2:
+            if launch_type == LAUNCH_TYPE_EC2:
                 launch_type_svc['PlacementStrategies'] = self.PLACEMENT_STRATEGIES
             svc = Service(
                 service_name,
@@ -408,7 +286,7 @@ service is down',
             )
             self.template.add_resource(svc)
         elif 'http_interface' in config:
-            lb, target_group_name, target_group = self._add_ecs_lb(cd, service_name, config, launch_type)
+            lb, target_group_name, target_group = self._add_ecs_lb(service_name, config, launch_type)
 
             security_group_ingress = {
                 'IpProtocol': 'TCP',
@@ -433,7 +311,7 @@ service is down',
                             Value=Sub("https://${" + alb.name + ".DNSName}")
                         )
                     )
-                    if launch_type == self.LAUNCH_TYPE_FARGATE:
+                    if launch_type == LAUNCH_TYPE_FARGATE:
                         # needed for FARGATE security group creation.
                         security_group_ingress['SourceSecurityGroupId'] = Ref(alb_sg)
                 else:
@@ -443,7 +321,7 @@ service is down',
                     alb_full_name = self.get_alb_full_name_from_listener_arn(listener_arn)
                     self.create_target_group_alarms(target_group_name, target_group, alb_full_name,
                                                     alb_config)
-            if launch_type == self.LAUNCH_TYPE_FARGATE:
+            if launch_type == LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
                 service_security_group = SecurityGroup(
@@ -517,7 +395,8 @@ service is down',
             svc = Service(
                 service_name,
                 LoadBalancers=[
-                    LoadBalancer(ContainerName=cd.Name, TargetGroupArn=config['tcp_interface']['target_group_arn'],
+                    LoadBalancer(ContainerName=container_name(service_name),
+                                 TargetGroupArn=config['tcp_interface']['target_group_arn'],
                                  ContainerPort=int(config['tcp_interface']['container_port']))],
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
@@ -536,7 +415,7 @@ service is down',
             self.template.add_resource(svc)
         else:
             launch_type_svc = {}
-            if launch_type == self.LAUNCH_TYPE_FARGATE:
+            if launch_type == LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
                 service_security_group = SecurityGroup(
@@ -621,6 +500,21 @@ service is down',
             )
         )
 
+    def _add_task_role(self, service_name, managed_policy_arns):
+        role = Role(
+            service_name + "Role",
+            ManagedPolicyArns=managed_policy_arns,
+            AssumeRolePolicyDocument=PolicyDocument(
+                Statement=[
+                    Statement(Effect=Allow,
+                              Action=[AssumeRole],
+                              Principal=Principal("Service", ["ecs-tasks.amazonaws.com"]))
+                ]
+            )
+        )
+        self.template.add_resource(role)
+        return role
+
     def _add_task_execution_role(self, service_name, secrets_name):
         automated_injected_secret_name = get_automated_injected_secret_name(self.env,
                                                                             self.application_name,
@@ -657,34 +551,7 @@ service is down',
         ))
         return task_execution_role
 
-    def _gen_container_definitions_for_sidecar(self, sidecar, log_config, env_config):
-        cd = {}
-        if 'command' in sidecar:
-            cd['Command'] = sidecar['command']
-
-        return ContainerDefinition(
-            Name=container_name(sidecar.get('name')),
-            Environment=[Environment(Name=k, Value=v) for (k, v) in env_config],
-            MemoryReservation=int(sidecar.get('memory_reservation')),
-            Image=sidecar.get('image'),
-            LogConfiguration=log_config,
-            Essential=False,
-            **cd
-        )
-
-    def _gen_log_config(self, service_name):
-        current_service_config = self.configuration['services'][service_name]
-        env_log_group = '-'.join([self.env, 'logs'])
-        return LogConfiguration(
-            LogDriver="awslogs",
-            Options={
-                'awslogs-stream-prefix': service_name,
-                'awslogs-group': current_service_config.get('log_group', env_log_group),
-                'awslogs-region': self.region
-            }
-        )
-
-    def _add_ecs_lb(self, cd, service_name, config, launch_type):
+    def _add_ecs_lb(self, service_name, config, launch_type):
         target_group_name = "TargetGroup" + service_name
         health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config[
             'http_interface'] else "/elb-check"
@@ -692,7 +559,7 @@ service is down',
             target_group_name = target_group_name + 'Internal'
 
         target_group_config = {}
-        if launch_type == self.LAUNCH_TYPE_FARGATE:
+        if launch_type == LAUNCH_TYPE_FARGATE:
             target_group_config['TargetType'] = 'ip'
 
         service_target_group = TargetGroup(
@@ -728,14 +595,14 @@ service is down',
         self.template.add_resource(service_target_group)
 
         lb = LoadBalancer(
-            ContainerName=cd.Name,
+            ContainerName=container_name(service_name),
             TargetGroupArn=Ref(service_target_group),
             ContainerPort=int(config['http_interface']['container_port'])
         )
 
         return lb, target_group_name, service_target_group
 
-    def _add_ecs_nlb(self, cd, service_name, elb_config, launch_type):
+    def _add_ecs_nlb(self, service_name, elb_config, launch_type):
         target_group_name = "TargetGroup" + service_name
         health_check_path = elb_config['health_check_path'] if 'health_check_path' in elb_config else "/elb-check"
         if elb_config['internal']:
@@ -769,7 +636,7 @@ service is down',
         self.template.add_resource(service_target_group)
 
         lb = LoadBalancer(
-            ContainerName=cd.Name,
+            ContainerName=container_name(service_name),
             TargetGroupArn=Ref(service_target_group),
             ContainerPort=int(elb_config['container_port'])
         )

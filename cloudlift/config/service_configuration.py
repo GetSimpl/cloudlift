@@ -298,13 +298,13 @@ class ServiceConfiguration(DynamodbConfig):
                         {"type": "null"}
                     ]
                 },
-                "task_arn": {
+                "task_role_arn": {
                     "oneOf": [
                         {"type": "string"},
                         {"type": "null"}
                     ]
                 },
-                "task_execution_arn": {
+                "task_execution_role_arn": {
                     "oneOf": [
                         {"type": "string"},
                         {"type": "null"}

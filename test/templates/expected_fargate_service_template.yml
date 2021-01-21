@@ -104,6 +104,7 @@ Resources:
               awslogs-group: staging-logs
               awslogs-region: us-west-2
               awslogs-stream-prefix: DummyFargateRunSidekiqsh
+          Memory: 20480
           MemoryReservation: 512
           Name: DummyFargateRunSidekiqshContainer
           Secrets:
@@ -198,6 +199,7 @@ Resources:
               awslogs-group: staging-logs
               awslogs-region: us-west-2
               awslogs-stream-prefix: DummyFargateService
+          Memory: 20480
           MemoryReservation: 512
           Name: DummyFargateServiceContainer
           PortMappings:

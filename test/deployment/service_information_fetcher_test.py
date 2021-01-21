@@ -13,11 +13,18 @@ class TestServiceInformationFetcher(unittest.TestCase):
 
     @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
     def test_fetch_service_cfn_info(self, mock_get_client_for):
+        service_configuration = {
+            'ecr_repo': {'name': 'dummy-repo'},
+            'services': {
+                'ServiceOne': {'secrets_name': 'dummy-test'},
+                'ServiceTwo': {'secrets_name': 'dummy-test'},
+            }
+        }
         mock_cfn_client = MagicMock()
         mock_get_client_for.return_value = mock_cfn_client
         mock_cfn_client.describe_stacks.return_value = _describe_stacks_output()
 
-        sif = ServiceInformationFetcher(service, env)
+        sif = ServiceInformationFetcher(service, env, service_configuration)
 
         expected_service_info = {
             'ServiceTwo': {'ecs_service_name': 'dummy-sen-test-ServiceTwo-45E0C5QX2HUV',
@@ -26,18 +33,6 @@ class TestServiceInformationFetcher(unittest.TestCase):
                            'secrets_name': 'dummy-test'}}
         self.assertDictEqual(expected_service_info, sif.service_info)
         mock_cfn_client.describe_stacks.assert_called_once_with(StackName='dummy-test')
-
-    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
-    def test_fetch_ecr_info(self, mock_get_client_for):
-        mock_cfn_client = MagicMock()
-        mock_get_client_for.return_value = mock_cfn_client
-        mock_cfn_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
-
-        sif = ServiceInformationFetcher(service, env)
-
-        self.assertEqual('dummy-sen-repo', sif.ecr_repo_name)
-        self.assertEqual('test-assume-role-arn', sif.ecr_assume_role_arn)
-        self.assertEqual('12345', sif.ecr_account_id)
 
     @patch('builtins.print')
     @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
@@ -51,7 +46,7 @@ class TestServiceInformationFetcher(unittest.TestCase):
             'containerDefinitions': [{'image': 'repo:v1-12345'}],
         }}
 
-        sif = ServiceInformationFetcher(service, env)
+        sif = ServiceInformationFetcher(service, env, _service_configuration())
 
         sif.get_version()
 
@@ -69,7 +64,7 @@ class TestServiceInformationFetcher(unittest.TestCase):
             'containerDefinitions': [{'image': 'repo:v1-12345'}],
         }}
 
-        sif = ServiceInformationFetcher(service, env)
+        sif = ServiceInformationFetcher(service, env, _service_configuration())
 
         sif.get_version(print_image=True)
 
@@ -87,11 +82,29 @@ class TestServiceInformationFetcher(unittest.TestCase):
             'containerDefinitions': [{'image': 'repo:fedbdf-12345'}],
         }}
 
-        sif = ServiceInformationFetcher(service, env)
+        sif = ServiceInformationFetcher(service, env, _service_configuration())
 
         sif.get_version(print_git=True)
 
         mock_print.assert_called_with('fedbdf')
+
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_initialization_from_service_configuration(self, mock_get_client_for):
+        mock_get_client_for.return_value.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+        sif = ServiceInformationFetcher(service, env, _service_configuration())
+
+        expected_service_info = {
+            'ServiceOne': {
+                'ecs_service_name': 'dummy-sen-test-ServiceOne-X9NCSHOSMM5S',
+                'secrets_name': 'dummy-test',
+            },
+            'ServiceTwo': {
+                'ecs_service_name': 'generated-ecs-service',
+                'secrets_name': 'dummy-test2',
+            },
+        }
+
+        self.assertEqual(expected_service_info, sif.service_info)
 
 
 def _describe_stacks_output():
@@ -134,6 +147,16 @@ def _describe_stacks_output():
         ],
         'Tags': [], 'EnableTerminationProtection': False,
         'DriftInformation': {'StackDriftStatus': 'NOT_CHECKED'}}]}
+
+
+def _service_configuration():
+    return {
+        'ecr_repo': {'name': 'dummy-repo'},
+        'services': {
+            'ServiceOne': {'secrets_name': 'dummy-test'},
+            'ServiceTwo': {'ecs_service_name': 'generated-ecs-service', 'secrets_name': 'dummy-test2'},
+        }
+    }
 
 
 def _describe_stacks_output_with_ecr_repo_config():

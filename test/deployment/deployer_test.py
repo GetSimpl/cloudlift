@@ -1,5 +1,6 @@
 import os
 from _datetime import datetime, timedelta
+from copy import deepcopy
 from unittest import TestCase
 from unittest.mock import patch, MagicMock, sentinel, mock_open
 
@@ -9,7 +10,7 @@ from dateutil.tz.tz import tzlocal
 from cloudlift.deployment.deployer import is_deployed, \
     record_deployment_failure_metric, deploy_and_wait, build_config, get_env_sample_file_name, \
     get_env_sample_file_contents, get_namespaces_from_directory, find_duplicate_keys, get_sample_keys, get_secret_name, \
-    get_automated_injected_secret_name
+    get_automated_injected_secret_name, create_new_task_definition
 from cloudlift.deployment.ecs import EcsService, EcsTaskDefinition
 from cloudlift.exceptions import UnrecoverableException
 
@@ -78,6 +79,80 @@ class TestDeployer(TestCase):
             ]
         }
         assert not is_deployed(service)
+
+    @patch("cloudlift.deployment.deployer.build_config")
+    def test_create_new_task_definition(self, mock_build_config):
+        client = MagicMock()
+        service_configuration = {
+            'command': './start_script.sh',
+            'container_health_check': {
+                'command': './check-health.sh',
+                'start_period': 10
+            },
+            'memory_reservation': 100,
+        }
+        mock_build_config.return_value = {
+            'DummyContainer': {
+                "secrets": {"CLOUDLIFT_INJECTED_SECRETS": 'arn_injected_secrets'},
+                "environment": {"PORT": "80"}
+            },
+        }
+
+        current_task_definition = {
+            'containerDefinitions': [
+                {
+                    'environment': [{'name': 'PORT', 'value': '80'}],
+                    'secrets': [{'name': 'CLOUDLIFT_INJECTED_SECRETS', 'valueFrom': 'arn_injected_secrets'}],
+                    'name': 'DummyContainer',
+                    'image': 'nginx:v1',
+                    'essential': True,
+                    'logConfiguration': {'logDriver': 'awslogs',
+                                         'options': {'awslogs-stream-prefix': 'Dummy', 'awslogs-group': 'test-logs',
+                                                     'awslogs-region': 'region1'}},
+                    'memoryReservation': 100, 'cpu': 0, 'command': ['./start_script.sh'],
+                    'healthCheck': {'command': ['CMD-SHELL', './check-health.sh'], 'startPeriod': 10},
+                }
+            ],
+            'executionRoleArn': 'oldTaskExecRoleArn',
+            'family': 'testDummyFamily',
+            'placementConstraints': [],
+            'taskRoleArn': 'oldTaskRoleArn',
+            'tags': [{'key': 'deployment_identifier', 'value': 'id-00'}],
+        }
+
+        expected = deepcopy(current_task_definition)
+        expected['containerDefinitions'][0]['image'] = 'nginx:v2'
+        expected['tags'][0]['value'] = 'id-01'
+        expected['containerDefinitions'][0]['memory'] = 20480
+
+        client.describe_services.return_value = {'services': [{
+            'taskDefinition': 'tdARN1',
+        }]}
+        client.describe_task_definition.return_value = {
+            'taskDefinition': current_task_definition,
+            'tags': [{'key': 'deployment_identifier', 'value': 'id-00'}],
+        }
+        create_new_task_definition(
+            color='white',
+            client=client,
+            cluster_name='cluster-test',
+            ecs_service_name='dummy-123',
+            ecs_service_logical_name='Dummy',
+            deployment_identifier='id-01',
+            service_name='dummy-test',
+            sample_env_file_path='./env.sample',
+            env_name='test',
+            secrets_name='dummy-test-secrets',
+            service_configuration=service_configuration,
+            region='region1',
+            ecr_image_uri='nginx:v2',
+        )
+
+        client.describe_services.assert_called_with(cluster_name='cluster-test', service_name='dummy-123')
+        client.describe_task_definition.assert_called_with(task_definition_arn='tdARN1')
+        args, kwargs = client.register_task_definition.call_args
+        self.assertEqual(expected, kwargs)
+        client.register_task_definition.assert_called_with(**expected)
 
 
 class TestDeployAndWait(TestCase):
@@ -166,7 +241,8 @@ class TestDeployAndWait(TestCase):
             }),
             self.create_ecs_service_with_status({
                 'events': [
-                    {'message': 'unable to place tasks due to memory', 'createdAt': start_time + timedelta(seconds=1)},
+                    {'message': 'unable to place tasks due to memory',
+                     'createdAt': start_time + timedelta(seconds=1)},
                 ],
                 'desiredCount': 5,
                 'runningCount': 0,
@@ -224,7 +300,8 @@ class TestDeployAndWait(TestCase):
                 'desiredCount': 5,
                 'runningCount': 0,
                 'events': [
-                    {'message': 'unable to place tasks due to memory', 'createdAt': start_time + timedelta(seconds=1)},
+                    {'message': 'unable to place tasks due to memory',
+                     'createdAt': start_time + timedelta(seconds=1)},
                 ],
                 'deployments': [
                     {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
@@ -236,7 +313,8 @@ class TestDeployAndWait(TestCase):
                 'desiredCount': 5,
                 'runningCount': 0,
                 'events': [
-                    {'message': 'unable to place tasks due to memory', 'createdAt': start_time + timedelta(seconds=2)},
+                    {'message': 'unable to place tasks due to memory',
+                     'createdAt': start_time + timedelta(seconds=2)},
                 ],
                 'deployments': [
                     {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
@@ -347,7 +425,8 @@ class TestBuildConfig(TestCase):
     @patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test\nADDITIONAL_CONFIG=true"))
     @patch('cloudlift.deployment.deployer.ParameterStore')
     @patch('cloudlift.deployment.deployer.secrets_manager')
-    def test_failure_build_config_for_if_sample_config_has_additional_keys(self, m_secrets_manager, m_parameter_store):
+    def test_failure_build_config_for_if_sample_config_has_additional_keys(self, m_secrets_manager,
+                                                                           m_parameter_store):
         env_name = "staging"
         service_name = "Dummy"
         sample_env_file_path = "test-env.sample"
@@ -361,7 +440,8 @@ class TestBuildConfig(TestCase):
             build_config(env_name, service_name, "", sample_env_file_path, essential_container_name, None)
 
         self.assertEqual(pytest_wrapped_e.type, UnrecoverableException)
-        self.assertEqual(str(pytest_wrapped_e.value), '"There is no config value for the keys {\'ADDITIONAL_CONFIG\'}"')
+        self.assertEqual(str(pytest_wrapped_e.value),
+                         '"There is no config value for the keys {\'ADDITIONAL_CONFIG\'}"')
 
     @patch('cloudlift.deployment.deployer.ParameterStore')
     @patch('cloudlift.deployment.deployer.secrets_manager')
@@ -405,7 +485,8 @@ class TestBuildConfig(TestCase):
             '../env_sample_files/env_sample_files_without_duplicate_keys',
         )
 
-        result = build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
+        result = build_config(env_name, service_name, ecs_service_name, sample_env_file_path,
+                              essential_container_name,
                               "dummy-secrets-staging")
 
         m_secrets_manager.set_secrets_manager_config.assert_called_with(
@@ -462,7 +543,8 @@ class TestBuildConfig(TestCase):
             '../env_sample_files/env_sample_files_without_duplicate_keys',
         )
 
-        result = build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
+        result = build_config(env_name, service_name, ecs_service_name, sample_env_file_path,
+                              essential_container_name,
                               "dummy-secrets-staging")
 
         m_secrets_manager.set_secrets_manager_config.assert_not_called()

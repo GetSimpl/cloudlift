@@ -137,6 +137,7 @@ Resources:
               awslogs-group: staging-logs
               awslogs-region: us-west-2
               awslogs-stream-prefix: Dummy
+          Memory: 20480
           MemoryReservation: 1000
           Name: DummyContainer
           PortMappings:

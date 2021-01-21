@@ -4,7 +4,7 @@ import boto3
 import click
 from botocore.exceptions import ClientError
 
-from cloudlift.config import highlight_production
+from cloudlift.config import highlight_production, ServiceConfiguration
 from cloudlift.config.logging import log_err
 from cloudlift.deployment import EnvironmentCreator, editor
 from cloudlift.deployment.configs import deduce_name
@@ -12,7 +12,6 @@ from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
 from cloudlift.exceptions import UnrecoverableException
-from cloudlift.session import SessionCreator
 from cloudlift.version import VERSION
 
 
@@ -185,16 +184,11 @@ from commit hash")
 @click.option('--image', is_flag=True, help='Print image with version')
 @click.option('--git', is_flag=True, help='Prints the git revision part of the image')
 def get_version(name, environment, image, git):
-    ServiceInformationFetcher(name, environment).get_version(print_image=image, print_git=git)
-
-
-@cli.command(help="Start SSH session in instance running a current \
-service task")
-@_require_environment
-@_require_name
-@click.option('--mfa', help='MFA code', prompt='MFA Code')
-def start_session(name, environment, mfa):
-    SessionCreator(name, environment).start_session(mfa)
+    ServiceInformationFetcher(
+        name,
+        environment,
+        ServiceConfiguration(service_name=name, environment=environment).get_config(),
+    ).get_version(print_image=image, print_git=git)
 
 
 if __name__ == '__main__':

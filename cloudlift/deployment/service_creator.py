@@ -18,7 +18,6 @@ from cloudlift.deployment.service_template_generator import ServiceTemplateGener
 from cloudlift.deployment.cloud_formation_stack import prepare_stack_options_for_template
 from cloudlift.deployment.ecr import ECR
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
-from cloudlift.config.account import get_account_id
 
 
 class ServiceCreator(object):
@@ -100,10 +99,14 @@ class ServiceCreator(object):
         '''
 
         log_bold("Starting to update service")
-        information_fetcher = ServiceInformationFetcher(self.service_configuration.service_name, self.environment)
         self.service_configuration.edit_config()
         self.service_configuration.validate()
 
+        information_fetcher = ServiceInformationFetcher(
+            self.service_configuration.service_name,
+            self.environment,
+            self.service_configuration.get_config(),
+        )
         try:
             current_image_uri = information_fetcher.get_current_image_uri()
             desired_counts = information_fetcher.fetch_current_desired_count()
