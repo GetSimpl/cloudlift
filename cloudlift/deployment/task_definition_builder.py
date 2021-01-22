@@ -32,8 +32,7 @@ class TaskDefinitionBuilder:
             fallback_task_execution_role=fallback_task_execution_role,
         ))
         task_definition = t.to_dict()["Resources"][self._resource_name(self.service_name)]["Properties"]
-        return _cloudformation_to_boto3_payload(task_definition, ignore_keys={'awslogs-group', 'awslogs-region',
-                                                                              'awslogs-stream-prefix'})
+        return _cloudformation_to_boto3_payload(task_definition, ignore_keys={'Options', 'DockerLabels'})
 
     def build_cloudformation_resource(
             self,
@@ -200,19 +199,22 @@ class TaskDefinitionBuilder:
         )
 
 
-def _cloudformation_to_boto3_payload(data, ignore_keys=set()):
+def _cloudformation_to_boto3_payload(data, ignore_keys=set(), ignore_camelcase=False):
     if not isinstance(data, dict):
         return data
 
     result = dict()
     for k, v in data.items():
-        key = k if k in ignore_keys else camelcase(k)
+        key = camelcase(k) if not ignore_camelcase else k
+        ignore_camelcase_for_all_children = k in ignore_keys
         if isinstance(v, dict):
-            result[key] = _cloudformation_to_boto3_payload(v, ignore_keys)
+            result[key] = _cloudformation_to_boto3_payload(v, ignore_keys,
+                                                           ignore_camelcase=ignore_camelcase_for_all_children)
         elif isinstance(v, list):
             elements = list()
             for each in v:
-                elements.append(_cloudformation_to_boto3_payload(each, ignore_keys))
+                elements.append(_cloudformation_to_boto3_payload(each, ignore_keys,
+                                                                 ignore_camelcase=ignore_camelcase_for_all_children))
             result[key] = elements
         elif isinstance(v, str):
             if v == 'true' or v == 'false':

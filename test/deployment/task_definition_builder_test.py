@@ -10,6 +10,7 @@ class TaskDefinitionBuilderTest(TestCase):
                 "command": "./check-health.sh",
                 "start_period": 10
             },
+            "container_labels": {"python_version": "2"},
             'http_interface': {'container_port': 9090},
             'memory_reservation': 100,
             'stop_timeout': 70,
@@ -29,6 +30,7 @@ class TaskDefinitionBuilderTest(TestCase):
             'containerDefinitions': [{
                 'command': ['./start_script.sh'],
                 'cpu': 0,
+                'dockerLabels': {'python_version': '2'},
                 'environment': [{'name': 'PORT', 'value': '80'}],
                 'essential': True,
                 'healthCheck': {

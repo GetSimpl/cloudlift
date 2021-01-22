@@ -153,6 +153,8 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Cpu: 0
+          DockerLabels:
+            python_version: '2'
           Environment:
             - Name: PORT
               Value: '80'

@@ -350,6 +350,7 @@ class TestServiceTemplateGenerator(TestCase):
                 "Dummy": {
                     "memory_reservation": Decimal(1000),
                     "command": None,
+                    "container_labels": {"python_version": "2"},
                     "secrets_name": "something",
                     "http_interface": {
                         "internal": False,
@@ -633,6 +634,8 @@ class TestServiceTemplateGenerator(TestCase):
     def assert_template(self, expected, actual):
         expected = json.loads(expected)
         actual = json.loads(actual)
+        expected['Outputs'].pop('CloudliftOptions')
+        actual['Outputs'].pop('CloudliftOptions')
         diff = DeepDiff(expected, actual, view='tree', max_diffs=None)
         if diff:
             msg = pformat(diff, indent=2)
