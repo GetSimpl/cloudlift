@@ -1,7 +1,6 @@
 import json
 import re
-import random
-import string
+import uuid
 
 import boto3
 from botocore.exceptions import ClientError
@@ -74,9 +73,8 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self._fetch_current_desired_count()
         self._add_ecs_service_iam_role()
         self._add_cluster_services()
-        
-        letters = string.ascii_lowercase
-        key = ''.join(random.choice(letters) for i in range(20)) + '.yml'
+
+        key = uuid.uuid4().hex + '.yml'
         if len(to_yaml(self.template.to_json())) > 51000:
             try:
                 self.client.put_object(
@@ -84,12 +82,12 @@ class ServiceTemplateGenerator(TemplateGenerator):
                     Bucket=self.bucket_name,
                     Key=key,
                 )
-                TemplateURL = 'https://' + self.bucket_name + '.s3.amazonaws.com/'+ key
-                return TemplateURL , 'TemplateURL', key
+                template_url = f'https://{self.bucket_name}.s3.amazonaws.com/{key}'
+                return template_url, 'TemplateURL', key
             except ClientError as boto_client_error:
                 error_code = boto_client_error.response['Error']['Code']
                 if error_code == 'AccessDenied':
-                    raise UnrecoverableException("Unable to store cloudlift service template in S3 bucket at "+ str(self.bucket_name))
+                    raise UnrecoverableException(f'Unable to store cloudlift service template in S3 bucket at {self.bucket_name}')
                 else:
                     raise boto_client_error
         else:
