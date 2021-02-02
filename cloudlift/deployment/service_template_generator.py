@@ -168,6 +168,10 @@ service is down',
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
+        
+        service_interruptable = False
+        if 'interruptable' in config:
+            service_interruptable = config["interruptable"]
 
         if 'http_interface' in config:
             container_definition_arguments['PortMappings'] = [
@@ -267,7 +271,7 @@ service is down',
                 DependsOn=service_listener.title,
                 PlacementConstraints=[PlacementConstraint(
                     Type='memberOf',
-                    Expression='attribute:deployment_type == Spot' if config['interruptable'] else 'attribute:deployment_type == OnDemand'
+                    Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
                 )],
                 LaunchType=launch_type,
                 **launch_type_svc,
@@ -325,7 +329,7 @@ service is down',
                 DeploymentConfiguration=deployment_configuration,
                 PlacementConstraints=[PlacementConstraint(
                     Type='memberOf',
-                    Expression='attribute:deployment_type == Spot' if config['interruptable'] else 'attribute:deployment_type == OnDemand'
+                    Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
                 )],
                 LaunchType=launch_type,
                 **launch_type_svc
