@@ -37,17 +37,19 @@ class ServiceCreator(object):
             self.environment
         )
 
-    def delete_template(self, key):
+    def delete_template(self, key=None):
         '''
             Delete CloudFormation Template stored in S3 bucket
         '''
-        try:
-            self.s3client.delete_object(
-                Bucket=self.bucket_name,
-                Key=key,
-            )
-        except ClientError as boto_client_error:
-            raise boto_client_error
+        if key:
+            try:
+                self.s3client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                )
+            except ClientError as boto_client_error:
+                print(f"Error deleting s3 key: {key}")
+                raise boto_client_error
 
     def create(self):
         '''
