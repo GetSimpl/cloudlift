@@ -19,13 +19,14 @@ DEPLOYMENT_CONCURRENCY = int(os.environ.get('CLOUDLIFT_DEPLOYMENT_CONCURRENCY', 
 
 
 class ServiceUpdater(object):
-    def __init__(self, name, environment='', env_sample_file='', timeout_seconds=None, version=None,
+    def __init__(self, name, environment='', env_sample_file='', env_sensitive_sample_file='', timeout_seconds=None, version=None,
                  build_args=None, dockerfile=None, ssh=None, cache_from=None,
                  deployment_identifier=None, working_dir='.'):
         self.name = name
         self.environment = environment
         self.deployment_identifier = deployment_identifier
         self.env_sample_file = env_sample_file
+        self.env_sensitive_sample_file = env_sensitive_sample_file
         self.timeout_seconds = timeout_seconds
         self.version = version
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
@@ -53,6 +54,10 @@ class ServiceUpdater(object):
         log_warning("Deploying to {self.region}".format(**locals()))
         if not os.path.exists(self.env_sample_file):
             raise UnrecoverableException('env.sample not found. Exiting.')
+
+        if not os.path.exists(self.env_sensitive_sample_file):
+            raise UnrecoverableException('env.sensitive not found. Exiting.')
+
         log_intent("name: " + self.name + " | environment: " +
                    self.environment + " | version: " + str(self.version) +
                    " | deployment_identifier: " + self.deployment_identifier)
@@ -65,6 +70,7 @@ class ServiceUpdater(object):
         target = deployer.deploy_new_version
         kwargs = dict(client=ecs_client, cluster_name=self.cluster_name,
                       service_name=self.name, sample_env_file_path=self.env_sample_file,
+                      sample_sensitive_env_file_path=self.env_sensitive_sample_file,
                       timeout_seconds=self.timeout_seconds, env_name=self.environment,
                       ecr_image_uri=image_url,
                       deployment_identifier=self.deployment_identifier,

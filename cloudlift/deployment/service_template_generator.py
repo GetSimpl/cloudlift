@@ -50,10 +50,11 @@ class ServiceTemplateGenerator(TemplateGenerator):
             Field='attribute:ecs.availability-zone'
         )]
 
-    def __init__(self, service_configuration, environment_stack, env_sample_file, ecr_image_uri, desired_counts=None):
+    def __init__(self, service_configuration, environment_stack, env_sample_file, env_sensitive_sample_file, ecr_image_uri, desired_counts=None):
         super(ServiceTemplateGenerator, self).__init__(service_configuration.environment)
         self._derive_configuration(service_configuration)
         self.env_sample_file_path = env_sample_file
+        self.env_sensitive_sample_file_path = env_sensitive_sample_file
         self.environment_stack = environment_stack
         self.ecr_image_uri = ecr_image_uri
         self.desired_counts = desired_counts or {}
@@ -212,9 +213,11 @@ service is down',
     def _add_service(self, service_name, config):
         launch_type = get_launch_type(config)
         secrets_name = config.get('secrets_name')
+        sensitive = config.get('sensitive')
         container_configurations = build_config(self.env, self.application_name, service_name,
                                                 self.env_sample_file_path,
-                                                container_name(service_name), secrets_name)
+                                                self.env_sensitive_sample_file_path,
+                                                container_name(service_name), secrets_name, sensitive=sensitive)
         if secrets_name:
             self.template.add_output(Output(service_name + "SecretsName",
                                             Description="AWS secrets manager name to pull the secrets from",

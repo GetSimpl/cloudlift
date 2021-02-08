@@ -400,6 +400,12 @@ class ServiceConfiguration(DynamodbConfig):
                 "secrets_name": {
                     "type": "string",
                 },
+                "sensitive": {
+                    "oneOf": [
+                        {"type": "boolean"},
+                        {"type": "null"}
+                    ]
+                },
                 "task_role_attached_managed_policy_arns": {
                     "type": "array",
                     "items": {

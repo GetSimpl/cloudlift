@@ -66,6 +66,7 @@ class TestServiceConfiguration(object):
                         "TestService": {
                             "memory_reservation": 1000,
                             "secrets_name": "secret-config",
+                            "sensitive": True,
                             "command": None,
                             "http_interface": {
                                 "internal": True,
@@ -161,6 +162,7 @@ class TestServiceConfiguration(object):
                 "TestService": {
                     "memory_reservation": 1000,
                     'secrets_name': 'secret-config',
+                    "sensitive": True,
                     "command": None,
                     "http_interface": {
                         "internal": True,
@@ -188,6 +190,7 @@ class TestServiceConfiguration(object):
                 "TestService": {
                     "memory_reservation": 1000,
                     'secrets_name': 'secret-config',
+                    "sensitive": True,
                     "command": None,
                     "http_interface": {
                         "internal": True,
@@ -248,6 +251,7 @@ class TestServiceConfiguration(object):
                 "TestService": {
                     "memory_reservation": 1000,
                     'secrets_name': 'secret-config',
+                    "sensitive": True,
                     "command": None,
                     "http_interface": {
                         "internal": True,

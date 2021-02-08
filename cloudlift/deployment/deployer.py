@@ -110,12 +110,21 @@ def deploy_and_wait(deployment, new_task_definition, color, timeout_seconds):
 def get_env_sample_file_name(namespace):
     return 'env.{}.sample'.format(namespace) if namespace != '' else 'env.sample'
 
+def get_env_sensitive_file_name(namespace):
+    return 'env.{}.sensitive'.format(namespace) if namespace != '' else 'env.sensitive'
+
 
 def get_env_sample_file_contents(env_samples_directory, namespace):
     env_sample_file_name = get_env_sample_file_name(namespace)
     path = os.path.join(env_samples_directory, env_sample_file_name)
     with open(path) as f:
         return f.read()
+
+def get_env_sensitive_file_contents(env_samples_directory, namespace):
+    env_sensitive_file_name = get_env_sensitive_file_name(namespace)
+    path = os.path.join(env_samples_directory, env_sensitive_file_name)
+    with open(path) as f:
+        return f.readlines()
 
 
 def get_namespaces_from_directory(directory_path):
@@ -144,20 +153,27 @@ def find_duplicate_keys(directory_path, namespaces):
     return duplicates
 
 
-def get_sample_keys(directory_path, namespace):
-    return set(read_config(get_env_sample_file_contents(directory_path, namespace)))
+def get_sample_keys(directory_path, namespace, sensitive=True):
+    sample_keys = set(read_config(get_env_sample_file_contents(directory_path, namespace)))
+    sensitive_keys = set(get_env_sensitive_file_contents(directory_path, namespace))
+    if not sensitive:
+        sample_keys = sample_keys - sensitive_keys
+    return sample_keys
 
 
 def get_secret_name(secrets_name, namespace):
     return f"{secrets_name}/{namespace}" if namespace and namespace != '' else secrets_name
 
 
-def build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
-                 secrets_name):
+def build_config(env_name, service_name, ecs_service_name, sample_env_file_path, sample_env_sensitive_file_path, essential_container_name,
+                 secrets_name, sensitive=True):
     secrets = {}
     env = {}
     if secrets_name is None:
         sample_config_keys = set(read_config(open(sample_env_file_path).read()))
+        if not sensitive:
+            sensitive_config_keys = set(open(sample_env_sensitive_file_path).readlines())
+            sample_config_keys = sample_config_keys - sensitive_config_keys
         env_config_param_store = _get_parameter_store_config(service_name, env_name)
         _validate_config_availability(sample_config_keys,
                                       set(env_config_param_store))
@@ -165,7 +181,7 @@ def build_config(env_name, service_name, ecs_service_name, sample_env_file_path,
     else:
         sample_env_folder_path = os.getcwd()
         secrets = build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path,
-                                                   secrets_name)
+                                                   secrets_name, sensitive)
     return {essential_container_name: {"secrets": secrets, "environment": env}}
 
 
@@ -173,7 +189,7 @@ def get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
     return f"cloudlift-injected/{env_name}/{service_name}/{ecs_service_name}"
 
 
-def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name):
+def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name, sensitive=True):
     secrets_across_namespaces = {}
     namespaces = get_namespaces_from_directory(sample_env_folder_path)
     duplicates = find_duplicate_keys(sample_env_folder_path, namespaces)
@@ -182,7 +198,7 @@ def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, s
     for namespace in namespaces:
         secrets_for_namespace = _get_secrets_for_namespace(env_name, namespace,
                                                            sample_env_folder_path,
-                                                           secrets_name)
+                                                           secrets_name, sensitive)
         secrets_across_namespaces.update(secrets_for_namespace)
 
     automated_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
@@ -199,10 +215,10 @@ def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, s
     return dict(CLOUDLIFT_INJECTED_SECRETS=arn)
 
 
-def _get_secrets_for_namespace(env_name, namespace, sample_env_folder_path, secrets_name):
+def _get_secrets_for_namespace(env_name, namespace, sample_env_folder_path, secrets_name, sensitive):
     inferred_secrets_name = get_secret_name(secrets_name, namespace)
     secrets_for_namespace = secrets_manager.get_config(inferred_secrets_name, env_name)['secrets']
-    sample_config_keys = get_sample_keys(sample_env_folder_path, namespace)
+    sample_config_keys = get_sample_keys(sample_env_folder_path, namespace, sensitive=sensitive)
     _validate_config_availability(sample_config_keys, set(secrets_for_namespace.keys()))
     return {k: secrets_for_namespace[k] for k in sample_config_keys}
 
