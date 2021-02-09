@@ -15,7 +15,7 @@ from pprint import pformat
 
 
 def mock_build_config_impl(env_name, cloudlift_service_name, dummy_ecs_service_name, sample_env_file_path,
-                           ecs_service_name, prefix):
+                           sample_env_sensitive_file_path, ecs_service_name, prefix, sensitive=False):
     return {ecs_service_name: {"secrets": {"CLOUDLIFT_INJECTED_SECRETS": 'arn_injected_secrets'},
                                "environment": {"PORT": "80"}}}
 
@@ -181,7 +181,7 @@ class TestServiceTemplateGenerator(TestCase):
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name="test-service",
                                                environment="staging")
 
-        generator = ServiceTemplateGenerator(mock_service_configuration, None, "env.sample", ecr_image_uri="image:v1")
+        generator = ServiceTemplateGenerator(mock_service_configuration, None, "env.sample", "env.sensitive", ecr_image_uri="image:v1")
 
         assert generator.env == 'staging'
         assert generator.application_name == 'test-service'
@@ -198,7 +198,7 @@ class TestServiceTemplateGenerator(TestCase):
         mock_service_configuration.get_config.return_value = mocked_service_config()
 
         def mock_build_config_impl(env_name, service_name, dummy_ecs_service_name, sample_env_file_path,
-                                   ecs_service_name, secrets_name):
+                                   sample_env_sensitive_file_path, ecs_service_name, secrets_name, sensitive=True):
             expected = "dummy-config" if ecs_service_name == "DummyContainer" else "dummy-sidekiq-config"
             self.assertEqual(secrets_name, expected)
             return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
@@ -210,6 +210,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
         generated_template = template_generator.generate_service()
@@ -265,6 +266,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
 
@@ -322,6 +324,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
 
@@ -385,6 +388,25 @@ class TestServiceTemplateGenerator(TestCase):
                     "memory_reservation": Decimal(1000),
                     "command": None,
                     "secrets_name": "something",
+                    "sensitive": False,
+                    "http_interface": {
+                        "internal": False,
+                        "alb": {
+                            "create_new": False,
+                            "target_5xx_error_threshold": 10,
+                            "listener_arn": "arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid",
+                            "path": "/api/*",
+                            "priority": 99,
+                        },
+                        "container_port": Decimal(7003),
+                        "restrict_access_to": ["0.0.0.0/0"],
+                        "health_check_path": "/elb-check"
+                    }
+                },
+                "DummyWithCustomListenerSensitive": {
+                    "memory_reservation": Decimal(1000),
+                    "command": None,
+                    "secrets_name": "something",
                     "http_interface": {
                         "internal": False,
                         "alb": {
@@ -425,6 +447,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
 
@@ -452,6 +475,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/dummyFargate-repo:1.1.1",
                                                       desired_counts={"DummyFargateService": 45,
                                                                       "DummyFargateRunSidekiqsh": 51})
@@ -481,6 +505,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "test-image-repo")
         with self.assertRaises(NotImplementedError) as context:
             template_generator.generate_service()
@@ -503,6 +528,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"FreeradiusServer": 100})
         generated_template = template_generator.generate_service()
@@ -527,6 +553,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"FreeradiusServer": 100})
         generated_template = template_generator.generate_service()
@@ -564,6 +591,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"Dummy": 1})
 
@@ -607,6 +635,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
+                                                      './test/templates/test_env.sensitive',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
                                                       desired_counts={"Dummy": 1})
 

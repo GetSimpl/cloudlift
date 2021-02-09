@@ -21,7 +21,8 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl,
                              HealthCheck)
 from troposphere.elasticloadbalancingv2 import (Action, Certificate, Listener, ListenerRule, Condition,
-                                                HostHeaderConfig, PathPatternConfig)
+                                                HostHeaderConfig, PathPatternConfig, QueryStringConfig,
+                                                QueryStringKeyValue)
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import LoadBalancer as NLBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -74,6 +75,12 @@ class ServiceTemplateGenerator(TemplateGenerator):
     def _add_cluster_services(self):
         for ecs_service_name, config in self.configuration['services'].items():
             self._add_service(ecs_service_name, config)
+
+    @property
+    def sensitive(self):
+        if self.configuration:
+            return self.configuration.get('sensitive', True)
+        return True
 
     def _add_service_alarms(self, svc):
         cloudlift_timedout_deployments_alarm = Alarm(
@@ -213,7 +220,7 @@ service is down',
     def _add_service(self, service_name, config):
         launch_type = get_launch_type(config)
         secrets_name = config.get('secrets_name')
-        sensitive = config.get('sensitive')
+        sensitive = config.get('sensitive', True)
         container_configurations = build_config(self.env, self.application_name, service_name,
                                                 self.env_sample_file_path,
                                                 self.env_sensitive_sample_file_path,
@@ -470,6 +477,7 @@ service is down',
 
     def attach_to_existing_listener(self, alb_config, service_name, target_group_name, listener_arn):
         conditions = []
+        service_config = self.configuration.get('services').get(service_name)
         if 'host' in alb_config:
             conditions.append(
                 Condition(
@@ -486,6 +494,16 @@ service is down',
                     PathPatternConfig=PathPatternConfig(
                         Values=[alb_config['path']],
                     ),
+                )
+            )
+
+        if not service_config.get('sensitive', True):
+            conditions.append(
+                Condition(
+                    Field="query-string",
+                    QueryStringConfig=QueryStringConfig(
+                        Values=[QueryStringKeyValue(Key="sensitive", Value="false")]
+                    )
                 )
             )
 

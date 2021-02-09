@@ -3,18 +3,23 @@ Outputs:
     Description: Options used with cloudlift when building this service
     Value: '{"cloudlift_version": "test-version", "notifications_arn": "some", "ecr_repo":
       {"name": "test-service-repo"}, "services": {"Dummy": {"memory_reservation":
-      1000, "command": null, "secrets_name": "something", "http_interface": {"internal":
-      false, "alb": {"create_new": false, "host": "abc.xyz.com", "priority": 4, "target_5xx_error_threshold":
-      10, "target_p95_latency_evaluation_periods": 3, "target_p95_latency_period_seconds":
-      30, "target_p95_latency_threshold_seconds": 10, "target_p99_latency_evaluation_periods":
-      3, "target_p99_latency_period_seconds": 30, "target_p99_latency_threshold_seconds":
-      10}, "container_port": 7003, "restrict_access_to": ["0.0.0.0/0"], "health_check_path":
-      "/elb-check"}, "autoscaling": {"max_capacity": 10, "min_capacity": 5, "request_count_per_target":
-      {"target_value": 10, "scale_in_cool_down_seconds": 120, "scale_out_cool_down_seconds":
-      60, "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"}}},
-      "DummyWithCustomListener": {"memory_reservation": 1000, "command": null, "secrets_name":
+      1000, "command": null, "container_labels": {"python_version": "2"}, "secrets_name":
       "something", "http_interface": {"internal": false, "alb": {"create_new": false,
-      "target_5xx_error_threshold": 10, "listener_arn": "arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid",
+      "host": "abc.xyz.com", "priority": 4, "target_5xx_error_threshold": 10, "target_p95_latency_evaluation_periods":
+      3, "target_p95_latency_period_seconds": 30, "target_p95_latency_threshold_seconds":
+      10, "target_p99_latency_evaluation_periods": 3, "target_p99_latency_period_seconds":
+      30, "target_p99_latency_threshold_seconds": 10}, "container_port": 7003, "restrict_access_to":
+      ["0.0.0.0/0"], "health_check_path": "/elb-check"}, "autoscaling": {"max_capacity":
+      10, "min_capacity": 5, "request_count_per_target": {"target_value": 10, "scale_in_cool_down_seconds":
+      120, "scale_out_cool_down_seconds": 60, "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"}}},
+      "DummyWithCustomListener": {"memory_reservation": 1000, "command": null, "secrets_name":
+      "something", "sensitive": false, "http_interface": {"internal": false, "alb":
+      {"create_new": false, "target_5xx_error_threshold": 10, "listener_arn": "arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid",
+      "path": "/api/*", "priority": 99}, "container_port": 7003, "restrict_access_to":
+      ["0.0.0.0/0"], "health_check_path": "/elb-check"}}, "DummyWithCustomListenerSensitive":
+      {"memory_reservation": 1000, "command": null, "secrets_name": "something", "http_interface":
+      {"internal": false, "alb": {"create_new": false, "target_5xx_error_threshold":
+      10, "listener_arn": "arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid",
       "path": "/api/*", "priority": 100}, "container_port": 7003, "restrict_access_to":
       ["0.0.0.0/0"], "health_check_path": "/elb-check"}}}}'
   DummyEcsServiceName:
@@ -27,6 +32,12 @@ Outputs:
     Description: The ECS name which needs to be entered
     Value: !GetAtt 'DummyWithCustomListener.Name'
   DummyWithCustomListenerSecretsName:
+    Description: AWS secrets manager name to pull the secrets from
+    Value: something
+  DummyWithCustomListenerSensitiveEcsServiceName:
+    Description: The ECS name which needs to be entered
+    Value: !GetAtt 'DummyWithCustomListenerSensitive.Name'
+  DummyWithCustomListenerSensitiveSecretsName:
     Description: AWS secrets manager name to pull the secrets from
     Value: something
   ECRRepoName:
@@ -238,8 +249,13 @@ Resources:
           PathPatternConfig:
             Values:
               - /api/*
+        - Field: query-string
+          QueryStringConfig:
+            Values:
+              - Key: sensitive
+                Value: 'false'
       ListenerArn: arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid
-      Priority: 100
+      Priority: 99
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
   DummyWithCustomListenerRole:
     Properties:
@@ -252,6 +268,108 @@ Resources:
               Service:
                 - ecs-tasks.amazonaws.com
       ManagedPolicyArns: []
+    Type: AWS::IAM::Role
+  DummyWithCustomListenerSensitive:
+    Properties:
+      Cluster: cluster-staging
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: 1
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: DummyWithCustomListenerSensitiveContainer
+          ContainerPort: 7003
+          TargetGroupArn: !Ref 'TargetGroupDummyWithCustomListenerSensitive'
+      PlacementStrategies:
+        - Field: attribute:ecs.availability-zone
+          Type: spread
+      Role: !Ref 'ECSServiceRole'
+      TaskDefinition: !Ref 'DummyWithCustomListenerSensitiveTaskDefinition'
+    Type: AWS::ECS::Service
+  DummyWithCustomListenerSensitiveListenerRule:
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref 'TargetGroupDummyWithCustomListenerSensitive'
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /api/*
+      ListenerArn: arn:aws:elasticloadbalancing:us-west-2:434332696:listener/app/albname/randomalbid/randomlistenerid
+      Priority: 100
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+  DummyWithCustomListenerSensitiveRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      ManagedPolicyArns: []
+    Type: AWS::IAM::Role
+  DummyWithCustomListenerSensitiveTaskDefinition:
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 0
+          Environment:
+            - Name: PORT
+              Value: '80'
+          Essential: 'true'
+          Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: staging-logs
+              awslogs-region: us-west-2
+              awslogs-stream-prefix: DummyWithCustomListenerSensitive
+          Memory: 20480
+          MemoryReservation: 1000
+          Name: DummyWithCustomListenerSensitiveContainer
+          PortMappings:
+            - ContainerPort: 7003
+          Secrets:
+            - Name: CLOUDLIFT_INJECTED_SECRETS
+              ValueFrom: arn_injected_secrets
+      ExecutionRoleArn: !Ref 'DummyWithCustomListenerSensitiveTaskExecutionRole'
+      Family: stagingDummyWithCustomListenerSensitiveFamily
+      PlacementConstraints: []
+      TaskRoleArn: !Ref 'DummyWithCustomListenerSensitiveRole'
+    Type: AWS::ECS::TaskDefinition
+  DummyWithCustomListenerSensitiveTaskExecutionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - secretsmanager:GetSecretValue
+                Effect: Allow
+                Resource:
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:cloudlift-injected/staging/dummy/DummyWithCustomListenerSensitive-??????
+                  - arn:aws:secretsmanager:us-west-2:12537612:secret:something-??????
+              - Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  - '*'
+          PolicyName: DummyWithCustomListenerSensitiveTaskExecutionRolePolicy
     Type: AWS::IAM::Role
   DummyWithCustomListenerTaskDefinition:
     Properties:
@@ -371,6 +489,28 @@ Resources:
       Threshold: '1'
       TreatMissingData: breaching
     Type: AWS::CloudWatch::Alarm
+  EcsNoRunningTasksAlarmDummyWithCustomListenerSensitive:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if the task count goes to zero, denoting service is
+        down
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'DummyWithCustomListenerSensitive.Name'
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: SampleCount
+      Threshold: '1'
+      TreatMissingData: breaching
+    Type: AWS::CloudWatch::Alarm
   FailedCloudliftDeploymentsDummy:
     Properties:
       AlarmActions:
@@ -403,6 +543,27 @@ Resources:
           Value: cluster-staging
         - Name: ServiceName
           Value: !GetAtt 'DummyWithCustomListener.Name'
+      EvaluationPeriods: 1
+      MetricName: FailedCloudliftDeployments
+      Namespace: ECS/DeploymentMetrics
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Average
+      Threshold: '0'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  FailedCloudliftDeploymentsDummyWithCustomListenerSensitive:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Cloudlift deployment timed out
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: cluster-staging
+        - Name: ServiceName
+          Value: !GetAtt 'DummyWithCustomListenerSensitive.Name'
       EvaluationPeriods: 1
       MetricName: FailedCloudliftDeployments
       Namespace: ECS/DeploymentMetrics
@@ -455,6 +616,27 @@ Resources:
       Threshold: 15
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
+  HighP95LatencyAlarmTargetGroupDummyWithCustomListenerSensitive:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if p95 latency of target group is higher than threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListenerSensitive.TargetGroupFullName'
+      EvaluationPeriods: 5
+      ExtendedStatistic: p95
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Threshold: 15
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
   HighP99LatencyAlarmTargetGroupDummy:
     Properties:
       AlarmActions:
@@ -497,6 +679,27 @@ Resources:
       Threshold: 25
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
+  HighP99LatencyAlarmTargetGroupDummyWithCustomListenerSensitive:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if p99 latency of target group is higher than threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListenerSensitive.TargetGroupFullName'
+      EvaluationPeriods: 5
+      ExtendedStatistic: p99
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Threshold: 25
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
   HighTarget5XXAlarmTargetGroupDummy:
     Properties:
       AlarmActions:
@@ -529,6 +732,27 @@ Resources:
           Value: app/albname/randomalbid
         - Name: TargetGroup
           Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Sum
+      Threshold: 10
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  HighTarget5XXAlarmTargetGroupDummyWithCustomListenerSensitive:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if target returns 5xx error code
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListenerSensitive.TargetGroupFullName'
       EvaluationPeriods: 1
       MetricName: HTTPCode_Target_5XX_Count
       Namespace: AWS/ApplicationELB
@@ -598,6 +822,24 @@ Resources:
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VPC'
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  TargetGroupDummyWithCustomListenerSensitive:
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /elb-check
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200-399
+      Port: 7003
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: load_balancing.algorithm.type
+          Value: least_outstanding_requests
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref 'VPC'
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
   TargetGroupUnhealthyHostAlarmTargetGroupDummy:
     Properties:
       AlarmActions:
@@ -630,6 +872,27 @@ Resources:
           Value: app/albname/randomalbid
         - Name: TargetGroup
           Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
+      EvaluationPeriods: 1
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      Period: 60
+      Statistic: Sum
+      Threshold: '1'
+      TreatMissingData: notBreaching
+    Type: AWS::CloudWatch::Alarm
+  TargetGroupUnhealthyHostAlarmTargetGroupDummyWithCustomListenerSensitive:
+    Properties:
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Triggers if any host is marked unhealthy
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: app/albname/randomalbid
+        - Name: TargetGroup
+          Value: !GetAtt 'TargetGroupDummyWithCustomListenerSensitive.TargetGroupFullName'
       EvaluationPeriods: 1
       MetricName: UnHealthyHostCount
       Namespace: AWS/ApplicationELB
