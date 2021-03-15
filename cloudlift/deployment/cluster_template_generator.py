@@ -454,6 +454,8 @@ for cluster for 15 minutes.',
                 "systemctl enable amazon-ssm-agent",
                 "systemctl start amazon-ssm-agent",
                 ""])))
+            with open (str(pathlib.Path(__file__).parent.absolute())+"/banner/"+self.env+"-banner.sh", "r") as banner:
+                banner_code=banner.read()
             lc_metadata = cloudformation.Init({
                 "config": cloudformation.InitConfig(
                     files=cloudformation.InitFiles({
@@ -480,6 +482,12 @@ for cluster for 15 minutes.',
                                     ''
                                 ])
                             ),
+                        ),
+                        "/etc/update-motd.d/99-banner": cloudformation.InitFile(
+                            content=banner_code,
+                            mode='0755',
+                            owner="root",
+                            group="root"
                         )
                     }),
                     services={
@@ -500,6 +508,14 @@ for cluster for 15 minutes.',
                                 "ECS_RESERVED_MEMORY=256",
                                 "ECS_ENABLE_SPOT_INSTANCE_DRAINING=true" if deployment_type == 'Spot' else "",
                                 "ECS_INSTANCE_ATTRIBUTES={\"deployment_type\": \""+ deployment_type +"\"}' > /etc/ecs/ecs.config"
+                                ])
+                            )
+                        },
+                        '02_update_hostname': {
+                            'command': Sub(
+                                " ".join([
+                                "hostnamectl set-hostname",
+                                self.env+"-`hostname -s`"
                                 ])
                             )
                         }

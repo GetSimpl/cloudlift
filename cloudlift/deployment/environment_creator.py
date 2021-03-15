@@ -84,6 +84,7 @@ class EnvironmentCreator(object):
             change_set = create_change_set(
                 self.client,
                 environment_stack_template_body,
+                "TemplateBody",
                 self.cluster_name,
                 self.key_name,
                 self.environment
