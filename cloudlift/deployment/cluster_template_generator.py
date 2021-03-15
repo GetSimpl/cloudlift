@@ -1,5 +1,6 @@
 import json
 import re
+import pathlib
 
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
@@ -449,6 +450,8 @@ for cluster for 15 minutes.',
             "systemctl enable amazon-ssm-agent",
             "systemctl start amazon-ssm-agent",
             ""])))
+        with open (str(pathlib.Path(__file__).parent.absolute())+"/banner/${self.env}-banner.sh", "r") as banner:
+            banner_code=banner.readlines()
         lc_metadata = cloudformation.Init({
             "config": cloudformation.InitConfig(
                 files=cloudformation.InitFiles({
@@ -475,6 +478,17 @@ for cluster for 15 minutes.',
                                 ''
                             ])
                         ),
+                    ),
+                    "/etc/update-motd.d/99-banner": cloudformation.InitFile(
+                        content=Sub(
+                            '\n'.join([
+                                "",
+                                banner_code
+                            ])
+                        ),
+                        mode='0755',
+                        owner="root",
+                        group="root"
                     )
                 }),
                 services={
@@ -491,6 +505,11 @@ for cluster for 15 minutes.',
                     '01_add_instance_to_cluster': {
                         'command': Sub(
                             'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256" > /etc/ecs/ecs.config'
+                        )
+                    },
+                    '02_update_hostname': {
+                        'command': Sub(
+                            'hostnamectl set-hostname ${self.env}-`hostname -s`'
                         )
                     }
                 }
