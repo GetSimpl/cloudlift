@@ -34,6 +34,75 @@ class TestServiceInformationFetcher(unittest.TestCase):
         self.assertDictEqual(expected_service_info, sif.service_info)
         mock_cfn_client.describe_stacks.assert_called_once_with(StackName='dummy-test')
 
+    @patch('cloudlift.deployment.service_information_fetcher.get_region_for_environment')
+    @patch('cloudlift.deployment.service_information_fetcher.EcsClient')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_fetch_current_desired_count(self, mock_get_client_for, mock_ecs_client, mock_get_region_for_environment):
+        service_configuration = {
+            'ecr_repo': {'name': 'dummy-repo'},
+            'services': {
+                'ServiceOne': {'secrets_name': 'dummy-test'},
+                'ServiceTwo': {'secrets_name': 'dummy-test'},
+            }
+        }
+        mock_cfn_client = MagicMock()
+        mock_get_client_for.return_value = mock_cfn_client
+        mock_cfn_client.describe_stacks.return_value = _describe_stacks_output()
+
+        mock_get_region_for_environment.return_value = "mock-region"
+        mock_ecs_client.return_value = mock_ecs_client
+        mock_ecs_client.describe_services.return_value = {'services': [{'desiredCount': 1}]}
+
+        sif = ServiceInformationFetcher(service, env, service_configuration)
+
+        actual = sif.fetch_current_desired_count()
+        expected = {'ServiceOne': 1, 'ServiceTwo': 1}
+
+        self.assertEqual(expected, actual)
+
+
+
+    @patch('cloudlift.deployment.service_information_fetcher.get_region_for_environment')
+    @patch('cloudlift.deployment.service_information_fetcher.EcsClient')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_fetch_current_desired_count_when_stack_does_not_have_service(self, mock_get_client_for, mock_ecs_client,
+                                                                          mock_get_region_for_environment):
+        service_configuration = {
+            'ecr_repo': {'name': 'dummy-repo'},
+            'services': {
+                'ServiceOne': {'secrets_name': 'dummy-test'},
+                'ServiceTwo': {'secrets_name': 'dummy-test'},
+            }
+        }
+        mock_cfn_client = MagicMock()
+        mock_get_client_for.return_value = mock_cfn_client
+        response = _describe_stacks_output()
+        stacks = response['Stacks']
+        outputs = stacks[0].get('Outputs')
+        new_outputs = []
+        for output in outputs:
+            if output.get('OutputKey') == 'ServiceTwoEcsServiceName':
+                continue
+            new_outputs.append(output)
+        stacks[0]['Outputs'] = new_outputs
+        mock_cfn_client.describe_stacks.return_value = {'Stacks': stacks}
+
+        mock_get_region_for_environment.return_value = "mock-region"
+        mock_ecs_client.return_value = mock_ecs_client
+        mock_ecs_client.describe_services.return_value = {'services': [{'desiredCount': 1}]}
+
+        sif = ServiceInformationFetcher(service, env, service_configuration)
+        def return_for_only_one_service(cluster_name, service_name):
+            if service_name == 'dummy-sen-test-ServiceOne-X9NCSHOSMM5S':
+                return {'services': [{'desiredCount': 1}]}
+            raise Exception()
+
+        mock_ecs_client.describe_services.side_effect = return_for_only_one_service
+
+        actual = sif.fetch_current_desired_count()
+        expected = {'ServiceOne': 1}
+        self.assertEqual(expected, actual)
+
     @patch('builtins.print')
     @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
     def test_get_version(self, mock_get_client_for, mock_print):

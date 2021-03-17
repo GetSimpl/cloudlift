@@ -17,7 +17,8 @@ class TaskDefinitionBuilderTest(TestCase):
             'system_controls': [{"namespace": "net.core.somaxconn", "value": "1024"}],
             'task_execution_role_arn': 'arn1',
             'task_role_arn': 'arn2',
-            'placement_constraints': [{'type': 'memberOf', 'expression': 'expr'}]
+            'placement_constraints': [{'type': 'memberOf', 'expression': 'expr'}],
+            "dns_servers": ["1.1.1.1"]
         }
         builder = TaskDefinitionBuilder(
             environment="test",
@@ -31,6 +32,7 @@ class TaskDefinitionBuilderTest(TestCase):
                 'command': ['./start_script.sh'],
                 'cpu': 0,
                 'dockerLabels': {'python_version': '2'},
+                'dnsServers': ['1.1.1.1'],
                 'environment': [{'name': 'PORT', 'value': '80'}],
                 'essential': True,
                 'healthCheck': {

@@ -134,8 +134,9 @@ class ServiceInformationFetcher(object):
             deployment_ecs_client = EcsClient(None, None, get_region_for_environment(self.environment))
             for logical_service_name, service_config in self.service_info.items():
                 deployment = DeployAction(deployment_ecs_client, self.cluster_name, service_config["ecs_service_name"])
-                desired_counts[logical_service_name] = deployment.service.desired_count
+                if deployment.service:
+                    desired_counts[logical_service_name] = deployment.service.desired_count
             log("Existing service counts: " + str(desired_counts))
-        except Exception:
-            raise UnrecoverableException("Could not find existing services.")
+        except Exception as e:
+            raise UnrecoverableException("Could not find existing services. {}".format(e))
         return desired_counts

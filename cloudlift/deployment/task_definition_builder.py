@@ -91,6 +91,9 @@ class TaskDefinitionBuilder:
                                                          Value=system_control['value']) for
                                            system_control in config['system_controls']]
 
+        if 'dns_servers' in config:
+            cd_kwargs['DnsServers'] = config.get('dns_servers', [])
+
         if launch_type == LAUNCH_TYPE_FARGATE:
             if 'udp_interface' in config:
                 raise NotImplementedError('udp interface not yet implemented in fargate type, please use ec2 type')

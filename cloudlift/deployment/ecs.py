@@ -435,7 +435,9 @@ class EcsAction(object):
 
     @property
     def service(self):
-        return self._service
+        if hasattr(self, '_service'):
+            return self._service
+        return None
 
     @property
     def cluster_name(self):
