@@ -28,7 +28,7 @@ from troposphere.iam import Role
 
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
-from cloudlift.config import DecimalEncoder
+from cloudlift.config import DecimalEncoder, VERSION
 from cloudlift.config import get_service_stack_name
 from cloudlift.deployment.deployer import build_config
 from cloudlift.deployment.ecs import DeployAction, EcsClient
@@ -65,7 +65,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
-        self.configuration = service_configuration.get_config()
+        self.configuration = service_configuration.get_config(VERSION)
 
     def generate_service(self):
         self._add_service_parameters()

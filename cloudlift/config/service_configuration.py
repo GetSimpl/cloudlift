@@ -48,7 +48,8 @@ class ServiceConfiguration(object):
         '''
 
         try:
-            current_configuration = self.get_config()
+            from cloudlift.version import VERSION
+            current_configuration = self.get_config(VERSION)
 
             updated_configuration = edit(
                 json.dumps(
@@ -82,7 +83,7 @@ class ServiceConfiguration(object):
         except ClientError:
             raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
 
-    def get_config(self):
+    def get_config(self, cloudlift_version):
         '''
             Get configuration from DynamoDB
         '''
@@ -104,7 +105,16 @@ class ServiceConfiguration(object):
                 existing_configuration = self._default_service_configuration()
                 self.new_service = True
 
-            existing_configuration.pop("cloudlift_version", None)
+            from distutils.version import LooseVersion
+            previous_cloudlift_version = existing_configuration.pop("cloudlift_version", None)
+            if LooseVersion(cloudlift_version) < LooseVersion(previous_cloudlift_version):
+                raise UnrecoverableException(f'Cloudlift Version {previous_cloudlift_version} was used to '
+                                             f'create this service. You are using version {cloudlift_version}, '
+                                             f'which is older and can cause corruption. Please upgrade to at least '
+                                             f'version {previous_cloudlift_version} to proceed.\n\nUpgrade to the '
+                                             f'latest version (Recommended):\n'
+                                             f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
+                                             f'\tpip install -U cloudlift=={previous_cloudlift_version}')
             return existing_configuration
         except ClientError:
             raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
@@ -136,7 +146,7 @@ class ServiceConfiguration(object):
         '''
             Updates cloudlift version in service configuration
         '''
-        config = self.get_config()
+        config = self.get_config(VERSION)
         self.set_config(config)
 
     def _validate_changes(self, configuration):
