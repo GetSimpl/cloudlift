@@ -1,7 +1,10 @@
 import datetime
 import unittest
+import os
+import pytest
 
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
+from cloudlift.exceptions import UnrecoverableException
 from dateutil.tz import tzutc
 from mock import patch, MagicMock
 
@@ -174,6 +177,107 @@ class TestServiceInformationFetcher(unittest.TestCase):
         }
 
         self.assertEqual(expected_service_info, sif.service_info)
+
+    @patch('cloudlift.deployment.deployer.secrets_manager')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_verify_env_sample_success(self, mock_get_client_for, mock_secrets_manager):
+        mock_get_client_for.return_value.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+
+        def get_config(secret_name, env):
+            if secret_name in {'dummy-test', 'dummy-test2'}:
+                return {'secrets': {
+                        'key1': 'actualValue1',
+                        'key2': 'actualValue2',
+                        'key3': 'actualValue3',
+                    }}
+            if secret_name in {'dummy-test/app1', 'dummy-test2/app1'}:
+                return {'secrets': {
+                    'key4': 'actualValue4',
+                    'key5': 'actualValue5',
+                }}
+            raise Exception('not found')
+        mock_secrets_manager.get_config.side_effect = get_config
+
+        sif = ServiceInformationFetcher(service, env, _service_configuration())
+
+        env_sample_directory_path = os.path.join(
+            os.path.dirname(__file__),
+            '../env_sample_files/env_sample_files_without_duplicate_keys',
+        )
+
+        # should not raise
+        sif.verify_env_sample(env_sample_directory_path)
+
+        self.assertEqual(mock_secrets_manager.get_config.call_count, 4)
+
+    @patch('cloudlift.deployment.deployer.secrets_manager')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_verify_env_sample_fail_duplicate_entries(self, mock_get_client_for, mock_secrets_manager):
+        mock_get_client_for.return_value.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+
+        def get_config(secret_name, env):
+            if secret_name in {'dummy-test', 'dummy-test2'}:
+                return {'secrets': {
+                        'key1': 'actualValue1',
+                        'key2': 'actualValue2',
+                        'key3': 'actualValue3',
+                    }}
+            if secret_name in {'dummy-test/app1', 'dummy-test2/app1'}:
+                return {'secrets': {
+                    'key4': 'actualValue4',
+                    'key5': 'actualValue5',
+                }}
+            raise Exception('not found')
+        mock_secrets_manager.get_config.side_effect = get_config
+
+        sif = ServiceInformationFetcher(service, env, _service_configuration())
+
+        env_sample_directory_path = os.path.join(
+            os.path.dirname(__file__),
+            '../env_sample_files/env_sample_files_with_duplicate_keys',
+        )
+
+
+        with pytest.raises(UnrecoverableException) as pytest_wrapped_e:
+            sif.verify_env_sample(env_sample_directory_path)
+
+        self.assertEqual(pytest_wrapped_e.type, UnrecoverableException)
+        self.assertEqual(str(pytest_wrapped_e.value),
+                         "\"duplicate keys found in env sample files [({'key1'}, 'env.app1.sample')] \"")
+
+    @patch('cloudlift.deployment.deployer.secrets_manager')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_verify_env_sample_fail_missing_entries(self, mock_get_client_for, mock_secrets_manager):
+        mock_get_client_for.return_value.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
+
+        def get_config(secret_name, env):
+            if secret_name in {'dummy-test', 'dummy-test2'}:
+                return {'secrets': {
+                        'key1': 'actualValue1',
+                        # 'key2': 'actualValue2',  #missing value
+                        'key3': 'actualValue3',
+                    }}
+            if secret_name in {'dummy-test/app1', 'dummy-test2/app1'}:
+                return {'secrets': {
+                    'key4': 'actualValue4',
+                    'key5': 'actualValue5',
+                }}
+            raise Exception('not found')
+        mock_secrets_manager.get_config.side_effect = get_config
+
+        sif = ServiceInformationFetcher(service, env, _service_configuration())
+
+        env_sample_directory_path = os.path.join(
+            os.path.dirname(__file__),
+            '../env_sample_files/env_sample_files_without_duplicate_keys',
+        )
+
+
+        with pytest.raises(UnrecoverableException) as pytest_wrapped_e:
+            sif.verify_env_sample(env_sample_directory_path)
+
+        self.assertEqual(pytest_wrapped_e.type, UnrecoverableException)
+        self.assertEqual(str(pytest_wrapped_e.value), "\"There is no config value for the keys {'key2'}\"")
 
 
 def _describe_stacks_output():

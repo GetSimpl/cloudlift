@@ -173,7 +173,7 @@ def get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
     return f"cloudlift-injected/{env_name}/{service_name}/{ecs_service_name}"
 
 
-def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name):
+def verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path, secrets_name):
     secrets_across_namespaces = {}
     namespaces = get_namespaces_from_directory(sample_env_folder_path)
     duplicates = find_duplicate_keys(sample_env_folder_path, namespaces)
@@ -184,6 +184,11 @@ def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, s
                                                            sample_env_folder_path,
                                                            secrets_name)
         secrets_across_namespaces.update(secrets_for_namespace)
+
+    return secrets_across_namespaces
+
+def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name):
+    secrets_across_namespaces = verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path, secrets_name)
 
     automated_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
     existing_secrets = {}

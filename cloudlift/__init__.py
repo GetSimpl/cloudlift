@@ -191,5 +191,17 @@ def get_version(name, environment, image, git):
     ).get_version(print_image=image, print_git=git)
 
 
+@cli.command(help="Verify that variables in env*sample have corresponding entries in AWS secrets manager")
+@_require_environment
+@_require_name
+@click.option('--env-sample-directory-path', default='.', help='path to directory containing env sample files')
+def verify_env_sample(name, environment, env_sample_directory_path):
+    ServiceInformationFetcher(
+        name,
+        environment,
+        ServiceConfiguration(service_name=name, environment=environment).get_config(),
+    ).verify_env_sample(env_sample_directory_path)
+
+
 if __name__ == '__main__':
     cli()

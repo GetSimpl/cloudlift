@@ -4,6 +4,7 @@ from cloudlift.config import get_client_for
 from cloudlift.config import get_cluster_name, get_service_stack_name
 from cloudlift.config import get_region_for_environment
 from cloudlift.config.logging import log, log_warning, log_intent
+from cloudlift.deployment.deployer import verify_and_get_secrets_for_all_namespaces
 from cloudlift.deployment.ecs import DeployAction, EcsClient
 from cloudlift.exceptions import UnrecoverableException
 
@@ -140,3 +141,13 @@ class ServiceInformationFetcher(object):
         except Exception as e:
             raise UnrecoverableException("Could not find existing services. {}".format(e))
         return desired_counts
+
+    def verify_env_sample(self, env_sample_directory_path):
+        if not self.stack_found:
+            raise UnrecoverableException(
+                "error finding stack in ServiceUpdater: {}-{}".format(self.name, self.environment))
+        service_info = self.service_info
+        for ecs_service_logical_name in service_info:
+            ecs_service_info = service_info[ecs_service_logical_name]
+            secrets_name = ecs_service_info.get('secrets_name')
+            verify_and_get_secrets_for_all_namespaces(self.environment, env_sample_directory_path, secrets_name)
