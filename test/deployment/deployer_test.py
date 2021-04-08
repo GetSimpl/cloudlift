@@ -581,6 +581,7 @@ class TestBuildConfig(TestCase):
         self.assertDictEqual(expected_configurations, actual_configurations)
 
 
+
 class TestSecrets(TestCase):
 
     def test_get_env_sample_file_name_for_default_namespace(self):

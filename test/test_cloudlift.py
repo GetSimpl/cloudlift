@@ -11,6 +11,7 @@ from cloudlift.config import ServiceConfiguration, VERSION
 from cloudlift.config import secrets_manager
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_updater import ServiceUpdater
+from cloudlift.utils import wait_until
 
 TEST_DIR = Path(__file__).resolve().parent
 
@@ -224,16 +225,6 @@ def match_page_content(service_url, content_expected):
     print("page_content: " + str(page_content))
     print("expected: " + content_expected)
     return page_content.strip() == content_expected.strip()
-
-
-def wait_until(predicate, timeout, period=1, *args, **kwargs):
-    mustend = time.time() + timeout
-    while time.time() < mustend:
-        if predicate(*args, **kwargs):
-            return True
-        print("sleeping and gonna retry...")
-        time.sleep(period)
-    return False
 
 
 def _set_param_store_env(env_name, svc_name, env_config):

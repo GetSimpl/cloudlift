@@ -3,6 +3,8 @@ from mock import patch, MagicMock
 import unittest
 import datetime
 from dateutil.tz.tz import tzlocal
+import json
+from cloudlift.exceptions import UnrecoverableException
 
 
 class TestSecretsManager(unittest.TestCase):
@@ -16,7 +18,7 @@ class TestSecretsManager(unittest.TestCase):
 
         mock_get_client_for.assert_called_once_with('secretsmanager', 'test')
         mock_client.get_secret_value.assert_called_once_with(SecretId='dummy-test')
-        self.assertEqual(config, {'secrets':  {'LABEL': 'L1', 'PORT': '80'},
+        self.assertEqual(config, {'secrets': {'LABEL': 'L1', 'PORT': '80'},
                                   'ARN': 'arn:aws:secretsmanager:us-west-2:12345678:secret:dummy-test-QvDJsW:::a1b87fb5-453e-42bd-a4f5-fdc0834854ef'})
 
     @patch('cloudlift.config.secrets_manager.get_client_for')
@@ -30,6 +32,39 @@ class TestSecretsManager(unittest.TestCase):
 
         mock_get_client_for.assert_called_once_with('secretsmanager', 'test')
         mock_client.get_secret_value.assert_called_once_with(SecretId='dummy-common')
+
+    @patch('cloudlift.config.secrets_manager.get_client_for')
+    def test_set_secrets_manager_config_waits_for_consistency(self, mock_client):
+        mock_client.return_value = mock_client
+
+        env = "test"
+        secret_name = "test-secret"
+        config = {'LABEL': 'label', 'PORT': '8080'}
+
+        mock_client.get_secret_value.side_effect = [
+            {'SecretString': "{}"},
+            {'SecretString': json.dumps({"LABEL": "label"})},
+            {'SecretString': json.dumps(config)},
+        ]
+
+        secrets_manager.set_secrets_manager_config(env, secret_name, config)
+
+    @patch.object(secrets_manager, 'SECRETS_MANAGER_CONSISTENCY_CHECK_TIMEOUT_SECONDS', 1)
+    @patch('cloudlift.config.secrets_manager.get_client_for')
+    def test_set_secrets_manager_config_fails_if_not_consistent(self, mock_client):
+        mock_client.return_value = mock_client
+
+        env = "test"
+        secret_name = "test-secret"
+        config = {'LABEL': 'label', 'PORT': '8080'}
+
+        mock_client.get_secret_value.return_value = {"SecretString": "{}"}
+        with self.assertRaises(UnrecoverableException):
+            secrets_manager.set_secrets_manager_config(env, secret_name, config)
+
+        mock_client.get_secret_value.side_effect = Exception("unable to fetch secret")
+        with self.assertRaises(UnrecoverableException):
+            secrets_manager.set_secrets_manager_config(env, secret_name, config)
 
 
 def _get_secret_response():
