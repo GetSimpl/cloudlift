@@ -63,7 +63,77 @@ class TestServiceInformationFetcher(unittest.TestCase):
 
         self.assertEqual(expected, actual)
 
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_fetch_current_image_uri(self, mock_client):
+        mock_client.return_value = mock_client
 
+        with self.subTest("when all services configurations are present"):
+            service_configuration = {
+                'ecr_repo': {'name': 'dummy-repo'},
+                'services': {
+                    'ServiceOne': {'ecs_service_name': 'service1'},
+                    'ServiceTwo': {'ecs_service_name': 'service2'},
+                }
+            }
+
+            mock_client.describe_services.return_value = {
+                'services': [{'taskDefinition': 'tdArn1'}]}
+            mock_client.describe_task_definition.return_value = {'taskDefinition': {
+                'containerDefinitions': [{'image': 'image:v1'}]
+            }}
+
+            sif = ServiceInformationFetcher(
+                service, env, service_configuration)
+
+            actual = sif._fetch_current_image_uri()
+            expected = "image:v1"
+
+            self.assertEqual(expected, actual)
+            mock_client.describe_task_definition.assert_called_with(
+                taskDefinition='tdArn1')
+
+        with self.subTest("when few services configurations are present"):
+            service_configuration = {
+                'ecr_repo': {'name': 'dummy-repo'},
+                'services': {
+                    'ServiceOne': {},
+                    'ServiceTwo': {'ecs_service_name': 'service2'},
+                }
+            }
+
+            mock_client.describe_services.return_value = {
+                'services': [{'taskDefinition': 'tdArn1'}]}
+            mock_client.describe_task_definition.return_value = {'taskDefinition': {
+                'containerDefinitions': [{'image': 'image:v1'}]
+            }}
+
+            sif = ServiceInformationFetcher(
+                service, env, service_configuration)
+
+            actual = sif._fetch_current_image_uri()
+            expected = "image:v1"
+
+            self.assertEqual(expected, actual)
+            mock_client.describe_services.assert_called_with(
+                cluster="cluster-test",
+                services=["service2"],
+            )
+
+        with self.subTest("raises exception if service is not present"):
+            service_configuration = {
+                'ecr_repo': {'name': 'dummy-repo'},
+                'services': {
+                    'ServiceOne': {},
+                    'ServiceTwo': {'ecs_service_name': 'service2'},
+                }
+            }
+
+            mock_client.describe_services.side_effect = Exception()
+            sif = ServiceInformationFetcher(
+                service, env, service_configuration)
+
+            with self.assertRaises(Exception):
+                sif._fetch_current_image_uri()
 
     @patch('cloudlift.deployment.service_information_fetcher.get_region_for_environment')
     @patch('cloudlift.deployment.service_information_fetcher.EcsClient')
@@ -112,8 +182,7 @@ class TestServiceInformationFetcher(unittest.TestCase):
         mock_client = MagicMock()
         mock_get_client_for.return_value = mock_client
         mock_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
-        mock_client.list_tasks.return_value = {'taskArns': ['arn1']}
-        mock_client.describe_tasks.return_value = {'tasks': [{'taskDefinitionArn': 'arn1'}]}
+        mock_client.describe_services.return_value = {'services': [{'taskDefinition': 'arn1'}]}
         mock_client.describe_task_definition.return_value = {'taskDefinition': {
             'containerDefinitions': [{'image': 'repo:v1-12345'}],
         }}
@@ -130,8 +199,7 @@ class TestServiceInformationFetcher(unittest.TestCase):
         mock_client = MagicMock()
         mock_get_client_for.return_value = mock_client
         mock_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
-        mock_client.list_tasks.return_value = {'taskArns': ['arn1']}
-        mock_client.describe_tasks.return_value = {'tasks': [{'taskDefinitionArn': 'arn1'}]}
+        mock_client.describe_services.return_value = {'services': [{'taskDefinition': 'arn1'}]}
         mock_client.describe_task_definition.return_value = {'taskDefinition': {
             'containerDefinitions': [{'image': 'repo:v1-12345'}],
         }}
@@ -148,8 +216,7 @@ class TestServiceInformationFetcher(unittest.TestCase):
         mock_client = MagicMock()
         mock_get_client_for.return_value = mock_client
         mock_client.describe_stacks.return_value = _describe_stacks_output_with_ecr_repo_config()
-        mock_client.list_tasks.return_value = {'taskArns': ['arn1']}
-        mock_client.describe_tasks.return_value = {'tasks': [{'taskDefinitionArn': 'arn1'}]}
+        mock_client.describe_services.return_value = {'services': [{'taskDefinition': 'arn1'}]}
         mock_client.describe_task_definition.return_value = {'taskDefinition': {
             'containerDefinitions': [{'image': 'repo:fedbdf-12345'}],
         }}

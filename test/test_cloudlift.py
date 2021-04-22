@@ -1,5 +1,4 @@
 import os
-import time
 from pathlib import Path
 
 import boto3
@@ -95,7 +94,7 @@ def test_cloudlift_can_deploy_to_ec2(keep_resources):
     secrets_manager.set_secrets_manager_config(environment_name, f'{stack_name}/redis',
                                                {'REDIS_HOST': 'redis'})
     create_service(mocked_config)
-    deploy_service(deployment_identifier="id-0")
+    deploy_service(mocked_config, deployment_identifier="id-0")
     validate_service(cfn_client, stack_name, expected_string)
     if not keep_resources:
         delete_stack(cfn_client, stack_name, wait=False)
@@ -112,7 +111,7 @@ def test_cloudlift_can_revert_service(keep_resources):
     secrets_manager.set_secrets_manager_config(environment_name, f'{stack_name}/redis',
                                                {'REDIS_HOST': 'redis'})
     create_service(mocked_config)
-    deploy_service(deployment_identifier='id-1')
+    deploy_service(mocked_config, deployment_identifier='id-1')
     validate_service(
         cfn_client,
         stack_name,
@@ -122,7 +121,7 @@ def test_cloudlift_can_revert_service(keep_resources):
     secrets_manager.set_secrets_manager_config(environment_name, f"{service_name}-{environment_name}",
                                                {'LABEL': 'Value from secret manager v2', 'PORT': '80',
                                                 'REDIS_HOST': 'redis'})
-    deploy_service(deployment_identifier='id-2')
+    deploy_service(mocked_config, deployment_identifier='id-2')
     validate_service(
         cfn_client,
         stack_name,
@@ -149,7 +148,7 @@ def test_cloudlift_service_with_parameter_store_config(keep_resources):
     print("adding configuration to parameter store")
     config = {'PORT': '80', 'LABEL': 'Demo', 'REDIS_HOST': 'redis', 'LABEL': 'Value from parameter store v1'}
     _set_param_store_env(environment_name, service_name, config)
-    create_service(mocked_config)
+    create_service(mocked_config, env_sample_file="parameter-store-env.sample")
 
     validate_service(
         cfn_client,
@@ -161,7 +160,7 @@ def test_cloudlift_service_with_parameter_store_config(keep_resources):
     config = {'PORT': '80', 'LABEL': 'Demo', 'REDIS_HOST': 'redis', 'LABEL': 'Value from parameter store v2'}
     _set_param_store_env(environment_name, service_name, config)
 
-    deploy_service(deployment_identifier="id-0")
+    deploy_service(mocked_config, deployment_identifier="id-0", env_sample_file="parameter-store-env.sample")
     validate_service(
         cfn_client,
         stack_name,
@@ -178,10 +177,12 @@ def validate_service(cfn_client, stack_name, expected_string):
     assert content_matched
 
 
-def deploy_service(deployment_identifier):
+def deploy_service(mocked_config, deployment_identifier, env_sample_file="env.sample"):
     os.chdir(f'{TEST_DIR}/dummy')
-    ServiceUpdater(service_name, environment_name, "env.sample", timeout_seconds=600,
-                   deployment_identifier=deployment_identifier).run()
+    with patch.object(ServiceConfiguration, 'get_config',
+                      new=mocked_config):
+        ServiceUpdater(service_name, environment_name, env_sample_file, timeout_seconds=600,
+                       deployment_identifier=deployment_identifier).run()
 
 
 def revert_service(deployment_identifier):
@@ -202,13 +203,13 @@ def get_current_task_definition_deployment_identifier(cfn_client, stack_name):
     return {tag['key']: tag['value'] for tag in tags}.get('deployment_identifier')
 
 
-def create_service(mocked_config):
+def create_service(mocked_config, env_sample_file="env.sample"):
     os.chdir(f'{TEST_DIR}/dummy')
     with patch.object(ServiceConfiguration, 'edit_config',
                       new=mocked_config):
         with patch.object(ServiceConfiguration, 'get_config',
                           new=mocked_config):
-            ServiceCreator(service_name, environment_name, "env.sample").create()
+            ServiceCreator(service_name, environment_name, env_sample_file).create()
 
 
 def delete_stack(cfn_client, stack_name, wait):

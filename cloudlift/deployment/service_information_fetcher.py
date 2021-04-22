@@ -51,31 +51,6 @@ class ServiceInformationFetcher(object):
         log_intent(f"Currently deployed tag: {ecr_image_uri}")
         return str(ecr_image_uri)
 
-    def get_instance_ids(self):
-        instance_ids = {}
-        ecs_client = get_client_for('ecs', self.environment)
-        for service in self.ecs_service_names:
-            task_arns = ecs_client.list_tasks(
-                cluster=self.cluster_name,
-                serviceName=service
-            )['taskArns']
-            tasks = ecs_client.describe_tasks(
-                cluster=self.cluster_name,
-                tasks=task_arns
-            )['tasks']
-            container_instance_arns = [
-                task['containerInstanceArn'] for task in tasks
-            ]
-            container_instances = ecs_client.describe_container_instances(
-                cluster=self.cluster_name,
-                containerInstances=container_instance_arns
-            )['containerInstances']
-            service_instance_ids = [
-                container['ec2InstanceId'] for container in container_instances
-            ]
-            instance_ids[service] = service_instance_ids
-        return instance_ids
-
     def get_version(self, print_image=False, print_git=False):
         image = self._fetch_current_image_uri()
         tag = image.split(':').pop()
@@ -91,27 +66,24 @@ class ServiceInformationFetcher(object):
     def _fetch_current_image_uri(self):
         ecs_client = get_client_for('ecs', self.environment)
         if len(self.service_info) < 1:
-            raise UnrecoverableException("cannot get running image_uri: no ECS services found")
+            raise UnrecoverableException(
+                "cannot get running image_uri: no ECS services found")
 
-        logical_service_name = next(iter(self.service_info))
-        ecs_service_name = self.service_info[logical_service_name].get('ecs_service_name')
-        task_arns = ecs_client.list_tasks(
+        ecs_service_name = next(service_info['ecs_service_name'] for service, service_info in self.service_info.items()
+                                if service_info.get('ecs_service_name'))
+
+        ecs_services = ecs_client.describe_services(
             cluster=self.cluster_name,
-            serviceName=ecs_service_name
-        )['taskArns']
+            services=[ecs_service_name],
+        )['services']
 
-        if len(task_arns) < 1:
-            raise UnrecoverableException("cannot get running image_uri: no task ARNs found for service")
+        if len(ecs_services) < 1:
+            raise UnrecoverableException(
+                "cannot get running image_uri: no service found.")
 
-        tasks = ecs_client.describe_tasks(
-            cluster=self.cluster_name,
-            tasks=task_arns
-        )['tasks']
-
-        task_definition_arns = tasks[0]['taskDefinitionArn']
+        task_definition_arn = ecs_services[0]['taskDefinition']
         task_definition = ecs_client.describe_task_definition(
-            taskDefinition=task_definition_arns
-        )
+            taskDefinition=task_definition_arn)
         return task_definition['taskDefinition']['containerDefinitions'][0]['image']
 
     def _get_stack_resource_summaries(self):
