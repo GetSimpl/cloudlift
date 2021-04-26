@@ -3,10 +3,11 @@ from troposphere.ecs import (ContainerDefinition,
                              Environment, Secret,
                              LogConfiguration,
                              PortMapping, TaskDefinition, PlacementConstraint, SystemControl,
-                             HealthCheck)
+                             HealthCheck, Ulimit)
 
 from cloudlift.deployment.launch_types import LAUNCH_TYPE_FARGATE, get_launch_type
 from stringcase import camelcase
+from cloudlift.exceptions import UnrecoverableException
 
 HARD_LIMIT_MEMORY_IN_MB = 20480
 
@@ -64,7 +65,7 @@ class TaskDefinitionBuilder:
         if ('udp_interface' in config) or ('tcp_interface' in config):
             td_kwargs['NetworkMode'] = 'awsvpc'
 
-        log_config = self._gen_log_config()
+        log_config = self._gen_log_config(config)
         env_config = container_configurations[container_name(service_name)].get('environment', {})
         secrets_config = container_configurations[container_name(service_name)].get('secrets', {})
 
@@ -80,8 +81,15 @@ class TaskDefinitionBuilder:
             'Memory': int(config.get('memory_hard_limit', HARD_LIMIT_MEMORY_IN_MB)),
         }
 
-        if config['command'] is not None:
-            cd_kwargs['Command'] = [config['command']]
+        if config.get('command'):
+            # command can be one of list(string) / string
+            command = config.get('command')
+            if isinstance(command, str):
+                cd_kwargs['Command']= [command]
+            elif isinstance(command, list):
+                cd_kwargs['Command'] = command
+            else:
+                raise UnrecoverableException('command should either be string or list(string)')
 
         if 'stop_timeout' in config:
             cd_kwargs['StopTimeout'] = int(config['stop_timeout'])
@@ -147,6 +155,15 @@ class TaskDefinitionBuilder:
         if 'container_labels' in config:
             cd_kwargs['DockerLabels'] = config.get('container_labels')
 
+        if 'ulimits' in config:
+            cd_kwargs['Ulimits'] = [
+                Ulimit(
+                    Name=ulimit['name'],
+                    SoftLimit=ulimit['soft_limit'],
+                    HardLimit=ulimit['hard_limit'],
+                ) for ulimit in config.get('ulimits', [])
+            ]
+
         cd = ContainerDefinition(**cd_kwargs)
         container_definitions = [cd]
         if 'sidecars' in config:
@@ -174,7 +191,9 @@ class TaskDefinitionBuilder:
     def _resource_name(self, service_name):
         return service_name + "TaskDefinition"
 
-    def _gen_log_config(self):
+    def _gen_log_config(self, config):
+        if 'log_configuration' in config:
+            return LogConfiguration(**config['log_configuration'])
         env_log_group = '-'.join([self.environment, 'logs'])
         return LogConfiguration(
             LogDriver="awslogs",

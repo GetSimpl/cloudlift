@@ -294,6 +294,7 @@ class ServiceConfiguration(DynamodbConfig):
                 },
                 "command": {
                     "oneOf": [
+                        {"type": "array", "items": {"type": "string"}},
                         {"type": "string"},
                         {"type": "null"}
                     ]

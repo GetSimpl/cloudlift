@@ -469,6 +469,58 @@ class TestServiceConfigurationValidation(TestCase):
             self.fail('Exception thrown: {}'.format(e))
 
     @mock_dynamodb2
+    def test_command(self):
+        service = ServiceConfiguration('test-service', 'test')
+        with self.subTest('raises exception for list with non strings'):
+            with self.assertRaises(UnrecoverableException):
+                service._validate_changes({
+                    'cloudlift_version': 'test',
+                    'ecr_repo': {'name': 'test-service-repo'},
+                    'services': {
+                        'TestService': {
+                            'memory_reservation': 1000,
+                            'command': ['python', 1],
+                        }
+                    }
+                })
+
+        with self.subTest("no exceptions for string command"):
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': './start',
+                    }
+                }
+            })
+
+        with self.subTest("no exceptions for list of strings in command"):
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': ['./start', 'server'],
+                    }
+                }
+            })
+
+        with self.subTest("no exceptions for null command"):
+            service._validate_changes({
+                'cloudlift_version': 'test',
+                'ecr_repo': {'name': 'test-service-repo'},
+                'services': {
+                    'TestService': {
+                        'memory_reservation': 1000,
+                        'command': None,
+                    }
+                }
+            })
+
+    @mock_dynamodb2
     def test_container_labels(self):
         service = ServiceConfiguration('test-service', 'test')
 
@@ -540,8 +592,10 @@ class TestServiceConfigurationValidation(TestCase):
         available_rules = set(range(1, 50001)) - testing_rules
         testing_listener_rules = [{"Priority": rule} for rule in testing_rules]
         for test_iteration in range(1, 100):
-            assert ServiceConfiguration._get_random_available_listener_rule_priority(testing_listener_rules, "abcd") not in testing_rules
+            assert ServiceConfiguration._get_random_available_listener_rule_priority(testing_listener_rules,
+                                                                                     "abcd") not in testing_rules
 
     def test_get_random_available_listener_priority_raises_exection(self):
         testing_listener_rules = [{"Priority": rule} for rule in range(1, 50001)]
-        self.assertRaises(UnrecoverableException, ServiceConfiguration._get_random_available_listener_rule_priority, testing_listener_rules, "abcd")
+        self.assertRaises(UnrecoverableException, ServiceConfiguration._get_random_available_listener_rule_priority,
+                          testing_listener_rules, "abcd")

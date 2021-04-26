@@ -269,3 +269,59 @@ class TaskDefinitionBuilderTest(TestCase):
         )
 
         self.assertEqual(expected, actual)
+
+    def test_build_task_definition_with_ulimits_and_log_configuration(self):
+        configuration = {
+            'command': ['python', 'manage.py', 'server'],
+            'memory_reservation': 100,
+            'task_execution_role_arn': 'arn1',
+            'task_role_arn': 'arn2',
+            'ulimits': [{'name': 'core', 'soft_limit': 0, 'hard_limit': 0}],
+            'log_configuration': {'LogDriver': 'json-file', 'Options': {
+                'max-size': '10m',
+                'max-file': '3'
+            }},
+        }
+        builder = TaskDefinitionBuilder(
+            environment="test",
+            service_name="dummy",
+            configuration=configuration,
+            region='region1',
+        )
+
+        expected = {
+            'containerDefinitions': [{
+                'cpu': 0,
+                'command': ['python', 'manage.py', 'server'],
+                'environment': [],
+                'essential': True,
+                'image': 'nginx:default',
+                'logConfiguration': {
+                    'logDriver': 'json-file',
+                    'options': {
+                        'max-file': '3',
+                        'max-size': '10m',
+                    },
+                },
+                'memory': 20480,
+                'memoryReservation': 100,
+                'name': 'dummyContainer',
+                'secrets': [],
+                'ulimits': [{'hardLimit': 0, 'name': 'core', 'softLimit': 0}],
+            }],
+            'executionRoleArn': 'arn1',
+            'family': 'testdummyFamily',
+            'taskRoleArn': 'arn2',
+            'placementConstraints': [],
+        }
+
+        actual = builder.build_task_definition(
+            container_configurations={
+                'dummyContainer': {},
+            },
+            ecr_image_uri="nginx:default",
+            fallback_task_role='fallback_arn1',
+            fallback_task_execution_role='fallback_arn2',
+        )
+
+        self.assertEqual(expected, actual)

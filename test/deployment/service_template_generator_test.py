@@ -252,7 +252,9 @@ class TestServiceTemplateGenerator(TestCase):
                             "scale_in_cool_down_seconds": 120,
                             "scale_out_cool_down_seconds": 60
                         }
-                    }
+                    },
+                    'log_configuration': {'LogDriver': 'json-file', 'Options': {'max-size': '10m', 'max-file': '3'}},
+                    'ulimits': [{'name': 'core', 'soft_limit': 0, 'hard_limit': 0, }],
                 },
             }
         }
@@ -272,10 +274,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_service_with_new_alb_template.yml')
         with(open(template_file_path)) as expected_template_file:
-            expected = load(''.join(expected_template_file.readlines()))
-            generated = load(generated_template)
-            diff = list(dictdiffer.diff(generated, expected))
-            assert diff == []
+            self.assert_template(to_json(''.join(expected_template_file.readlines())), to_json(generated_template))
 
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
@@ -641,7 +640,8 @@ class TestServiceTemplateGenerator(TestCase):
             msg = pformat(diff, indent=2)
             msg = msg.replace('t1:', 'expected:')
             msg = msg.replace('t2:', 'actual:')
-            self.fail(msg)
+            self.assertDictEqual(expected, actual, msg=msg)
+
         self.assertDictEqual(expected, actual)
 
     @staticmethod

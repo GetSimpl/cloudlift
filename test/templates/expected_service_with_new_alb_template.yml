@@ -157,11 +157,10 @@ Resources:
           Essential: 'true'
           Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1
           LogConfiguration:
-            LogDriver: awslogs
+            LogDriver: json-file
             Options:
-              awslogs-group: staging-logs
-              awslogs-region: us-west-2
-              awslogs-stream-prefix: Dummy
+              max-size: 10m
+              max-file: '3'
           Memory: 20480
           MemoryReservation: 1000
           Name: DummyContainer
@@ -170,6 +169,10 @@ Resources:
           Secrets:
             - Name: CLOUDLIFT_INJECTED_SECRETS
               ValueFrom: arn_injected_secrets
+          Ulimits:
+            - Name: core
+              SoftLimit: 0
+              HardLimit: 0
       ExecutionRoleArn: !Ref 'DummyTaskExecutionRole'
       Family: stagingDummyFamily
       PlacementConstraints: []

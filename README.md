@@ -306,6 +306,44 @@ Supported autoscaling policies `request_count_per_target`. It works only if ther
 }
 ```
 
+`log_configuration` to override default log configuration
+
+```json5
+{
+  "services": {
+    "Test123": {
+      // To use default log configuration
+      "log_configuration": {
+        "LogDriver": "json-file",
+        "Options": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      },
+    }
+  }
+}
+```
+
+`ulimits` to specify Ulimits
+
+```json5
+{
+  "services": {
+    "Test123": {
+      // E.g to disable core dumps
+      "ulimits": [
+        {
+          "name": "core",
+          "soft_limit": 0,
+          "hard_limit": 0,
+        }
+      ],
+    }
+  }
+}
+```
+
 #### 3. Deploy service
 
 This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS
