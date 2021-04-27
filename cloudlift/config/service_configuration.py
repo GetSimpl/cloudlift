@@ -434,8 +434,53 @@ class ServiceConfiguration(DynamodbConfig):
                             },
                             "required": ['target_value', 'scale_in_cool_down_seconds', 'scale_out_cool_down_seconds']
                         },
+                        "custom_metric": {
+                            "type": "object",
+                            "properties": {
+                                "target_value": {
+                                    "type": "number"
+                                },
+                                "scale_in_cool_down_seconds": {
+                                    "type": "number"
+                                },
+                                "scale_out_cool_down_seconds": {
+                                    "type": "number"
+                                },
+                                "metric_name": {
+                                    "type": "string",
+                                },
+                                "namespace": {
+                                    "type": "string",
+                                },
+                                "statistic": {
+                                    "type": "string",
+                                    "enum": ["Maximum", "Average", "Minimum", "SampleCount", "Sum"]
+                                },
+                                "unit": {
+                                    "type": "string",
+                                },
+                                "metric_dimensions": {
+                                    "type": "array",
+                                    "items": {
+                                        "required": ["name", "value"],
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                            },
+                                            "value": {
+                                                "type": "string",
+                                            },
+                                        }
+                                    }
+                                },
+
+                            },
+                            "required": ['target_value', 'scale_in_cool_down_seconds', 'scale_out_cool_down_seconds',
+                                         'metric_name', 'namespace', 'statistic']
+                        },
                     },
-                    "required": ['max_capacity', 'min_capacity', 'request_count_per_target']
+                    "required": ['max_capacity', 'min_capacity']
                 },
                 "container_labels": {
                     "type": "object",

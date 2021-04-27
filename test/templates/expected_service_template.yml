@@ -108,6 +108,25 @@ Resources:
           Type: spread
       TaskDefinition: !Ref 'DummyRunSidekiqshTaskDefinition'
     Type: AWS::ECS::Service
+  DummyRunSidekiqshCustomMetricScalingPolicy:
+    Properties:
+      PolicyName: customMetricScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId:
+        Ref: DummyRunSidekiqshScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        CustomizedMetricSpecification:
+          Dimensions:
+            - Name: Environment
+              Value: STAGE
+          MetricName: metricName
+          Namespace: CustomNamespace
+          Statistic: Maximum
+          Unit: Count
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 100
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
   DummyRunSidekiqshRole:
     Properties:
       AssumeRolePolicyDocument:
@@ -121,6 +140,21 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
     Type: AWS::IAM::Role
+  DummyRunSidekiqshScalableTarget:
+    Properties:
+      MaxCapacity: 5
+      MinCapacity: 1
+      ResourceId:
+        Fn::Sub:
+          - service/cluster-staging/${service_name}
+          - service_name:
+              Fn::GetAtt:
+                - DummyRunSidekiqsh
+                - Name
+      RoleARN: arn:aws:iam::12537612:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
   DummyRunSidekiqshTaskDefinition:
     Properties:
       ContainerDefinitions:

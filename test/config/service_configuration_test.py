@@ -560,6 +560,42 @@ class TestServiceConfigurationValidation(TestCase):
         })
 
     @mock_dynamodb2
+    def test_custom_metric_autoscaling(self):
+        service = ServiceConfiguration('test-service', 'test')
+
+        data = {
+            'cloudlift_version': 'test',
+            'ecr_repo': {'name': 'test-service-repo'},
+            'services': {
+                'TestService': {
+                    'memory_reservation': 1000,
+                    'command': None,
+                    "autoscaling": {
+                        "min_capacity": 1,
+                        "max_capacity": 2,
+                        "custom_metric": {
+                            "scale_in_cool_down_seconds": 60,
+                            "scale_out_cool_down_seconds": 60,
+                            "target_value": 100,
+                            "metric_name": "metric-name",
+                            "namespace": "namespace",
+                            "statistic": "Maximum",
+                            "unit": "unit",
+                            "metric_dimensions": [
+                                {
+                                    "name": "name",
+                                    "value": "value"
+                                }
+                            ]
+                        }
+                    },
+                }
+            }
+        }
+
+        service._validate_changes(data)
+
+    @mock_dynamodb2
     def test_set_service_and_task_roles(self):
         service = ServiceConfiguration('test-service', 'test')
 

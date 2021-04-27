@@ -13,6 +13,7 @@ from cloudlift.deployment.service_updater import ServiceUpdater
 from cloudlift.utils import wait_until
 
 TEST_DIR = Path(__file__).resolve().parent
+REDIS_IMAGE = os.getenv('CLOUDLIFT_REDIS_IMAGE', 'redis')
 
 
 def setup_module(module):
@@ -32,7 +33,7 @@ def mocked_service_config(cls, *args, **kwargs):
                 "command": None,
                 "secrets_name": f'{service_name}-{environment_name}',
                 "sidecars": [
-                    {"name": "redis", "image": "redis", "memory_reservation": 256}
+                    {"name": "redis", "image": REDIS_IMAGE, "memory_reservation": 256}
                 ],
                 "http_interface": {
                     "alb": {
@@ -61,7 +62,7 @@ def mocked_service_with_parameter_store_config(cls, *args, **kwargs):
             "Dummy": {
                 "command": None,
                 "sidecars": [
-                    {"name": "redis", "image": "redis", "memory_reservation": 256}
+                    {"name": "redis", "image": REDIS_IMAGE, "memory_reservation": 256}
                 ],
                 "http_interface": {
                     "alb": {

@@ -11,15 +11,12 @@ from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub, Split, Select
 from troposphere.applicationautoscaling import ScalableTarget
 from troposphere.applicationautoscaling import ScalingPolicy, TargetTrackingScalingPolicyConfiguration, \
-    PredefinedMetricSpecification
+    PredefinedMetricSpecification, CustomizedMetricSpecification, MetricDimension as AppAutoscalingMetricDimension
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
-from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
-                             DeploymentConfiguration, Environment, Secret,
-                             LoadBalancer, LogConfiguration,
-                             NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition, PlacementConstraint, SystemControl,
-                             HealthCheck)
+from troposphere.ecs import (AwsvpcConfiguration, DeploymentConfiguration, LoadBalancer, NetworkConfiguration,
+                             PlacementStrategy,
+                             Service)
 from troposphere.elasticloadbalancingv2 import (Action, Certificate, Listener, ListenerRule, Condition,
                                                 HostHeaderConfig, PathPatternConfig)
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
@@ -32,15 +29,15 @@ from troposphere.iam import Role, Policy
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_account_id
-from cloudlift.config.region import get_environment_level_alb_listener, get_client_for
+from cloudlift.config.region import get_environment_level_alb_listener
 from cloudlift.config.service_configuration import DEFAULT_TARGET_GROUP_DEREGISTRATION_DELAY, \
     DEFAULT_LOAD_BALANCING_ALGORITHM, DEFAULT_HEALTH_CHECK_INTERVAL_SECONDS, DEFAULT_HEALTH_CHECK_TIMEOUT_SECONDS, \
     DEFAULT_HEALTH_CHECK_HEALTHY_THRESHOLD_COUNT, DEFAULT_HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT
 from cloudlift.deployment.deployer import build_config, get_automated_injected_secret_name
+from cloudlift.deployment.launch_types import LAUNCH_TYPE_FARGATE, LAUNCH_TYPE_EC2, get_launch_type
+from cloudlift.deployment.task_definition_builder import TaskDefinitionBuilder, container_name
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.exceptions import UnrecoverableException
-from cloudlift.deployment.task_definition_builder import TaskDefinitionBuilder, container_name
-from cloudlift.deployment.launch_types import LAUNCH_TYPE_FARGATE, LAUNCH_TYPE_EC2, get_launch_type
 
 
 class ServiceTemplateGenerator(TemplateGenerator):
@@ -209,6 +206,40 @@ service is down',
             )
         )
 
+    def _add_custom_metric_scaling_policy(self, ecs_svc, config, scalable_target):
+        try:
+            target_value = int(config.get('target_value'))
+            scale_in_cool_down = int(config.get('scale_in_cool_down_seconds'))
+            scale_out_cool_down = int(config.get('scale_out_cool_down_seconds'))
+        except TypeError as e:
+            raise UnrecoverableException('The following value has to be integer: {}'.format(e))
+
+        metric_dimensions = [AppAutoscalingMetricDimension(
+            Name=d['name'], Value=d['value'],
+        ) for d in config.get('metric_dimensions')]
+
+        self.template.add_resource(
+            ScalingPolicy(
+                str(ecs_svc.name) + 'CustomMetricScalingPolicy',
+                PolicyName='customMetricScalingPolicy',
+                PolicyType='TargetTrackingScaling',
+                TargetTrackingScalingPolicyConfiguration=TargetTrackingScalingPolicyConfiguration(
+                    ScaleInCooldown=scale_in_cool_down,
+                    ScaleOutCooldown=scale_out_cool_down,
+                    TargetValue=target_value,
+                    CustomizedMetricSpecification=CustomizedMetricSpecification(
+                        MetricName=config.get('metric_name'),
+                        Namespace=config.get('namespace'),
+                        Statistic=config.get('statistic'),
+                        Unit=config.get('unit'),
+                        Dimensions=metric_dimensions,
+                    ),
+
+                ),
+                ScalingTargetId=Ref(scalable_target)
+            )
+        )
+
     def _add_service(self, service_name, config):
         launch_type = get_launch_type(config)
         secrets_name = config.get('secrets_name')
@@ -245,6 +276,7 @@ service is down',
         desired_count = self._get_desired_task_count_for_service(service_name,
                                                                  min_count=int(
                                                                      autoscaling_config.get('min_capacity', 0)))
+        request_count_per_target_autoscaling_data = {}
         if 'udp_interface' in config:
             lb, target_group_name = self._add_ecs_nlb(service_name, config['udp_interface'], launch_type)
             nlb_enabled = 'nlb_enabled' in config['udp_interface'] and config['udp_interface']['nlb_enabled']
@@ -288,12 +320,16 @@ service is down',
         elif 'http_interface' in config:
             lb, target_group_name, target_group = self._add_ecs_lb(service_name, config, launch_type)
 
+            request_count_per_target_autoscaling_data['target_group'] = target_group
+
             security_group_ingress = {
                 'IpProtocol': 'TCP',
                 'ToPort': int(config['http_interface']['container_port']),
                 'FromPort': int(config['http_interface']['container_port']),
             }
             launch_type_svc = {}
+            create_new_alb = False
+            alb = None
 
             alb_enabled = 'alb' in config['http_interface']
             if alb_enabled:
@@ -358,23 +394,9 @@ service is down',
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
-            if autoscaling_config:
-                scalable_target = self._add_scalable_target(svc, autoscaling_config)
-                self._add_scalable_target_alarms(service_name, svc, autoscaling_config)
-
-                if 'alb_arn' in autoscaling_config['request_count_per_target']:
-                    alb_arn = autoscaling_config['request_count_per_target']['alb_arn']
-                elif 'http_interface' in config and alb_enabled and create_new_alb:
-                    alb_arn = alb
-                else:
-                    raise UnrecoverableException('Unable to fetch alb arn, please provide alb_arn in config')
-                self._add_alb_request_count_scaling_policy(
-                    svc,
-                    alb_arn,
-                    target_group,
-                    autoscaling_config['request_count_per_target'],
-                    scalable_target
-                )
+            if create_new_alb and alb:
+                request_count_per_target_autoscaling_data['create_new_alb'] = create_new_alb
+                request_count_per_target_autoscaling_data['alb_arn'] = alb
 
             self.template.add_output(
                 Output(
@@ -460,7 +482,43 @@ service is down',
                 )
             )
             self.template.add_resource(svc)
+
+        if autoscaling_config:
+            self._add_autoscaling_resources(service_name, svc, autoscaling_config,
+                                            request_count_per_target_autoscaling_data)
         self._add_service_alarms(svc)
+
+    def _add_autoscaling_resources(self, service_name, svc, autoscaling_config,
+                                   request_count_per_target_autoscaling_data=None):
+        scalable_target = self._add_scalable_target(svc, autoscaling_config)
+
+        if autoscaling_config.get('enable_scalable_target_alarms', True):
+            self._add_scalable_target_alarms(service_name, svc, autoscaling_config)
+
+        if 'request_count_per_target' in autoscaling_config:
+            request_count_per_target_conf = autoscaling_config.get('request_count_per_target')
+
+            if 'alb_arn' in request_count_per_target_conf:
+                alb_arn = request_count_per_target_conf['alb_arn']
+            elif request_count_per_target_autoscaling_data.get('create_new_alb'):
+                alb_arn = request_count_per_target_autoscaling_data['alb_arn']
+            else:
+                raise UnrecoverableException('Unable to fetch alb arn, please provide alb_arn in config')
+
+            self._add_alb_request_count_scaling_policy(
+                svc,
+                alb_arn,
+                request_count_per_target_autoscaling_data.get('target_group'),
+                request_count_per_target_conf,
+                scalable_target
+            )
+
+        if 'custom_metric' in autoscaling_config:
+            self._add_custom_metric_scaling_policy(
+                svc,
+                autoscaling_config.get('custom_metric'),
+                scalable_target
+            )
 
     def get_alb_full_name_from_listener_arn(self, listener_arn):
         return "/".join(listener_arn.split('/')[1:-1])

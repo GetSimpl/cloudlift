@@ -1,17 +1,16 @@
 import datetime
+import json
 import os
 from decimal import Decimal
+from pprint import pformat
 from unittest import TestCase
 
-import dictdiffer
 from cfn_flip import to_json, load
+from deepdiff import DeepDiff
 from mock import patch, MagicMock
 
 from cloudlift.config import ServiceConfiguration
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
-import json
-from deepdiff import DeepDiff
-from pprint import pformat
 
 
 def mock_build_config_impl(env_name, cloudlift_service_name, dummy_ecs_service_name, sample_env_file_path,
@@ -55,6 +54,26 @@ def mocked_service_config():
                 "container_labels": {"label1": "value1"}
             },
             "DummyRunSidekiqsh": {
+                "autoscaling": {
+                    "custom_metric": {
+                        "metric_dimensions": [
+                            {
+                                "name": "Environment",
+                                "value": "STAGE"
+                            },
+                        ],
+                        "metric_name": "metricName",
+                        "namespace": "CustomNamespace",
+                        "scale_in_cool_down_seconds": 60,
+                        "scale_out_cool_down_seconds": 60,
+                        "statistic": "Maximum",
+                        "target_value": 100,
+                        "unit": "Count"
+                    },
+                    "enable_scalable_target_alarms": False,
+                    "max_capacity": 5,
+                    "min_capacity": 1
+                },
                 "memory_reservation": Decimal(1000),
                 "command": "./run-sidekiq.sh",
                 "deployment": {
@@ -330,13 +349,12 @@ class TestServiceTemplateGenerator(TestCase):
         with(open(template_file_path)) as expected_template_file:
             self.assert_template(to_json(''.join(expected_template_file.readlines())), to_json(generated_template))
 
-    @patch('cloudlift.deployment.service_template_generator.get_client_for')
     @patch('cloudlift.deployment.service_template_generator.get_environment_level_alb_listener')
     @patch('cloudlift.deployment.service_template_generator.build_config')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
     def test_generate_service_with_env_alb_host_based(self, mock_region_service, mock_get_account_id, mock_build_config,
-                                                      mock_get_environment_level_alb_listener, mock_get_client_for):
+                                                      mock_get_environment_level_alb_listener):
         environment = 'staging'
         application_name = 'dummy'
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
@@ -406,21 +424,6 @@ class TestServiceTemplateGenerator(TestCase):
         mock_get_account_id.return_value = "12537612"
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
         mock_get_environment_level_alb_listener.return_value = "listenerARN1234"
-        mock_elbv2_client = MagicMock()
-        mock_get_client_for.return_value = mock_elbv2_client
-
-        def mock_describe_rules(ListenerArn=None, Marker=None):
-            if ListenerArn:
-                return {
-                    'Rules': [{'Priority': '1'}, {'Priority': '2'}],
-                    'NextMarker': '/next/marker'
-                }
-            if Marker:
-                return {
-                    'Rules': [{'Priority': '3'}, {'Priority': '5'}]
-                }
-
-        mock_elbv2_client.describe_rules.side_effect = mock_describe_rules
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',

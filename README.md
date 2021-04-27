@@ -291,6 +291,38 @@ Supported autoscaling policies `request_count_per_target`. It works only if ther
 }
 ```
 
+Autoscaling policy: custom_metric
+
+```json5
+{
+  "services": {
+    "Test123": {
+      "autoscaling": {
+        "min_capacity": 1,
+        "max_capacity": 2,
+        "custom_metric": {
+          "scale_in_cool_down_seconds": 60,
+          "scale_out_cool_down_seconds": 60,
+          "target_value": 100,
+          "metric_name": "metric-name",
+          "namespace": "namespace",
+          "statistic": "Average | Maximum | Minimum | SampleCount | Sum",
+          "unit": "unit",
+          "metric_dimensions": [
+            {
+              "name": "name",
+              "value": "value"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+For documentation refer [here](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-applicationautoscaling-scalingpolicy-customizedmetricspecification.html#cfn-applicationautoscaling-scalingpolicy-customizedmetricspecification-unit).
+
 `container_labels` allows to add docker labels
 
 ```json5
