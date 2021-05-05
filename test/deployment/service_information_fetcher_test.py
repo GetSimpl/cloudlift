@@ -37,6 +37,27 @@ class TestServiceInformationFetcher(unittest.TestCase):
         self.assertDictEqual(expected_service_info, sif.service_info)
         mock_cfn_client.describe_stacks.assert_called_once_with(StackName='dummy-test')
 
+    @patch('cloudlift.deployment.service_information_fetcher.log_warning')
+    @patch('cloudlift.deployment.service_information_fetcher.get_client_for')
+    def test_fetch_service_cfn_info_raise_exception(self, mock_get_client_for, mock_log_warning):
+        service_configuration = {
+            'ecr_repo': {'name': 'dummy-repo'},
+            'services': {
+                'ServiceOne': {'secrets_name': 'dummy-test'},
+                'ServiceTwo': {'secrets_name': 'dummy-test'},
+            }
+        }
+        mock_cfn_client = MagicMock()
+        mock_get_client_for.return_value = mock_cfn_client
+        mock_cfn_client.describe_stacks.side_effect = Exception('could not fetch')
+
+        sif = ServiceInformationFetcher(service, env, service_configuration)
+
+        self.assertFalse(sif.stack_found)
+        mock_log_warning.assert_called_with(
+            'Could not determine services. Stack not found. Error raised: could not fetch')
+
+
     @patch('cloudlift.deployment.service_information_fetcher.get_region_for_environment')
     @patch('cloudlift.deployment.service_information_fetcher.EcsClient')
     @patch('cloudlift.deployment.service_information_fetcher.get_client_for')

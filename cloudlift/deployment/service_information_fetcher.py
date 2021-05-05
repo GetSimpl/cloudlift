@@ -43,7 +43,7 @@ class ServiceInformationFetcher(object):
                                    if resource_summary['LogicalResourceId'].endswith('ListenerRule')]
         except Exception as e:
             self.stack_found = False
-            log_warning("Could not determine services. Stack not found")
+            log_warning("Could not determine services. Stack not found. Error raised: {}".format(e))
 
 
     def get_current_image_uri(self):
