@@ -29,7 +29,7 @@ class EcsClient(object):
                           region_name=region,
                           profile_name=profile)
         config = Config(retries=dict(
-            max_attempts=10,
+            max_attempts=50,
             mode='standard',
         ))
         self.boto = session.client(u'ecs', config=config)
