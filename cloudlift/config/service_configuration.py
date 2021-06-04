@@ -101,20 +101,21 @@ class ServiceConfiguration(object):
             )
             if 'Item' in configuration_response:
                 existing_configuration = configuration_response['Item']['configuration']
+
+                from distutils.version import LooseVersion
+                previous_cloudlift_version = existing_configuration.pop("cloudlift_version", None)
+                if LooseVersion(cloudlift_version) < LooseVersion(previous_cloudlift_version):
+                    raise UnrecoverableException(f'Cloudlift Version {previous_cloudlift_version} was used to '
+                                                 f'create this service. You are using version {cloudlift_version}, '
+                                                 f'which is older and can cause corruption. Please upgrade to at least '
+                                                 f'version {previous_cloudlift_version} to proceed.\n\nUpgrade to the '
+                                                 f'latest version (Recommended):\n'
+                                                 f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
+                                                 f'\tpip install -U cloudlift=={previous_cloudlift_version}')
             else:
                 existing_configuration = self._default_service_configuration()
                 self.new_service = True
 
-            from distutils.version import LooseVersion
-            previous_cloudlift_version = existing_configuration.pop("cloudlift_version", None)
-            if LooseVersion(cloudlift_version) < LooseVersion(previous_cloudlift_version):
-                raise UnrecoverableException(f'Cloudlift Version {previous_cloudlift_version} was used to '
-                                             f'create this service. You are using version {cloudlift_version}, '
-                                             f'which is older and can cause corruption. Please upgrade to at least '
-                                             f'version {previous_cloudlift_version} to proceed.\n\nUpgrade to the '
-                                             f'latest version (Recommended):\n'
-                                             f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
-                                             f'\tpip install -U cloudlift=={previous_cloudlift_version}')
             return existing_configuration
         except ClientError:
             raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
