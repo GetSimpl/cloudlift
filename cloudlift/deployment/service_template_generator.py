@@ -71,37 +71,12 @@ class ServiceTemplateGenerator(TemplateGenerator):
         for ecs_service_name, config in self.configuration['services'].items():
             self._add_service(ecs_service_name, config)
 
-    def _add_service_alarms(self, svc):
-        cloudlift_timedout_deployments_alarm = Alarm(
-            'FailedCloudliftDeployments' + str(svc.name),
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(
-                    Name='ClusterName',
-                    Value=self.cluster_name
-                ),
-                MetricDimension(
-                    Name='ServiceName',
-                    Value=GetAtt(svc, 'Name')
-                )
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            OKActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Cloudlift deployment timed out',
-            Namespace='ECS/DeploymentMetrics',
-            Period=60,
-            ComparisonOperator='GreaterThanThreshold',
-            Statistic='Average',
-            Threshold='0',
-            MetricName='FailedCloudliftDeployments',
-            TreatMissingData='notBreaching'
-        )
-        self.template.add_resource(cloudlift_timedout_deployments_alarm)
+    def _add_service_alarms(self, svc, config):
         # How to add service task count alarm
         # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch-metrics.html#cw_running_task_count
         ecs_no_running_tasks_alarm = Alarm(
             'EcsNoRunningTasksAlarm' + str(svc.name),
-            EvaluationPeriods=1,
+            EvaluationPeriods=int(config.get('ecs_no_running_tasks_evaluation_periods', 2)),
             Dimensions=[
                 MetricDimension(
                     Name='ClusterName',
@@ -117,7 +92,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
             AlarmDescription='Alarm if the task count goes to zero, denoting \
 service is down',
             Namespace='AWS/ECS',
-            Period=60,
+            Period=int(config.get('ecs_no_running_tasks_period', 300)),
             ComparisonOperator='LessThanThreshold',
             Statistic='SampleCount',
             Threshold='1',
@@ -486,7 +461,7 @@ service is down',
         if autoscaling_config:
             self._add_autoscaling_resources(service_name, svc, autoscaling_config,
                                             request_count_per_target_autoscaling_data)
-        self._add_service_alarms(svc)
+        self._add_service_alarms(svc, config)
 
     def _add_autoscaling_resources(self, service_name, svc, autoscaling_config,
                                    request_count_per_target_autoscaling_data=None):
@@ -912,7 +887,7 @@ service is down',
     def create_target_group_alarms(self, target_group_name, target_group, alb_full_name, alb_config):
         unhealthy_alarm = Alarm(
             'TargetGroupUnhealthyHostAlarm' + target_group_name,
-            EvaluationPeriods=1,
+            EvaluationPeriods=int(alb_config.get('target_group_unhealthy_host_evaluation_periods', 3)),
             Dimensions=[
                 MetricDimension(
                     Name='LoadBalancer',
@@ -930,7 +905,7 @@ service is down',
             Period=60,
             ComparisonOperator='GreaterThanOrEqualToThreshold',
             Statistic='Sum',
-            Threshold='1',
+            Threshold=str(alb_config.get('target_group_unhealthy_host_threshold', '5')),
             MetricName='UnHealthyHostCount',
             TreatMissingData='notBreaching'
         )
@@ -938,7 +913,7 @@ service is down',
 
         high_5xx_alarm = Alarm(
             'HighTarget5XXAlarm' + target_group_name,
-            EvaluationPeriods=1,
+            EvaluationPeriods=int(alb_config.get('target_5xx_error_evaluation_periods', 5)),
             Dimensions=[
                 MetricDimension(
                     Name='LoadBalancer',
@@ -953,10 +928,10 @@ service is down',
             OKActions=[Ref(self.notification_sns_arn)],
             AlarmDescription='Triggers if target returns 5xx error code',
             Namespace='AWS/ApplicationELB',
-            Period=60,
+            Period=int(alb_config.get('target_5xx_error_period', 60)),
             ComparisonOperator='GreaterThanOrEqualToThreshold',
             Statistic='Sum',
-            Threshold=int(alb_config.get('target_5xx_error_threshold')),
+            Threshold=int(alb_config.get('target_5xx_error_threshold', 300)),
             MetricName='HTTPCode_Target_5XX_Count',
             TreatMissingData='notBreaching'
         )

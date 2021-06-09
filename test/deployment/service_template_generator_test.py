@@ -369,12 +369,18 @@ class TestServiceTemplateGenerator(TestCase):
                     "command": None,
                     "container_labels": {"python_version": "2"},
                     "secrets_name": "something",
+                    "ecs_no_running_tasks_period": 350,
+                    "ecs_no_running_tasks_evaluation_periods": 3,
                     "http_interface": {
                         "internal": False,
                         "alb": {
                             "create_new": False,
                             "host": "abc.xyz.com",
                             "priority": 4,
+                            "target_group_unhealthy_host_evaluation_periods": 3,
+                            "target_group_unhealthy_host_threshold": 3,
+                            "target_5xx_error_evaluation_periods": 10,
+                            "target_5xx_error_period": 300,
                             "target_5xx_error_threshold": 10,
                             "target_p95_latency_evaluation_periods": 3,
                             "target_p95_latency_period_seconds": 30,

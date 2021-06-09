@@ -275,12 +275,12 @@ Resources:
           Value: cluster-staging
         - Name: ServiceName
           Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 2
       MetricName: CPUUtilization
       Namespace: AWS/ECS
       OKActions:
         - !Ref 'NotificationSnsArn'
-      Period: 60
+      Period: 300
       Statistic: SampleCount
       Threshold: '1'
       TreatMissingData: breaching
@@ -297,57 +297,15 @@ Resources:
           Value: cluster-staging
         - Name: ServiceName
           Value: !GetAtt 'DummyFargateService.Name'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 2
       MetricName: CPUUtilization
       Namespace: AWS/ECS
       OKActions:
         - !Ref 'NotificationSnsArn'
-      Period: 60
+      Period: 300
       Statistic: SampleCount
       Threshold: '1'
       TreatMissingData: breaching
-    Type: AWS::CloudWatch::Alarm
-  FailedCloudliftDeploymentsDummyFargateRunSidekiqsh:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyFargateRunSidekiqsh.Name'
-      EvaluationPeriods: 1
-      MetricName: FailedCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
-  FailedCloudliftDeploymentsDummyFargateService:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyFargateService.Name'
-      EvaluationPeriods: 1
-      MetricName: FailedCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
   FargateServicestagingDummyFargateRunSidekiqsh:
     Properties:

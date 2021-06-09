@@ -339,12 +339,12 @@ Resources:
           Value: cluster-staging
         - Name: ServiceName
           Value: !GetAtt 'Dummy.Name'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 3
       MetricName: CPUUtilization
       Namespace: AWS/ECS
       OKActions:
         - !Ref 'NotificationSnsArn'
-      Period: 60
+      Period: 350
       Statistic: SampleCount
       Threshold: '1'
       TreatMissingData: breaching
@@ -361,57 +361,15 @@ Resources:
           Value: cluster-staging
         - Name: ServiceName
           Value: !GetAtt 'DummyWithCustomListener.Name'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 2
       MetricName: CPUUtilization
       Namespace: AWS/ECS
       OKActions:
         - !Ref 'NotificationSnsArn'
-      Period: 60
+      Period: 300
       Statistic: SampleCount
       Threshold: '1'
       TreatMissingData: breaching
-    Type: AWS::CloudWatch::Alarm
-  FailedCloudliftDeploymentsDummy:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'Dummy.Name'
-      EvaluationPeriods: 1
-      MetricName: FailedCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
-    Type: AWS::CloudWatch::Alarm
-  FailedCloudliftDeploymentsDummyWithCustomListener:
-    Properties:
-      AlarmActions:
-        - !Ref 'NotificationSnsArn'
-      AlarmDescription: Cloudlift deployment timed out
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: cluster-staging
-        - Name: ServiceName
-          Value: !GetAtt 'DummyWithCustomListener.Name'
-      EvaluationPeriods: 1
-      MetricName: FailedCloudliftDeployments
-      Namespace: ECS/DeploymentMetrics
-      OKActions:
-        - !Ref 'NotificationSnsArn'
-      Period: 60
-      Statistic: Average
-      Threshold: '0'
-      TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
   HighP95LatencyAlarmTargetGroupDummy:
     Properties:
@@ -508,12 +466,12 @@ Resources:
           Value: ''
         - Name: TargetGroup
           Value: !GetAtt 'TargetGroupDummy.TargetGroupFullName'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 10
       MetricName: HTTPCode_Target_5XX_Count
       Namespace: AWS/ApplicationELB
       OKActions:
         - !Ref 'NotificationSnsArn'
-      Period: 60
+      Period: 300
       Statistic: Sum
       Threshold: 10
       TreatMissingData: notBreaching
@@ -529,7 +487,7 @@ Resources:
           Value: app/albname/randomalbid
         - Name: TargetGroup
           Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 5
       MetricName: HTTPCode_Target_5XX_Count
       Namespace: AWS/ApplicationELB
       OKActions:
@@ -609,14 +567,14 @@ Resources:
           Value: ''
         - Name: TargetGroup
           Value: !GetAtt 'TargetGroupDummy.TargetGroupFullName'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 3
       MetricName: UnHealthyHostCount
       Namespace: AWS/ApplicationELB
       OKActions:
         - !Ref 'NotificationSnsArn'
       Period: 60
       Statistic: Sum
-      Threshold: '1'
+      Threshold: '3'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
   TargetGroupUnhealthyHostAlarmTargetGroupDummyWithCustomListener:
@@ -630,13 +588,13 @@ Resources:
           Value: app/albname/randomalbid
         - Name: TargetGroup
           Value: !GetAtt 'TargetGroupDummyWithCustomListener.TargetGroupFullName'
-      EvaluationPeriods: 1
+      EvaluationPeriods: 3
       MetricName: UnHealthyHostCount
       Namespace: AWS/ApplicationELB
       OKActions:
         - !Ref 'NotificationSnsArn'
       Period: 60
       Statistic: Sum
-      Threshold: '1'
+      Threshold: '5'
       TreatMissingData: notBreaching
     Type: AWS::CloudWatch::Alarm
