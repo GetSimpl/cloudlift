@@ -92,8 +92,7 @@ class TaskDefinitionCreator:
         log_bold("Checking image in ECR")
         ecr_client.build_and_upload_image()
         log_bold("Updating task definition\n")
-        env_config = build_config(
-            self.environment, self.name, self.env_sample_file)
+        env_config = build_config(self.environment, self.name, self.env_sample_file)
         ecs_client = EcsClient(region=self.region)
         deployment = DeployAction(ecs_client, self.cluster_name, None)
         task_defn = self._apply_changes_over_current_task_defn(env_config, ecs_client, ecr_client, deployment)
