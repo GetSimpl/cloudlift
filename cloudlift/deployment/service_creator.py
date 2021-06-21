@@ -92,7 +92,7 @@ class ServiceCreator(object):
             else:
                 raise boto_client_error
 
-    def update(self):
+    def update(self, exit_on_save=False):
         '''
             Create and execute changeset for existing CloudFormation template
             for ECS service and related dependencies
@@ -101,6 +101,8 @@ class ServiceCreator(object):
         log_bold("Starting to update service")
         self.service_configuration.edit_config()
         self.service_configuration.validate()
+        if exit_on_save:
+            return
 
         information_fetcher = ServiceInformationFetcher(
             self.service_configuration.service_name,

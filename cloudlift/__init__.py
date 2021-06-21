@@ -87,8 +87,9 @@ def create_service(name, environment, version, build_arg, dockerfile, env_sample
 @_require_environment
 @_require_name
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
-def update_service(name, environment, env_sample_file):
-    ServiceCreator(name, environment, env_sample_file).update()
+@click.option('--exit-on-save', is_flag=True, help='Exit on saving the JSON')
+def update_service(name, environment, env_sample_file, exit_on_save):
+    ServiceCreator(name, environment, env_sample_file).update(exit_on_save)
 
 
 @cli.command(help="Create a new environment")
