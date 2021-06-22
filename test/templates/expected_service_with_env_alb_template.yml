@@ -86,6 +86,11 @@ Resources:
           Type: spread
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'DummyTaskDefinition'
+      Tags:
+        - Key: custom_label
+          Value: custom_value
+        - Key: environment
+          Value: test
     Type: AWS::ECS::Service
   DummyALBRequestCountPerTargetScalingPolicy:
     Properties:

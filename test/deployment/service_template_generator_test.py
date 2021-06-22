@@ -402,6 +402,10 @@ class TestServiceTemplateGenerator(TestCase):
                             "scale_out_cool_down_seconds": 60,
                             "alb_arn": "arn:aws:elasticloadbalancing:us-west-2:123456123456:loadbalancer/app/alb-name/alb-id"
                         }
+                    },
+                    'service_tags': {
+                        'environment': 'test',
+                        'custom_label': 'custom_value',
                     }
                 },
                 "DummyWithCustomListener": {

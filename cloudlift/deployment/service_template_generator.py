@@ -16,7 +16,7 @@ from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, DeploymentConfiguration, LoadBalancer, NetworkConfiguration,
                              PlacementStrategy,
-                             Service)
+                             Service, Tags)
 from troposphere.elasticloadbalancingv2 import (Action, Certificate, Listener, ListenerRule, Condition,
                                                 HostHeaderConfig, PathPatternConfig)
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
@@ -252,10 +252,14 @@ service is down',
                                                                  min_count=int(
                                                                      autoscaling_config.get('min_capacity', 0)))
         request_count_per_target_autoscaling_data = {}
+        launch_type_svc = {}
+
+        if 'service_tags' in config:
+            launch_type_svc['Tags'] = Tags.from_dict(**config['service_tags'])
+
         if 'udp_interface' in config:
             lb, target_group_name = self._add_ecs_nlb(service_name, config['udp_interface'], launch_type)
             nlb_enabled = 'nlb_enabled' in config['udp_interface'] and config['udp_interface']['nlb_enabled']
-            launch_type_svc = {}
 
             if nlb_enabled:
                 elb, service_listener, nlb_sg = self._add_nlb(service_name, config, target_group_name)
@@ -302,7 +306,6 @@ service is down',
                 'ToPort': int(config['http_interface']['container_port']),
                 'FromPort': int(config['http_interface']['container_port']),
             }
-            launch_type_svc = {}
             create_new_alb = False
             alb = None
 
@@ -383,7 +386,6 @@ service is down',
 
             self.template.add_resource(svc)
         elif 'tcp_interface' in config:
-            launch_type_svc = {}
             launch_type_svc['NetworkConfiguration'] = NetworkConfiguration(
                 AwsvpcConfiguration=AwsvpcConfiguration(
                     Subnets=[Ref(self.private_subnet1), Ref(self.private_subnet2)],
@@ -411,7 +413,6 @@ service is down',
             )
             self.template.add_resource(svc)
         else:
-            launch_type_svc = {}
             if launch_type == LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
@@ -423,23 +424,20 @@ service is down',
                     GroupDescription=pascalcase("FargateService" + self.env + service_name)
                 )
                 self.template.add_resource(service_security_group)
-                launch_type_svc = {
-                    'NetworkConfiguration': NetworkConfiguration(
-                        AwsvpcConfiguration=AwsvpcConfiguration(
-                            Subnets=[
-                                Ref(self.private_subnet1),
-                                Ref(self.private_subnet2)
-                            ],
-                            SecurityGroups=[
-                                Ref(service_security_group)
-                            ]
-                        )
+                launch_type_svc['NetworkConfiguration'] = NetworkConfiguration(
+                    AwsvpcConfiguration=AwsvpcConfiguration(
+                        Subnets=[
+                            Ref(self.private_subnet1),
+                            Ref(self.private_subnet2)
+                        ],
+                        SecurityGroups=[
+                            Ref(service_security_group)
+                        ]
                     )
-                }
+                )
             else:
-                launch_type_svc = {
-                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
-                }
+                launch_type_svc['PlacementStrategies'] = self.PLACEMENT_STRATEGIES
+
             svc = Service(
                 service_name,
                 Cluster=self.cluster_name,

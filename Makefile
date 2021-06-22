@@ -7,7 +7,7 @@ test-template:
 		python3 -m pytest test/deployment/service_template_generator_test.py -vv
 
 test-unit:
-	pytest -s test/deployment/* test/config/*
+	pytest -s -vv test/deployment/* test/config/*
 
 test-integration:
 	pytest -s test/test_cloudlift.py
