@@ -25,3 +25,4 @@ deepdiff
 Jinja2==2.11.3
 docker==4.4.4
 importlib-metadata==3.7.3
+ruamel.yaml==0.17.10

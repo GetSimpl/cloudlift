@@ -1,0 +1,14 @@
+default:
+  users:
+    - "*"
+  resources:
+    environment_variables: &default !flatten
+      - key1
+      - key3
+payroll:
+  users:
+    - somebody@rippling.com
+  resources:
+    environment_variables: !flatten
+      - *default
+      - key4

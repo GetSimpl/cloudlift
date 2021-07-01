@@ -14,6 +14,7 @@ from cloudlift.deployment.ecs import DeployAction
 from cloudlift.deployment.ecs import EcsTaskDefinition
 from cloudlift.deployment.task_definition_builder import TaskDefinitionBuilder
 from cloudlift.exceptions import UnrecoverableException
+from cloudlift.utils.yaml_parser import config_keys
 
 
 
@@ -32,7 +33,7 @@ def revert_deployment(client, cluster_name, ecs_service_name, color, timeout_sec
 
 
 def deploy_new_version(client, cluster_name, ecs_service_name, ecs_service_logical_name, deployment_identifier,
-                       service_name, sample_env_file_path,
+                       access_role, access_file, service_name, sample_env_file_path,
                        timeout_seconds, env_name, secrets_name, service_configuration, region, ecr_image_uri,
                        color='white'):
     task_definition = create_new_task_definition(
@@ -46,6 +47,8 @@ def deploy_new_version(client, cluster_name, ecs_service_name, ecs_service_logic
         client=client,
         cluster_name=cluster_name,
         deployment_identifier=deployment_identifier,
+        access_role=access_role,
+        access_file=access_file,
         ecs_service_logical_name=ecs_service_logical_name,
         service_configuration=service_configuration,
         region=region,
@@ -70,13 +73,13 @@ def deploy_task_definition(client, task_definition, cluster_name, ecs_service_na
 
 def create_new_task_definition(color, ecr_image_uri, ecs_service_name, env_name,
                                sample_env_file_path, secrets_name, service_name, client, cluster_name,
-                               deployment_identifier, ecs_service_logical_name, service_configuration, region):
+                               deployment_identifier, access_role, access_file, ecs_service_logical_name,
+                               service_configuration, region):
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     task_definition = deployment.get_current_task_definition(deployment.service)
     essential_container = find_essential_container(task_definition[u'containerDefinitions'])
     container_configurations = build_config(env_name, service_name, ecs_service_logical_name, sample_env_file_path,
-                                            essential_container,
-                                            secrets_name)
+                                            essential_container, secrets_name, access_role, access_file)
     task_definition.compute_diffs(essential_container, ecr_image_uri)
     print_task_diff(ecs_service_name, task_definition.diff, color)
 
@@ -153,7 +156,7 @@ def get_secret_name(secrets_name, namespace):
 
 
 def build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
-                 secrets_name):
+                 secrets_name, access_role, access_file):
     secrets = {}
     env = {}
     if secrets_name is None:
@@ -165,7 +168,7 @@ def build_config(env_name, service_name, ecs_service_name, sample_env_file_path,
     else:
         sample_env_folder_path = os.getcwd()
         secrets = build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path,
-                                                   secrets_name)
+                                                   secrets_name, access_role, access_file)
     return {essential_container_name: {"secrets": secrets, "environment": env}}
 
 
@@ -173,22 +176,38 @@ def get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
     return f"cloudlift-injected/{env_name}/{service_name}/{ecs_service_name}"
 
 
-def verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path, secrets_name):
+def filter_secrets_by_access_role(secrets, access_role, access_file):
+    if access_role is None:
+        return secrets
+    filtered_secrets = {}
+    configs = config_keys(access_role, access_file)
+    for config in configs:
+        filtered_secrets[config] = secrets[config]
+    return filtered_secrets
+
+
+def verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path, secrets_name, access_role, access_file):
     secrets_across_namespaces = {}
     namespaces = get_namespaces_from_directory(sample_env_folder_path)
     duplicates = find_duplicate_keys(sample_env_folder_path, namespaces)
+
     if len(duplicates) != 0:
         raise UnrecoverableException('duplicate keys found in env sample files {} '.format(duplicates))
+
     for namespace in namespaces:
         secrets_for_namespace = _get_secrets_for_namespace(env_name, namespace,
                                                            sample_env_folder_path,
                                                            secrets_name)
         secrets_across_namespaces.update(secrets_for_namespace)
 
+    secrets_across_namespaces = filter_secrets_by_access_role(secrets_across_namespaces, access_role, access_file)
+
     return secrets_across_namespaces
 
-def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name):
-    secrets_across_namespaces = verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path, secrets_name)
+def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name,
+                                     access_role, access_file):
+    secrets_across_namespaces = verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path,
+                                                                          secrets_name, access_role, access_file)
 
     automated_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
     existing_secrets = {}

@@ -133,9 +133,10 @@ def edit_config(name, environment, sidecar):
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
 @click.option('--ssh', default=None, help='SSH agent socket or keys to expose to the docker build')
 @click.option('--cache-from', multiple=True, help='Images to consider as cache sources')
+@click.option('--access-role', default=None, help='Access role from Access file for env variables')
+@click.option('--access-file', default='access.yml', help='Access Role definitions file path')
 def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile, env_sample_file, ssh,
-                   cache_from,
-                   deployment_identifier):
+                   cache_from, deployment_identifier, access_role, access_file):
     ServiceUpdater(
         name,
         environment=environment,
@@ -145,7 +146,10 @@ def deploy_service(name, environment, timeout_seconds, version, build_arg, docke
         build_args=dict(build_arg),
         dockerfile=dockerfile,
         ssh=ssh,
-        cache_from=list(cache_from), deployment_identifier=deployment_identifier
+        cache_from=list(cache_from),
+        deployment_identifier=deployment_identifier,
+        access_role=access_role,
+        access_file=access_file,
     ).run()
 
 

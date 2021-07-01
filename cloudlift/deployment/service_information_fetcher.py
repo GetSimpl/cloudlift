@@ -122,4 +122,4 @@ class ServiceInformationFetcher(object):
         for ecs_service_logical_name in service_info:
             ecs_service_info = service_info[ecs_service_logical_name]
             secrets_name = ecs_service_info.get('secrets_name')
-            verify_and_get_secrets_for_all_namespaces(self.environment, env_sample_directory_path, secrets_name)
+            verify_and_get_secrets_for_all_namespaces(self.environment, env_sample_directory_path, secrets_name, None, None)
