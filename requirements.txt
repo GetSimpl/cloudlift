@@ -1,5 +1,5 @@
 boto3>=1.9.89
-awscli
+awscli>=1.19.105
 certifi==2017.7.27.1
 cfn-flip==1.0.3
 chardet==3.0.4
