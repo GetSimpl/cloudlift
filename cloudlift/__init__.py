@@ -77,8 +77,9 @@ ECS services")
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
 @click.option('--ssh', default=None, help='SSH agent socket or keys to expose to the docker build')
 @click.option('--cache-from', multiple=True, help='Images to consider as cache sources')
-def create_service(name, environment, version, build_arg, dockerfile, env_sample_file, ssh, cache_from):
-    ServiceCreator(name, environment, env_sample_file).create(
+@click.option('--access-file', default='access.yml', help='Access Role definitions file path')
+def create_service(name, environment, version, build_arg, dockerfile, env_sample_file, ssh, cache_from, access_file):
+    ServiceCreator(name, environment, env_sample_file, access_file).create(
         version=version, build_arg=dict(build_arg), dockerfile=dockerfile, ssh=ssh, cache_from=list(cache_from),
     )
 
@@ -88,8 +89,9 @@ def create_service(name, environment, version, build_arg, dockerfile, env_sample
 @_require_name
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
 @click.option('--exit-on-save', is_flag=True, help='Exit on saving the JSON')
-def update_service(name, environment, env_sample_file, exit_on_save):
-    ServiceCreator(name, environment, env_sample_file).update(exit_on_save)
+@click.option('--access-file', default='access.yml', help='Access Role definitions file path')
+def update_service(name, environment, env_sample_file, exit_on_save, access_file):
+    ServiceCreator(name, environment, env_sample_file, access_file).update(exit_on_save)
 
 
 @cli.command(help="Create a new environment")
@@ -133,10 +135,9 @@ def edit_config(name, environment, sidecar):
 @click.option('--env_sample_file', default='env.sample', help='env sample file path')
 @click.option('--ssh', default=None, help='SSH agent socket or keys to expose to the docker build')
 @click.option('--cache-from', multiple=True, help='Images to consider as cache sources')
-@click.option('--access-role', default=None, help='Access role from Access file for env variables')
 @click.option('--access-file', default='access.yml', help='Access Role definitions file path')
 def deploy_service(name, environment, timeout_seconds, version, build_arg, dockerfile, env_sample_file, ssh,
-                   cache_from, deployment_identifier, access_role, access_file):
+                   cache_from, deployment_identifier, access_file):
     ServiceUpdater(
         name,
         environment=environment,
@@ -148,7 +149,6 @@ def deploy_service(name, environment, timeout_seconds, version, build_arg, docke
         ssh=ssh,
         cache_from=list(cache_from),
         deployment_identifier=deployment_identifier,
-        access_role=access_role,
         access_file=access_file,
     ).run()
 

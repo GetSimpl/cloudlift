@@ -210,7 +210,7 @@ def create_service(mocked_config, env_sample_file="env.sample"):
                       new=mocked_config):
         with patch.object(ServiceConfiguration, 'get_config',
                           new=mocked_config):
-            ServiceCreator(service_name, environment_name, env_sample_file).create()
+            ServiceCreator(service_name, environment_name, env_sample_file, None).create()
 
 
 def delete_stack(cfn_client, stack_name, wait):

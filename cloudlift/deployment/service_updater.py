@@ -20,7 +20,7 @@ DEPLOYMENT_CONCURRENCY = int(os.environ.get('CLOUDLIFT_DEPLOYMENT_CONCURRENCY', 
 class ServiceUpdater(object):
     def __init__(self, name, environment='', env_sample_file='', timeout_seconds=None, version=None,
                  build_args=None, dockerfile=None, ssh=None, cache_from=None,
-                 deployment_identifier=None, access_role=None, access_file=None, working_dir='.'):
+                 deployment_identifier=None, access_file=None, working_dir='.'):
         self.name = name
         self.environment = environment
         self.deployment_identifier = deployment_identifier
@@ -31,7 +31,6 @@ class ServiceUpdater(object):
         self.cluster_name = get_cluster_name(environment)
         self.service_configuration = ServiceConfiguration(service_name=name, environment=environment).get_config()
         self.service_info_fetcher = ServiceInformationFetcher(self.name, self.environment, self.service_configuration)
-        self.access_role = access_role
         self.access_file = access_file
         if not self.service_info_fetcher.stack_found:
             raise UnrecoverableException(
@@ -68,9 +67,8 @@ class ServiceUpdater(object):
         kwargs = dict(client=ecs_client, cluster_name=self.cluster_name,
                       service_name=self.name, sample_env_file_path=self.env_sample_file,
                       timeout_seconds=self.timeout_seconds, env_name=self.environment,
-                      ecr_image_uri=image_url,
-                      deployment_identifier=self.deployment_identifier,
-                      access_role=self.access_role, access_file=self.access_file,
+                      ecr_image_uri=image_url, deployment_identifier=self.deployment_identifier,
+                      access_file=self.access_file,
                       )
         self.run_job_for_all_services("Deploy", target, kwargs)
         log_bold("Deployment completed in {:.2f} seconds".format(time.time()-start_time))

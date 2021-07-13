@@ -142,7 +142,6 @@ class TestDeployer(TestCase):
             service_name='dummy-test',
             sample_env_file_path='./env.sample',
             env_name='test',
-            access_role=None,
             access_file='access.yml',
             secrets_name='dummy-test-secrets',
             service_configuration=service_configuration,

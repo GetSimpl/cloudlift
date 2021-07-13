@@ -26,7 +26,7 @@ class ServiceCreator(object):
         CloudFormation template for ECS service and related dependencies
     '''
 
-    def __init__(self, name, environment, env_sample_file):
+    def __init__(self, name, environment, env_sample_file, access_file):
         self.name = name
         self.environment = environment
         self.stack_name = get_service_stack_name(environment, name)
@@ -35,6 +35,7 @@ class ServiceCreator(object):
         self.existing_events = get_stack_events(self.client, self.stack_name)
         self.service_configuration = ServiceConfiguration(self.name, self.environment)
         self.env_sample_file = env_sample_file
+        self.access_file = access_file
 
     def create(self, config_body=None, version=None, build_arg=None, dockerfile=None, ssh=None, cache_from=None):
         '''
@@ -66,7 +67,8 @@ class ServiceCreator(object):
             self.service_configuration,
             self.environment_stack,
             self.env_sample_file,
-            ecr.image_uri
+            ecr.image_uri,
+            self.access_file,
         )
         service_template_body = template_generator.generate_service()
 
@@ -118,6 +120,7 @@ class ServiceCreator(object):
                 self.environment_stack,
                 self.env_sample_file,
                 current_image_uri,
+                self.access_file,
                 desired_counts,
             )
             service_template_body = template_generator.generate_service()

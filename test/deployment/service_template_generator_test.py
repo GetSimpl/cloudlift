@@ -14,7 +14,7 @@ from cloudlift.deployment.service_template_generator import ServiceTemplateGener
 
 
 def mock_build_config_impl(env_name, cloudlift_service_name, dummy_ecs_service_name, sample_env_file_path,
-                           ecs_service_name, prefix):
+                           ecs_service_name, prefix, access_role, access_file):
     return {ecs_service_name: {"secrets": {"CLOUDLIFT_INJECTED_SECRETS": 'arn_injected_secrets'},
                                "environment": {"PORT": "80"}}}
 
@@ -200,7 +200,8 @@ class TestServiceTemplateGenerator(TestCase):
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name="test-service",
                                                environment="staging")
 
-        generator = ServiceTemplateGenerator(mock_service_configuration, None, "env.sample", ecr_image_uri="image:v1")
+        generator = ServiceTemplateGenerator(mock_service_configuration, None, "env.sample", ecr_image_uri="image:v1",
+                                             access_file=None)
 
         assert generator.env == 'staging'
         assert generator.application_name == 'test-service'
@@ -217,7 +218,7 @@ class TestServiceTemplateGenerator(TestCase):
         mock_service_configuration.get_config.return_value = mocked_service_config()
 
         def mock_build_config_impl(env_name, service_name, dummy_ecs_service_name, sample_env_file_path,
-                                   ecs_service_name, secrets_name):
+                                   ecs_service_name, secrets_name, access_role, access_file):
             expected = "dummy-config" if ecs_service_name == "DummyContainer" else "dummy-sidekiq-config"
             self.assertEqual(secrets_name, expected)
             return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
@@ -230,6 +231,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_service_template.yml')
@@ -287,6 +289,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
 
         generated_template = template_generator.generate_service()
@@ -341,6 +344,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
 
         generated_template = template_generator.generate_service()
@@ -438,6 +442,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"Dummy": 100, "DummyRunSidekiqsh": 199})
 
         generated_template = template_generator.generate_service()
@@ -465,6 +470,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/dummyFargate-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"DummyFargateService": 45,
                                                                       "DummyFargateRunSidekiqsh": 51})
 
@@ -493,7 +499,7 @@ class TestServiceTemplateGenerator(TestCase):
 
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
-                                                      "test-image-repo")
+                                                      "test-image-repo", None,)
         with self.assertRaises(NotImplementedError) as context:
             template_generator.generate_service()
             self.assertTrue(
@@ -516,6 +522,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"FreeradiusServer": 100})
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_udp_service_template.yml')
@@ -540,6 +547,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"FreeradiusServer": 100})
         generated_template = template_generator.generate_service()
         template_file_path = os.path.join(os.path.dirname(__file__), '../templates/expected_tcp_service_template.yml')
@@ -577,6 +585,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"Dummy": 1})
 
         generated_template = template_generator.generate_service()
@@ -620,6 +629,7 @@ class TestServiceTemplateGenerator(TestCase):
         template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
                                                       './test/templates/test_env.sample',
                                                       "12537612.dkr.ecr.us-west-2.amazonaws.com/test-service-repo:1.1.1",
+                                                      None,
                                                       desired_counts={"Dummy": 1})
 
         generated_template = template_generator.generate_service()
