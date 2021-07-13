@@ -17,6 +17,31 @@ from cloudlift.exceptions import UnrecoverableException
 from cloudlift.utils.yaml_parser import config_keys
 
 
+class DeploymentResultChecker(object):
+    def __init__(self, deploy_action: DeployAction,
+                 action_name: str,
+                 task_definition: EcsTaskDefinition,
+                 color: str,
+                 timeout_seconds: int):
+        self.deploy_action = deploy_action
+        self.action_name = action_name
+        self.task_definition = task_definition
+        self.existing_events = fetch_events(deploy_action.get_service())
+        self.color = color
+        self.deploy_end_time = time() + timeout_seconds
+
+    def wait_for_finish(self):
+        while time() <= self.deploy_end_time:
+            service = self.deploy_action.get_service()
+            self.existing_events = fetch_and_print_new_events(service, self.existing_events, self.color)
+            if is_deployed(service):
+                log_with_color(f"{self.deploy_action.service_name} {self.action_name}: Completed successfully.", self.color)
+                return True
+            sleep(5)
+        record_deployment_failure_metric(self.deploy_action.cluster_name, self.deploy_action.service_name)
+        log_err(f"Deployment {self.deploy_action.service_name} {self.action_name} timed out!")
+        raise UnrecoverableException(f"Deployment {self.deploy_action.service_name} {self.action_name} failed")
+
 
 def find_essential_container(container_definitions):
     for defn in container_definitions:
@@ -29,7 +54,7 @@ def revert_deployment(client, cluster_name, ecs_service_name, color, timeout_sec
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     previous_task_defn = deployment.get_task_definition_by_deployment_identifier(deployment.service,
                                                                                  deployment_identifier)
-    deploy_task_definition(client, previous_task_defn, cluster_name, ecs_service_name, color, timeout_seconds, 'Revert')
+    return deploy_task_definition(client, previous_task_defn, cluster_name, ecs_service_name, color, timeout_seconds, 'Revert')
 
 
 def deploy_new_version(client, cluster_name, ecs_service_name, ecs_service_logical_name, deployment_identifier,
@@ -53,7 +78,7 @@ def deploy_new_version(client, cluster_name, ecs_service_name, ecs_service_logic
         service_configuration=service_configuration,
         region=region,
     )
-    deploy_task_definition(client, task_definition, cluster_name, ecs_service_name, color, timeout_seconds, 'Deploy')
+    return deploy_task_definition(client, task_definition, cluster_name, ecs_service_name, color, timeout_seconds, 'Deploy')
 
 
 def deploy_task_definition(client, task_definition, cluster_name, ecs_service_name, color, timeout_secs, action_name):
@@ -64,11 +89,9 @@ def deploy_task_definition(client, task_definition, cluster_name, ecs_service_na
     else:
         desired_count = deployment.service.desired_count
     deployment.service.set_desired_count(desired_count)
-    deployment_succeeded = deploy_and_wait(deployment, task_definition, color, timeout_secs)
-    if not deployment_succeeded:
-        record_deployment_failure_metric(deployment.cluster_name, deployment.service_name)
-        raise UnrecoverableException(ecs_service_name + f" {action_name} failed.")
-    log_with_color(f"{ecs_service_name} {action_name}: Completed successfully.", color)
+    result_checker = DeploymentResultChecker(deployment, action_name, task_definition, color, timeout_secs)
+    deployment.deploy(task_definition)
+    return result_checker
 
 
 def create_new_task_definition(color, ecr_image_uri, ecs_service_name, env_name,
@@ -101,13 +124,6 @@ def create_new_task_definition(color, ecr_image_uri, ecs_service_name, env_name,
     if diff:
         log_with_color(f"{ecs_service_name} task definition diffs: {pformat(diff)}", color)
     return deployment.update_task_definition(updated_task_definition, deployment_identifier)
-
-
-def deploy_and_wait(deployment, new_task_definition, color, timeout_seconds):
-    existing_events = fetch_events(deployment.get_service())
-    deploy_end_time = time() + timeout_seconds
-    deployment.deploy(new_task_definition)
-    return wait_for_finish(deployment, existing_events, color, deploy_end_time)
 
 
 def get_env_sample_file_name(namespace):
@@ -156,7 +172,7 @@ def get_secret_name(secrets_name, namespace):
 
 
 def build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
-                 secrets_name, access_role, access_file):
+                 secrets_name, access_role=None, access_file='access.yml'):
     secrets = {}
     env = {}
     if secrets_name is None:
@@ -256,18 +272,6 @@ def read_config(file_content):
         key, value = line.split('=', 1)
         config[key] = value
     return config
-
-
-def wait_for_finish(action, existing_events, color, deploy_end_time):
-    while time() <= deploy_end_time:
-        service = action.get_service()
-        existing_events = fetch_and_print_new_events(service, existing_events, color)
-        if is_deployed(service):
-            return True
-        sleep(5)
-
-    log_err("Deployment timed out!")
-    return False
 
 
 def record_deployment_failure_metric(cluster_name, service_name):

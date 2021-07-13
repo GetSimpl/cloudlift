@@ -1,6 +1,6 @@
-import multiprocessing
 import os
-from time import sleep
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 import boto3
 
@@ -10,7 +10,6 @@ from cloudlift.config.logging import log_bold, log_intent, log_warning
 from cloudlift.deployment import deployer, ServiceInformationFetcher
 from cloudlift.deployment.ecs import EcsClient
 from cloudlift.exceptions import UnrecoverableException
-from cloudlift.utils import chunks
 from cloudlift.deployment.ecr import ECR
 from stringcase import spinalcase
 
@@ -52,6 +51,7 @@ class ServiceUpdater(object):
         )
 
     def run(self):
+        start_time = time.time()
         log_warning("Deploying to {self.region}".format(**locals()))
         if not os.path.exists(self.env_sample_file):
             raise UnrecoverableException('env.sample not found. Exiting.')
@@ -73,6 +73,7 @@ class ServiceUpdater(object):
                       access_role=self.access_role, access_file=self.access_file,
                       )
         self.run_job_for_all_services("Deploy", target, kwargs)
+        log_bold("Deployment completed in {:.2f} seconds".format(time.time()-start_time))
 
     def revert(self):
         target = deployer.revert_deployment
@@ -86,41 +87,29 @@ class ServiceUpdater(object):
         self.ecr.add_tags(additional_tags)
 
     def run_job_for_all_services(self, job_name, target, kwargs):
-        log_bold("{} concurrency: {}".format(job_name, DEPLOYMENT_CONCURRENCY))
         jobs = []
         service_info = self.service_info_fetcher.service_info
-        for index, ecs_service_logical_name in enumerate(service_info):
-            ecs_service_info = service_info[ecs_service_logical_name]
-            log_bold(f"Queueing {job_name} of " + ecs_service_info['ecs_service_name'])
-            color = DEPLOYMENT_COLORS[index % 3]
-            services_configuration = self.service_configuration['services']
-            kwargs.update(dict(ecs_service_name=ecs_service_info['ecs_service_name'],
-                               secrets_name=ecs_service_info.get('secrets_name'),
-                               ecs_service_logical_name=ecs_service_logical_name,
-                               color=color,
-                               service_configuration=services_configuration.get(ecs_service_logical_name),
-                               region=self.region,
-                               ))
-            process = multiprocessing.Process(
-                target=target,
-                kwargs=kwargs
-            )
-            jobs.append(process)
-        all_exit_codes = []
-        for chunk_of_jobs in chunks(jobs, DEPLOYMENT_CONCURRENCY):
-            for process in chunk_of_jobs:
-                process.start()
-
-            while True:
-                sleep(1)
-                exit_codes = [proc.exitcode for proc in chunk_of_jobs]
-                if None not in exit_codes:
-                    break
-
-            for exit_code in exit_codes:
-                all_exit_codes.append(exit_code)
-        if any(all_exit_codes) != 0:
-            raise UnrecoverableException(f"{job_name} failed")
+        with ThreadPoolExecutor(max_workers=DEPLOYMENT_CONCURRENCY) as executor:
+            for index, ecs_service_logical_name in enumerate(service_info):
+                ecs_service_info = service_info[ecs_service_logical_name]
+                log_bold(f"Starting {job_name} of " + ecs_service_info['ecs_service_name'])
+                color = DEPLOYMENT_COLORS[index % 3]
+                services_configuration = self.service_configuration['services']
+                kwargs_copy = kwargs.copy()
+                kwargs_copy.update(dict(ecs_service_name=ecs_service_info['ecs_service_name'],
+                                   secrets_name=ecs_service_info.get('secrets_name'),
+                                   ecs_service_logical_name=ecs_service_logical_name,
+                                   color=color,
+                                   service_configuration=services_configuration.get(ecs_service_logical_name),
+                                   region=self.region,
+                                   ))
+                jobs.append(executor.submit(target, **kwargs_copy))
+        log_bold(f"Waiting for {job_name} to complete.")
+        with ThreadPoolExecutor(max_workers=DEPLOYMENT_CONCURRENCY) as executor:
+            results = [executor.submit(job.result().wait_for_finish) for job in jobs]
+        for result in results:
+            if result.exception() is not None:
+                raise UnrecoverableException(f"{job_name} failed")
 
     @property
     def region(self):

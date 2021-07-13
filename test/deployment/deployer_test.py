@@ -2,15 +2,15 @@ import os
 from _datetime import datetime, timedelta
 from copy import deepcopy
 from unittest import TestCase
-from unittest.mock import patch, MagicMock, sentinel, mock_open
+from unittest.mock import patch, MagicMock, sentinel, mock_open, PropertyMock
 
 import pytest
 from dateutil.tz.tz import tzlocal
 
 from cloudlift.deployment.deployer import is_deployed, \
-    record_deployment_failure_metric, deploy_and_wait, build_config, get_env_sample_file_name, \
+    record_deployment_failure_metric, build_config, get_env_sample_file_name, \
     get_env_sample_file_contents, get_namespaces_from_directory, find_duplicate_keys, get_sample_keys, get_secret_name, \
-    get_automated_injected_secret_name, create_new_task_definition
+    get_automated_injected_secret_name, create_new_task_definition, DeploymentResultChecker
 from cloudlift.deployment.ecs import EcsService, EcsTaskDefinition
 from cloudlift.exceptions import UnrecoverableException
 
@@ -157,12 +157,12 @@ class TestDeployer(TestCase):
         client.register_task_definition.assert_called_with(**expected)
 
 
-class TestDeployAndWait(TestCase):
+class TestDeploymentResultChecker(TestCase):
     @staticmethod
     def create_ecs_service_with_status(status):
         return EcsService('cluster-testing', status)
 
-    def test_deploy_and_wait_successful_run(self):
+    def test_wait_for_finish(self):
         deployment = MagicMock()
         deployment.get_service.side_effect = [
             self.create_ecs_service_with_status({
@@ -190,16 +190,14 @@ class TestDeployAndWait(TestCase):
         new_task_definition = EcsTaskDefinition({'containerDefinitions': []})
         color = "green"
         timeout_seconds = 3
-
+        checker = DeploymentResultChecker(deployment, "Deploy", new_task_definition, color, timeout_seconds)
         self.assertTrue(
-            deploy_and_wait(deployment, new_task_definition, color, timeout_seconds),
+            checker.wait_for_finish(),
             "expected deployment to be successful"
         )
 
-        deployment.deploy.assert_called_with(new_task_definition)
-
-    @patch("cloudlift.deployment.deployer.log_err")
-    def test_deploy_and_wait_timeout(self, mock_log_err):
+    @patch('cloudlift.deployment.deployer.record_deployment_failure_metric')
+    def test_wait_for_finish_timeout(self, mock_record):
         deployment = MagicMock()
         deployment.get_service.return_value = self.create_ecs_service_with_status({
             'desiredCount': 5,
@@ -212,131 +210,15 @@ class TestDeployAndWait(TestCase):
             ]
         })
 
-        new_task_definition = EcsTaskDefinition({'containerDefinitions': []})
-        color = "green"
-        timeout_seconds = 2
-
-        self.assertFalse(
-            deploy_and_wait(deployment, new_task_definition, color, timeout_seconds),
-            "expected deployment to fail"
-        )
-
-        deployment.deploy.assert_called_with(new_task_definition)
-        mock_log_err.assert_called_with('Deployment timed out!')
-
-    @patch("cloudlift.deployment.deployer.log_err")
-    def test_deploy_and_wait_unable_to_place_tasks_initially_succeeds_eventually(self, mock_log_err):
-        deployment = MagicMock()
-        start_time = datetime.now(tz=tzlocal())
-        deployment.get_service.side_effect = [
-            self.create_ecs_service_with_status({
-                'desiredCount': 5,
-                'runningCount': 0,
-                'events': [
-                    {'message': 'unable to place tasks due to memory', 'createdAt': start_time},
-                ],
-                'deployments': [
-                    {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
-                     'createdAt': start_time - timedelta(seconds=5),
-                     'updatedAt': start_time - timedelta(seconds=5)}
-                ]
-            }),
-            self.create_ecs_service_with_status({
-                'events': [
-                    {'message': 'unable to place tasks due to memory',
-                     'createdAt': start_time + timedelta(seconds=1)},
-                ],
-                'desiredCount': 5,
-                'runningCount': 0,
-                'deployments': [
-                    {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
-                     'createdAt': start_time - timedelta(seconds=5),
-                     'updatedAt': start_time - timedelta(seconds=2)}
-                ]
-            }),
-            self.create_ecs_service_with_status({
-                'desiredCount': 5,
-                'runningCount': 5,
-                'events': [
-                    {'message': 'service test has reached a steady state.',
-                     'createdAt': start_time + timedelta(seconds=2)},
-                ],
-                'deployments': [
-                    {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 5,
-                     'createdAt': start_time - timedelta(seconds=5),
-                     'updatedAt': start_time - timedelta(seconds=1)}
-                ]
-            }),
-        ]
+        deployment.service_name = 'cluster'
+        deployment.action_name = 'new_service'
 
         new_task_definition = EcsTaskDefinition({'containerDefinitions': []})
         color = "green"
-        timeout_seconds = 15
-
-        self.assertTrue(
-            deploy_and_wait(deployment, new_task_definition, color, timeout_seconds),
-            "expected deployment to pass"
-        )
-
-        deployment.deploy.assert_called_with(new_task_definition)
-        mock_log_err.assert_not_called()
-
-    @patch("cloudlift.deployment.deployer.log_err")
-    def test_deploy_and_wait_unable_to_place_tasks_till_timeout(self, mock_log_err):
-        deployment = MagicMock()
-        start_time = datetime.now(tz=tzlocal())
-        deployment.get_service.side_effect = [
-            self.create_ecs_service_with_status({
-                'desiredCount': 5,
-                'runningCount': 0,
-                'events': [
-                    {'message': 'unable to place tasks due to memory', 'createdAt': start_time},
-                ],
-                'deployments': [
-                    {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
-                     'createdAt': start_time - timedelta(seconds=5),
-                     'updatedAt': start_time - timedelta(seconds=5)}
-                ]
-            }),
-            self.create_ecs_service_with_status({
-                'desiredCount': 5,
-                'runningCount': 0,
-                'events': [
-                    {'message': 'unable to place tasks due to memory',
-                     'createdAt': start_time + timedelta(seconds=1)},
-                ],
-                'deployments': [
-                    {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
-                     'createdAt': start_time - timedelta(seconds=5),
-                     'updatedAt': start_time - timedelta(seconds=4)}
-                ]
-            }),
-            self.create_ecs_service_with_status({
-                'desiredCount': 5,
-                'runningCount': 0,
-                'events': [
-                    {'message': 'unable to place tasks due to memory',
-                     'createdAt': start_time + timedelta(seconds=2)},
-                ],
-                'deployments': [
-                    {'status': 'PRIMARY', 'desiredCount': 5, 'runningCount': 0,
-                     'createdAt': start_time - timedelta(seconds=5),
-                     'updatedAt': start_time - timedelta(seconds=3)}
-                ]
-            }),
-        ]
-
-        new_task_definition = EcsTaskDefinition({'containerDefinitions': []})
-        color = "green"
-        timeout_seconds = 2
-
-        self.assertFalse(
-            deploy_and_wait(deployment, new_task_definition, color, timeout_seconds),
-            "expected deployment to fail"
-        )
-
-        deployment.deploy.assert_called_with(new_task_definition)
-        mock_log_err.assert_called_with('Deployment timed out!')
+        timeout_seconds = 1
+        checker = DeploymentResultChecker(deployment, "Deploy", new_task_definition, color, timeout_seconds)
+        self.assertRaises(UnrecoverableException, checker.wait_for_finish)
+        self.assertTrue(mock_record.called)
 
 
 @patch('cloudlift.deployment.deployer.datetime')
