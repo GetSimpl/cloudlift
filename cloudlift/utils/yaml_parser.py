@@ -1,7 +1,6 @@
 from pathlib import Path
+from os import path
 import ruamel.yaml
-
-from cloudlift.config.logging import log_err
 
 yaml = ruamel.yaml.YAML()
 
@@ -27,34 +26,16 @@ class Flatten(list):
 
 access_roles_data = None
 
-
 def load_access_file(access_file):
+    if not path.isfile(access_file):
+        return None
     global access_roles_data
-    if not access_file:
-        return
-
     if access_roles_data is None:
-        file = Path(access_file)
-        if not file.is_file():
-            log_err(f"Access file ({access_file}) is missing")
-            return
-
-        try:
-            access_roles_data = yaml.load(file)
-        except Exception as e:
-            log_err(f"Error parsing access_file: {e}")
-            return
-
+        access_roles_data = yaml.load(Path(access_file))
     return access_roles_data
 
-
 def config_keys(access_role, access_file):
-    if not access_file:
-        return []
-
     data = load_access_file(access_file)
-
-    if access_role not in data:
-        return []
-
+    if data is None:
+        return None
     return data[access_role]['resources']['environment_variables']
