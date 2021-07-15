@@ -23,6 +23,14 @@ class Flatten(list):
            else:
                yield item
 
+access_roles_data = None
+
+def load_access_file(access_file):
+    global access_roles_data
+    if access_roles_data is None:
+        access_roles_data = yaml.load(Path(access_file))
+    return access_roles_data
+
 def config_keys(access_role, access_file):
-    data = yaml.load(Path(access_file))
+    data = load_access_file(access_file)
     return data[access_role]['resources']['environment_variables']

@@ -11,6 +11,7 @@ from cloudlift.deployment import deployer, ServiceInformationFetcher
 from cloudlift.deployment.ecs import EcsClient
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.deployment.ecr import ECR
+from cloudlift.utils.yaml_parser import load_access_file
 from stringcase import spinalcase
 
 DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
@@ -70,6 +71,7 @@ class ServiceUpdater(object):
                       ecr_image_uri=image_url, deployment_identifier=self.deployment_identifier,
                       access_file=self.access_file,
                       )
+        load_access_file(self.access_file)
         self.run_job_for_all_services("Deploy", target, kwargs)
         log_bold("Deployment completed in {:.2f} seconds".format(time.time()-start_time))
 
