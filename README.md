@@ -6,7 +6,7 @@ services in AWS ECS.
 Cloudlift is a command-line tool for dockerized services to be deployed in AWS
 ECS. It's very simple to use. That's possible because this is heavily
 opinionated. Under the hood, it is a wrapper to AWS cloudformation templates. On
-creating/udpating a service or a cluster this creates/updates a cloudformation
+creating/updating a service or a cluster this creates/updates a cloudformation
 in AWS.
 
 ## Demo videos
