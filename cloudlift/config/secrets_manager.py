@@ -16,6 +16,7 @@ def set_secrets_manager_config(env, secret_name, config):
     try:
         client.put_secret_value(SecretId=secret_name, SecretString=secret_string)
     except client.exceptions.ResourceNotFoundException:
+        log_warning(f"Created secret {secret_name}")
         client.create_secret(Name=secret_name, SecretString=secret_string)
 
     def check_consistency(secret_id, expected_configuration):

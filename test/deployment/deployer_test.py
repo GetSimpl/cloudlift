@@ -10,7 +10,8 @@ from dateutil.tz.tz import tzlocal
 from cloudlift.deployment.deployer import is_deployed, \
     record_deployment_failure_metric, build_config, get_env_sample_file_name, \
     get_env_sample_file_contents, get_namespaces_from_directory, find_duplicate_keys, get_sample_keys, get_secret_name, \
-    get_automated_injected_secret_name, create_new_task_definition, DeploymentResultChecker
+    get_automated_injected_secret_name, create_new_task_definition, DeploymentResultChecker, \
+    publish_secrets
 from cloudlift.deployment.ecs import EcsService, EcsTaskDefinition
 from cloudlift.exceptions import UnrecoverableException
 
@@ -523,9 +524,7 @@ class TestBuildConfig(TestCase):
         self.assertDictEqual(expected_configurations, actual_configurations)
 
 
-
 class TestSecrets(TestCase):
-
     def test_get_env_sample_file_name_for_default_namespace(self):
         self.assertEqual(get_env_sample_file_name(''), 'env.sample')
 
@@ -565,3 +564,72 @@ class TestSecrets(TestCase):
 
     def test_get_secret_name_for_non_default_execution_namespace(self):
         self.assertEqual(get_secret_name('test-prefix-test', 'app1'), 'test-prefix-test/app1')
+
+    @patch("cloudlift.deployment.deployer.build_secrets_for_all_namespaces")
+    def test_publish_secrets(self, mock_build_secrets_for_all_namespaces):
+        mock_build_secrets_for_all_namespaces.return_value = dict(CLOUDLIFT_INJECTED_SECRETS='secret-id:version')
+        with self.subTest("test one service"):
+            mock_service_configuration = MagicMock()
+            mock_service_configuration.get_config.return_value = {
+                'services': {
+                    'ServiceOne': {
+                        'secrets_name': 'secret-1'
+                    }
+                }
+            }
+            self.assertEqual('secret-id:version',
+                             publish_secrets(mock_service_configuration, 'target-secret', None, 'env.sample'))
+
+        with self.subTest("test multiple services with same secret"):
+            mock_service_configuration = MagicMock()
+            mock_service_configuration.get_config.return_value = {
+                'services': {
+                    'ServiceOne': {
+                        'secrets_name': 'secret-1'
+                    },
+                    'ServiceTwo': {
+                        'secrets_name': 'secret-1'
+                    }
+                }
+            }
+            self.assertEqual('secret-id:version',
+                             publish_secrets(mock_service_configuration, 'target-secret', None, 'env.sample'))
+
+        with self.subTest("test multiple services with different secrets"):
+            mock_service_configuration = MagicMock()
+            mock_service_configuration.get_config.return_value = {
+                'services': {
+                    'ServiceOne': {
+                        'secrets_name': 'secret-1'
+                    },
+                    'ServiceTwo': {
+                        'secrets_name': 'secret-2'
+                    }
+                }
+            }
+
+            with self.assertRaises(UnrecoverableException) as ex:
+                publish_secrets(mock_service_configuration, 'target-secret', None, 'env.sample')
+                self.assertEqual("Pass source-service as mutliple secrets are found",
+                                 ex.exception.value)
+
+        with self.subTest("test multiple services with different secrets and explicit source"):
+            mock_build_secrets_for_all_namespaces.reset_mock()
+            mock_service_configuration = MagicMock()
+            mock_service_configuration.get_config.return_value = {
+                'services': {
+                    'ServiceOne': {
+                        'secrets_name': 'secret-1'
+                    },
+                    'ServiceTwo': {
+                        'secrets_name': 'secret-2'
+                    }
+                }
+            }
+
+            self.assertEqual('secret-id:version',
+                             publish_secrets(mock_service_configuration, 'target-secret', 'ServiceOne', 'env.sample'))
+
+            # Asserting 5th arg is secret-1.
+            args, kwargs = mock_build_secrets_for_all_namespaces.call_args_list[0]
+            self.assertEqual("secret-1", kwargs['secrets_name'])

@@ -3,11 +3,12 @@ from datetime import datetime
 from glob import glob
 from pprint import pformat
 from time import sleep, time
+from typing import Optional
 
 import boto3
 from deepdiff import DeepDiff
 
-from cloudlift.config import ParameterStore
+from cloudlift.config import ParameterStore, ServiceConfiguration
 from cloudlift.config import secrets_manager
 from cloudlift.config.logging import log_bold, log_err, log_intent, log_with_color, log_warning, log
 from cloudlift.deployment.ecs import DeployAction
@@ -171,7 +172,7 @@ def get_secret_name(secrets_name, namespace):
 
 
 def build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
-                 secrets_name, access_role=None, access_file='access.yml'):
+                 secrets_name, access_role=None, access_file='access.yml', generated_secret_name=None):
     secrets = {}
     env = {}
     if secrets_name is None:
@@ -182,9 +183,43 @@ def build_config(env_name, service_name, ecs_service_name, sample_env_file_path,
         env = {k: env_config_param_store[k] for k in sample_config_keys}
     else:
         sample_env_folder_path = os.getcwd()
-        secrets = build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path,
-                                                   secrets_name, access_role, access_file)
+        secrets = build_secrets_for_all_namespaces(
+            env_name=env_name,
+            service_name=service_name,
+            ecs_service_name=ecs_service_name,
+            sample_env_folder_path=sample_env_folder_path,
+            secrets_name=secrets_name,
+            access_role=access_role,
+            access_file=access_file,
+            generated_secret_name=generated_secret_name,
+        )
     return {essential_container_name: {"secrets": secrets, "environment": env}}
+
+
+def publish_secrets(service_configuration: ServiceConfiguration,
+                    secret_id: str,
+                    source_service: Optional[str],
+                    env_sample_file: str):
+    if source_service:
+        source_service_config = service_configuration.get_config().get('services', {}).get(source_service)
+        secrets_name = source_service_config.get('secrets_name')
+    else:
+        secrets = set([service_config.get('secrets_name') for service_name, service_config in
+                       service_configuration.get_config().get('services', {}).items()])
+        if len(secrets) > 1:
+            raise UnrecoverableException('Pass source-service as mutliple secrets are found')
+        secrets_name = secrets.pop()
+
+    generated_configurations = build_config(
+        env_name=service_configuration.environment,
+        service_name=service_configuration.service_name,
+        ecs_service_name=None,
+        sample_env_file_path=env_sample_file,
+        essential_container_name='root',
+        secrets_name=secrets_name,
+        generated_secret_name=secret_id,
+    )
+    return generated_configurations['root']['secrets'].get('CLOUDLIFT_INJECTED_SECRETS', None)
 
 
 def get_automated_injected_secret_name(env_name, service_name, ecs_service_name):
@@ -222,22 +257,24 @@ def verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path, 
 
     return secrets_across_namespaces
 
+
 def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name,
-                                     access_role, access_file):
+                                     access_role, access_file, generated_secret_name=None):
     secrets_across_namespaces = verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path,
                                                                           secrets_name, access_role, access_file)
 
-    automated_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name)
+    published_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name) if \
+        generated_secret_name is None else generated_secret_name
     existing_secrets = {}
     try:
-        existing_secrets = secrets_manager.get_config(automated_secret_name, env_name)['secrets']
+        existing_secrets = secrets_manager.get_config(published_secret_name, env_name)['secrets']
     except Exception as err:
-        log_warning(f'secret {automated_secret_name} does not exist. It will be created: {err}')
+        log_warning(f'secret {published_secret_name} does not exist. It will be created: {err}')
     if existing_secrets != secrets_across_namespaces:
-        log(f"Updating {automated_secret_name}")
-        secrets_manager.set_secrets_manager_config(env_name, automated_secret_name,
+        log(f"Updating {published_secret_name}")
+        secrets_manager.set_secrets_manager_config(env_name, published_secret_name,
                                                    secrets_across_namespaces)
-    arn = secrets_manager.get_config(automated_secret_name, env_name)['ARN']
+    arn = secrets_manager.get_config(published_secret_name, env_name)['ARN']
     return dict(CLOUDLIFT_INJECTED_SECRETS=arn)
 
 

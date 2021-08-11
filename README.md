@@ -395,19 +395,22 @@ This example is bit comprehensive to show
 - it can execute shell commands with "`".
 - It's wrapped with double quotes to avoid line-breaks in SSH keys breaking the command.
 
-### 6. Starting shell on container instance for service
+#### 4. Publish Secrets
 
-You can start a shell on a container instance which is running a task for given
-application using the `start_session` command. One pre-requisite for this is
-installing the session manager plugin for `awscli`. To install session manager
-plugin follow the [guide](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html#install-plugin-macos)
+This command can be used to run the secrets generation logic and publish it to a specific secret ARN.
 
 ```sh
-  cloudlift start_session -e <environment-name>
+cloudlift publish_secrets -e test --name svc --secret-id secret-arn
 ```
 
-MFA code can be passed as parameter `--mfa` or you will be prompted to enter
-the MFA code.
+This would publish the secrets to the specific secret-arn. If there are multiple services with different `secrets_name` in their configuration,
+the following command can be used to publish multiple secrets
+
+
+```sh
+cloudlift publish_secrets -e test --name svc --source-service svc-1 --secret-id secret-arn-1
+cloudlift publish_secrets -e test --name svc --source-service svc-2 --secret-id secret-arn-2
+```
 
 ## Contributing to cloudlift
 

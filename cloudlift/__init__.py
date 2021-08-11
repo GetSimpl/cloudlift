@@ -11,6 +11,7 @@ from cloudlift.deployment.configs import deduce_name
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
+from cloudlift.deployment.deployer import publish_secrets as publish_to_secrets_manager
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.version import VERSION
 
@@ -206,6 +207,17 @@ def verify_env_sample(name, environment, env_sample_directory_path):
         environment,
         ServiceConfiguration(service_name=name, environment=environment).get_config(),
     ).verify_env_sample(env_sample_directory_path)
+
+
+@cli.command(help="Publish generated secrets to a specific secrets ARN")
+@_require_environment
+@_require_name
+@click.option("--secret-id", required=True, type=str, help="Secret name/arn to publish to")
+@click.option("--source-service", default="", type=str, help="Pick source from Cloudlift services")
+@click.option('--env_sample_file', default='env.sample', help='env sample file path')
+def publish_secrets(name, environment, secret_id, source_service, env_sample_file):
+    service_configuration = ServiceConfiguration(service_name=name, environment=environment)
+    print(publish_to_secrets_manager(service_configuration, secret_id, source_service, env_sample_file))
 
 
 if __name__ == '__main__':
