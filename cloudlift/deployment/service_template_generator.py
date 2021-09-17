@@ -18,7 +18,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition)
+                             PortMapping, Service, TaskDefinition, SystemControl)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -204,6 +204,10 @@ service is down',
                 )
             ]
 
+        if 'system_controls' in config:
+            container_definition_arguments['SystemControls'] = [SystemControl(Namespace=system_control['name_space'],
+                                                                              Value=system_control['value']) for
+                                                                system_control in config['system_controls']]
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
 
