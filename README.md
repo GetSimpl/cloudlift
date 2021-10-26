@@ -144,6 +144,7 @@ This opens the `VISUAL` editor with default config similar to -
               },
               // Use secrets from secrets manager with key test-env
               "secrets_name": "test-env",
+              "secrets_override": "test-env-overrides", // optional
               "memory_reservation": 100
           }
       }
@@ -172,6 +173,10 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 
 `container_health_check` can be used to specify docker container health and maps to `healthCheck`
 in ECS container definition. For more information, check [here](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html)
+
+`secrets_name` can be used to inject secrets from Secrets manager. This will be injected as a JSON through an ENV variable CLOUDLIFIT_INEJECTED_SECRETS.
+
+`secrets_override` can be used to override specific keys picked from `secrets_name`
 
 An example service using `container_health_check`
 

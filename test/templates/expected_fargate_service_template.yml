@@ -93,9 +93,7 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Cpu: 0
-          Environment:
-            - Name: PORT
-              Value: '80'
+          Environment: []
           Essential: 'true'
           Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummyFargate-repo:1.1.1
           LogConfiguration:
@@ -188,9 +186,7 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Cpu: 0
-          Environment:
-            - Name: PORT
-              Value: '80'
+          Environment: []
           Essential: 'true'
           Image: 12537612.dkr.ecr.us-west-2.amazonaws.com/dummyFargate-repo:1.1.1
           LogConfiguration:

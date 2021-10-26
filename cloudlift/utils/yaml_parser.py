@@ -35,6 +35,8 @@ def load_access_file(access_file):
     return access_roles_data
 
 def config_keys(access_role, access_file):
+    if not access_file:
+        return None
     data = load_access_file(access_file)
     if data is None:
         return None

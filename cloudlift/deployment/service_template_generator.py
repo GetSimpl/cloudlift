@@ -220,11 +220,16 @@ service is down',
     def _add_service(self, service_name, config):
         launch_type = get_launch_type(config)
         secrets_name = config.get('secrets_name')
-        container_configurations = build_config(self.env, self.application_name, service_name,
-                                                self.env_sample_file_path,
-                                                container_name(service_name), secrets_name,
-                                                config.get('access_role'), self.access_file,
-                                                )
+        container_configurations = build_config(
+            env_name=self.env,
+            service_name=self.application_name,
+            ecs_service_name=service_name,
+            sample_env_file_path=self.env_sample_file_path,
+            essential_container_name=container_name(service_name),
+            secrets_name=secrets_name,
+            access_role=config.get('access_role'),
+            access_file=self.access_file,
+            override_secrets_name=config.get('secrets_override'))
         if secrets_name:
             self.template.add_output(Output(service_name + "SecretsName",
                                             Description="AWS secrets manager name to pull the secrets from",

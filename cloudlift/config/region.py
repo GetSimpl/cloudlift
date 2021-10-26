@@ -1,7 +1,8 @@
 import boto3
+from botocore.config import Config
 from cloudlift.exceptions import UnrecoverableException
-
 from cloudlift.config import EnvironmentConfiguration
+
 
 local_cache = {}
 
@@ -43,9 +44,13 @@ def get_service_templates_bucket_for_environment(environment):
 
 
 def get_client_for(resource, environment):
+    config = Config(retries=dict(
+        max_attempts=100,
+        mode='standard',
+    ))
     return boto3.session.Session(
         region_name=get_region_for_environment(environment)
-    ).client(resource)
+    ).client(resource, config=config)
 
 
 def get_resource_for(resource, environment):

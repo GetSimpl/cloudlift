@@ -101,9 +101,18 @@ def create_new_task_definition(color, ecr_image_uri, ecs_service_name, env_name,
     deployment = DeployAction(client, cluster_name, ecs_service_name)
     task_definition = deployment.get_current_task_definition(deployment.service)
     essential_container = find_essential_container(task_definition[u'containerDefinitions'])
-    container_configurations = build_config(env_name, service_name, ecs_service_logical_name, sample_env_file_path,
-                                            essential_container, secrets_name, service_configuration.get('access_role'), access_file)
-    task_definition.compute_diffs(essential_container, ecr_image_uri)
+    container_configurations = build_config(
+        env_name,
+        service_name,
+        ecs_service_logical_name,
+        sample_env_file_path,
+        essential_container,
+        secrets_name,
+        service_configuration.get('access_role'),
+        access_file,
+        override_secrets_name=service_configuration.get('secrets_override'))
+    task_definition.compute_diffs(essential_container,
+                                  ecr_image_uri)
     print_task_diff(ecs_service_name, task_definition.diff, color)
 
     builder = TaskDefinitionBuilder(
@@ -171,8 +180,16 @@ def get_secret_name(secrets_name, namespace):
     return f"{secrets_name}/{namespace}" if namespace and namespace != '' else secrets_name
 
 
-def build_config(env_name, service_name, ecs_service_name, sample_env_file_path, essential_container_name,
-                 secrets_name, access_role=None, access_file='access.yml', generated_secret_name=None):
+def build_config(env_name,
+                 service_name,
+                 ecs_service_name,
+                 sample_env_file_path,
+                 essential_container_name,
+                 secrets_name,
+                 access_role=None,
+                 access_file='access.yml',
+                 generated_secret_name=None,
+                 override_secrets_name=None):
     secrets = {}
     env = {}
     if secrets_name is None:
@@ -192,6 +209,7 @@ def build_config(env_name, service_name, ecs_service_name, sample_env_file_path,
             access_role=access_role,
             access_file=access_file,
             generated_secret_name=generated_secret_name,
+            override_secrets_name=override_secrets_name,
         )
     return {essential_container_name: {"secrets": secrets, "environment": env}}
 
@@ -258,10 +276,26 @@ def verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path, 
     return secrets_across_namespaces
 
 
-def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, sample_env_folder_path, secrets_name,
-                                     access_role, access_file, generated_secret_name=None):
+def build_secrets_for_all_namespaces(env_name,
+                                     service_name,
+                                     ecs_service_name,
+                                     sample_env_folder_path,
+                                     secrets_name,
+                                     access_role,
+                                     access_file,
+                                     generated_secret_name=None,
+                                     override_secrets_name=None):
     secrets_across_namespaces = verify_and_get_secrets_for_all_namespaces(env_name, sample_env_folder_path,
                                                                           secrets_name, access_role, access_file)
+
+    overrides = secrets_manager.get_config(
+        override_secrets_name, env_name).get('secrets', {}) if override_secrets_name is not None \
+        else {}
+
+    for key, value in overrides.items():
+        # Override only if key is present in secrets_across_namespaces
+        if key in secrets_across_namespaces:
+            secrets_across_namespaces[key] = value
 
     published_secret_name = get_automated_injected_secret_name(env_name, service_name, ecs_service_name) if \
         generated_secret_name is None else generated_secret_name
@@ -270,6 +304,7 @@ def build_secrets_for_all_namespaces(env_name, service_name, ecs_service_name, s
         existing_secrets = secrets_manager.get_config(published_secret_name, env_name)['secrets']
     except Exception as err:
         log_warning(f'secret {published_secret_name} does not exist. It will be created: {err}')
+
     if existing_secrets != secrets_across_namespaces:
         log(f"Updating {published_secret_name}")
         secrets_manager.set_secrets_manager_config(env_name, published_secret_name,

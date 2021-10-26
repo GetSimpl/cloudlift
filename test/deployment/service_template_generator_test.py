@@ -7,15 +7,16 @@ from unittest import TestCase
 
 from cfn_flip import to_json, load
 from deepdiff import DeepDiff
-from mock import patch, MagicMock
+from mock import patch, MagicMock, mock_open
 
 from cloudlift.config import ServiceConfiguration
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
 
 
-def mock_build_config_impl(env_name, cloudlift_service_name, dummy_ecs_service_name, sample_env_file_path,
-                           ecs_service_name, prefix, access_role, access_file):
-    return {ecs_service_name: {"secrets": {"CLOUDLIFT_INJECTED_SECRETS": 'arn_injected_secrets'},
+def mock_build_config_impl(env_name, service_name, ecs_service_name, sample_env_file_path,
+                           essential_container_name, secrets_name, access_role, access_file,
+                           override_secrets_name):
+    return {essential_container_name: {"secrets": {"CLOUDLIFT_INJECTED_SECRETS": 'arn_injected_secrets'},
                                "environment": {"PORT": "80"}}}
 
 
@@ -145,7 +146,8 @@ def mocked_fargate_service_config():
                     "memory": 512
                 },
                 "memory_reservation": 512,
-                "secrets_name": "dummy-fargate-config"
+                "secrets_name": "dummy-fargate-config",
+                "secrets_override": "dummy-fargate-config-override"
             },
             "DummyFargateService": {
                 "command": None,
@@ -217,11 +219,12 @@ class TestServiceTemplateGenerator(TestCase):
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_service_config()
 
-        def mock_build_config_impl(env_name, service_name, dummy_ecs_service_name, sample_env_file_path,
-                                   ecs_service_name, secrets_name, access_role, access_file):
-            expected = "dummy-config" if ecs_service_name == "DummyContainer" else "dummy-sidekiq-config"
+        def mock_build_config_impl(env_name, service_name, ecs_service_name, sample_env_file_path,
+                                   essential_container_name, secrets_name, access_role, access_file,
+                                   override_secrets_name):
+            expected = "dummy-config" if essential_container_name == "DummyContainer" else "dummy-sidekiq-config"
             self.assertEqual(secrets_name, expected)
-            return {ecs_service_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
+            return {essential_container_name: {"secrets": {"LABEL": 'arn_secret_label_v1'}, "environment": {"PORT": "80"}}}
 
         mock_build_config.side_effect = mock_build_config_impl
 
@@ -452,29 +455,48 @@ class TestServiceTemplateGenerator(TestCase):
         with(open(template_file_path)) as expected_template_file:
             self.assert_template(to_json(''.join(expected_template_file.readlines())), to_json(generated_template))
 
-    @patch('cloudlift.deployment.service_template_generator.build_config')
+    @patch('cloudlift.deployment.deployer.glob')
+    @patch('cloudlift.deployment.deployer.secrets_manager')
     @patch('cloudlift.deployment.service_template_generator.get_account_id')
     @patch('cloudlift.deployment.template_generator.region_service')
-    def test_generate_fargate_service(self, mock_region_service, mock_get_account_id, mock_build_config):
+    def test_generate_fargate_service(self,
+                                      mock_region_service,
+                                      mock_get_account_id,
+                                      mock_secrets_manager,
+                                      mock_glob):
         environment = 'staging'
         application_name = 'dummyFargate'
         mock_service_configuration = MagicMock(spec=ServiceConfiguration, service_name=application_name,
                                                environment=environment)
         mock_service_configuration.get_config.return_value = mocked_fargate_service_config()
 
-        mock_build_config.side_effect = mock_build_config_impl
+        def mock_get_config(secrets_name, env):
+            if secrets_name == "dummy-fargate-config":
+                return {'secrets': {"PORT": "80", "LABEL": "dummyvalue"}}
+            if secrets_name == "dummy-fargate-config-override":
+                return {'secrets': {"LABEL": "overridenValue", "TIMEOUT": "5"}}
+            if secrets_name == "cloudlift-injected/staging/dummyFargate/DummyFargateRunSidekiqsh":
+                return {'secrets': {}, 'ARN': "arn_injected_secrets"}
+            if secrets_name == "cloudlift-injected/staging/dummyFargate/DummyFargateService":
+                return {'secrets': {}, 'ARN': "arn_injected_secrets"}
+
+        mock_secrets_manager.get_config.side_effect = mock_get_config
+        mock_glob.return_value = ['env.sample']
 
         mock_get_account_id.return_value = "12537612"
         mock_region_service.get_region_for_environment.return_value = "us-west-2"
 
-        template_generator = ServiceTemplateGenerator(mock_service_configuration, self._get_env_stack(),
-                                                      './test/templates/test_env.sample',
-                                                      "12537612.dkr.ecr.us-west-2.amazonaws.com/dummyFargate-repo:1.1.1",
-                                                      None,
-                                                      desired_counts={"DummyFargateService": 45,
-                                                                      "DummyFargateRunSidekiqsh": 51})
+        template_generator = ServiceTemplateGenerator(
+            service_configuration=mock_service_configuration,
+            environment_stack=self._get_env_stack(),
+            env_sample_file="env.sample",
+            #   './test/templates/test_env.sample',
+            ecr_image_uri="12537612.dkr.ecr.us-west-2.amazonaws.com/dummyFargate-repo:1.1.1",
+            access_file=None,
+            desired_counts={"DummyFargateService": 45, "DummyFargateRunSidekiqsh": 51})
 
-        generated_template = template_generator.generate_service()
+        with patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test")):
+            generated_template = template_generator.generate_service()
 
         template_file_path = os.path.join(os.path.dirname(__file__),
                                           '../templates/expected_fargate_service_template.yml')

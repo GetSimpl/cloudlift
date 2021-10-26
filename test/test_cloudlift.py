@@ -183,13 +183,13 @@ def deploy_service(mocked_config, deployment_identifier, env_sample_file="env.sa
     with patch.object(ServiceConfiguration, 'get_config',
                       new=mocked_config):
         ServiceUpdater(service_name, environment_name, env_sample_file, timeout_seconds=600,
-                       deployment_identifier=deployment_identifier).run()
+                       deployment_identifier=deployment_identifier, access_file='access.yml').run()
 
 
 def revert_service(deployment_identifier):
     os.chdir(f'{TEST_DIR}/dummy')
     ServiceUpdater(service_name, environment_name, timeout_seconds=600,
-                   deployment_identifier=deployment_identifier).revert()
+                   deployment_identifier=deployment_identifier, access_file='access.yml').revert()
 
 
 def get_current_task_definition_deployment_identifier(cfn_client, stack_name):

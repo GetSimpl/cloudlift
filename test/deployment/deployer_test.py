@@ -1,11 +1,10 @@
 import os
-from _datetime import datetime, timedelta
+from _datetime import datetime
 from copy import deepcopy
 from unittest import TestCase
-from unittest.mock import patch, MagicMock, sentinel, mock_open, PropertyMock
+from unittest.mock import patch, MagicMock, sentinel, mock_open
 
 import pytest
-from dateutil.tz.tz import tzlocal
 
 from cloudlift.deployment.deployer import is_deployed, \
     record_deployment_failure_metric, build_config, get_env_sample_file_name, \
@@ -564,6 +563,55 @@ class TestSecrets(TestCase):
 
     def test_get_secret_name_for_non_default_execution_namespace(self):
         self.assertEqual(get_secret_name('test-prefix-test', 'app1'), 'test-prefix-test/app1')
+
+    @patch('builtins.open', mock_open(read_data="PORT=1\nLABEL=test"))
+    @patch('cloudlift.deployment.deployer.glob')
+    @patch('cloudlift.deployment.deployer.secrets_manager')
+    def test_secrets_override(self, m_secrets_mgr, m_glob):
+        env_name = "staging"
+        service_name = "Dummy"
+        sample_env_file_path = "test-env.sample"
+        essential_container_name = "mainService"
+        secrets_name = "main"
+        m_secrets_mgr.get_config.return_value = {'secrets': {},
+                                                 'ARN': "dummy_arn"}
+        m_glob.return_value = ['env.sample']
+
+        def mock_get_config(secrets_name, env):
+            if secrets_name == "main":
+                return {'secrets': {"PORT": "80", "LABEL": "dummyvalue"}}
+            if secrets_name == "main-overrides":
+                return {'secrets': {"LABEL": "overridenValue", "TIMEOUT": "5"}}
+            if secrets_name == "cloudlift-injected/staging/Dummy/test-ecs-service-name":
+                return {'secrets': {}, 'ARN': "dummy_arn"}
+
+        m_secrets_mgr.get_config.side_effect = mock_get_config
+
+        actual_configurations = build_config(
+            env_name=env_name,
+            service_name=service_name,
+            ecs_service_name="test-ecs-service-name",
+            sample_env_file_path=sample_env_file_path,
+            essential_container_name=essential_container_name,
+            secrets_name=secrets_name,
+            access_role=None,
+            access_file='access.yml',
+            generated_secret_name=None,
+            override_secrets_name="main-overrides",
+        )
+
+        expected_configurations = {
+            "mainService": {
+                "secrets": {'CLOUDLIFT_INJECTED_SECRETS': 'dummy_arn'},
+                "environment": {}
+            }
+        }
+        m_secrets_mgr.set_secrets_manager_config.assert_called_with(
+            'staging',
+            'cloudlift-injected/staging/Dummy/test-ecs-service-name',
+            {'PORT': '80', 'LABEL': 'overridenValue'}
+        )
+        self.assertDictEqual(expected_configurations, actual_configurations)
 
     @patch("cloudlift.deployment.deployer.build_secrets_for_all_namespaces")
     def test_publish_secrets(self, mock_build_secrets_for_all_namespaces):

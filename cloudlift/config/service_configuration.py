@@ -401,6 +401,9 @@ class ServiceConfiguration(DynamodbConfig):
                 "secrets_name": {
                     "type": "string",
                 },
+                "secrets_override": {
+                    "type": "string",
+                },
                 "task_role_attached_managed_policy_arns": {
                     "type": "array",
                     "items": {
