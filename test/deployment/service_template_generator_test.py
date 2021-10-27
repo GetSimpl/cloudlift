@@ -395,6 +395,7 @@ class TestServiceTemplateGenerator(TestCase):
                             "target_p99_latency_evaluation_periods": 3,
                             "target_p99_latency_period_seconds": 30,
                             "target_p99_latency_threshold_seconds": 10,
+                            "alarm_playbook_url": "https://playbook/alb",
                         },
                         "container_port": Decimal(7003),
                         "restrict_access_to": ["0.0.0.0/0"],
@@ -403,6 +404,7 @@ class TestServiceTemplateGenerator(TestCase):
                     "autoscaling": {
                         "max_capacity": 10,
                         "min_capacity": 5,
+                        "alarm_playbook_url": "https://playbook/autoscaling",
                         "request_count_per_target": {
                             "target_value": 10,
                             "scale_in_cool_down_seconds": 120,
@@ -413,7 +415,8 @@ class TestServiceTemplateGenerator(TestCase):
                     'service_tags': {
                         'environment': 'test',
                         'custom_label': 'custom_value',
-                    }
+                    },
+                    "alarm_playbook_url": "https://playbook/service",
                 },
                 "DummyWithCustomListener": {
                     "memory_reservation": Decimal(1000),

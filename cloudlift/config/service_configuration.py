@@ -194,6 +194,9 @@ class ServiceConfiguration(DynamodbConfig):
                                 },
                                 "priority": {
                                     "type": "number"
+                                },
+                                "alarm_playbook_url": {
+                                    "type": "string"
                                 }
                             },
                             "required": [
@@ -482,6 +485,9 @@ class ServiceConfiguration(DynamodbConfig):
                             "required": ['target_value', 'scale_in_cool_down_seconds', 'scale_out_cool_down_seconds',
                                          'metric_name', 'namespace', 'statistic']
                         },
+                        "alarm_playbook_url": {
+                            "type": "string"
+                        },
                     },
                     "required": ['max_capacity', 'min_capacity']
                 },
@@ -491,6 +497,9 @@ class ServiceConfiguration(DynamodbConfig):
                         ".*": {"type": "string"}
                     },
                     "additionalProperties": False
+                },
+                "alarm_playbook_url": {
+                    "type": "string"
                 },
             },
             "required": ["memory_reservation", "command"]

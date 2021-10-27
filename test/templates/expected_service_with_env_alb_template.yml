@@ -337,7 +337,7 @@ Resources:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
       AlarmDescription: Alarm if the task count goes to zero, denoting service is
-        down
+        down. More details can be found from https://playbook/service
       ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: ClusterName
@@ -380,7 +380,7 @@ Resources:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if p95 latency of target group is higher than threshold
+      AlarmDescription: Triggers if p95 latency of target group is higher than threshold. More details can be found from https://playbook/alb
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
@@ -422,7 +422,7 @@ Resources:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if p99 latency of target group is higher than threshold
+      AlarmDescription: Triggers if p99 latency of target group is higher than threshold. More details can be found from https://playbook/alb
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
@@ -464,7 +464,7 @@ Resources:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if target returns 5xx error code
+      AlarmDescription: Triggers if target returns 5xx error code. More details can be found from https://playbook/alb
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
@@ -507,7 +507,7 @@ Resources:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
       AlarmDescription: Triggers if desired task count of a service is equal to max_capacity,
-        review auto scaling configuration if this alarm triggers
+        review auto scaling configuration if this alarm triggers. More details can be found from https://playbook/autoscaling
       ComparisonOperator: GreaterThanOrEqualToThreshold
       DatapointsToAlarm: 3
       Dimensions:
@@ -565,7 +565,7 @@ Resources:
     Properties:
       AlarmActions:
         - !Ref 'NotificationSnsArn'
-      AlarmDescription: Triggers if any host is marked unhealthy
+      AlarmDescription: Triggers if any host is marked unhealthy. More details can be found from https://playbook/alb
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
