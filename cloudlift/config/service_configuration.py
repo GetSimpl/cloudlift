@@ -530,6 +530,12 @@ class ServiceConfiguration(DynamodbConfig):
                         "account_id": {"type": "string"},
                         "assume_role_arn": {"type": "string"},
                         "name": {"type": "string"},
+                        "additional_accounts": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "required": ["name"]
                 },

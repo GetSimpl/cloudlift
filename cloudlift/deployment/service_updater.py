@@ -47,7 +47,8 @@ class ServiceUpdater(object):
             dockerfile,
             working_dir,
             ssh,
-            cache_from
+            cache_from,
+            ecr_repo_config.get('additional_accounts', None),
         )
 
     def run(self):

@@ -60,6 +60,7 @@ class ServiceCreator(object):
             dockerfile=dockerfile,
             ssh=ssh,
             cache_from=cache_from,
+            additional_accounts=ecr_repo_config.get('additional_accounts', None),
         )
         ecr.upload_artefacts()
 

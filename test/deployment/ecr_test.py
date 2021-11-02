@@ -126,6 +126,56 @@ class TestECR(TestCase):
             policyText=json.dumps(expected_policy_text),
         )
 
+    @patch("cloudlift.deployment.ecr.get_account_id")
+    @patch("cloudlift.deployment.ecr._create_ecr_client")
+    def test_ensure_repository_with_additional_cross_account_access(self, mock_create_ecr_client, mock_get_account_id):
+        mock_ecr_client = MagicMock()
+        mock_create_ecr_client.return_value = mock_ecr_client
+        mock_get_account_id.return_value = "98765"
+
+        ecr = ECR("aws-region", "test-repo", "12345", additional_accounts=["5678"])
+
+        ecr.ensure_repository()
+
+        mock_ecr_client.create_repository.assert_called_with(
+            repositoryName='test-repo',
+            imageScanningConfiguration={'scanOnPush': True}
+        )
+
+        expected_policy_text = {
+            "Version": "2008-10-17",
+            "Statement": [
+                {
+                    "Sid": "AllowCrossAccountPull-98765",
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["98765"]},
+                    "Action": [
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:BatchGetImage",
+                        "ecr:InitiateLayerUpload",
+                        "ecr:PutImage",
+                        "ecr:UploadLayerPart",
+                        "ecr:CompleteLayerUpload"
+                    ]
+                },
+                {
+                    "Sid": "AllowCrossAccountPull-Secondary",
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["5678"]},
+                    "Action": [
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:BatchGetImage"
+                    ]
+                },
+            ]}
+
+        mock_ecr_client.set_repository_policy.assert_called_with(
+            repositoryName='test-repo',
+            policyText=json.dumps(expected_policy_text),
+        )
+
     def test_image_uri(self):
         ecr = ECR("aws-region", "target-repo", "acc-id", version="v1")
 

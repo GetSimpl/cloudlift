@@ -15,8 +15,8 @@ DEFAULT_DOCKER_FILE = "Dockerfile"
 
 
 class ECR:
-    def __init__(self, region, repo_name, account_id=None, assume_role_arn=None, version=None,
-                 build_args=None, dockerfile=None, working_dir='.', ssh=None, cache_from=None):
+    def __init__(self, region, repo_name, account_id=None, assume_role_arn=None, version=None, build_args=None,
+                    dockerfile=None, working_dir='.', ssh=None, cache_from=None, additional_accounts=None):
         self.repo_name = repo_name
         self.region = region
         self.account_id = account_id or get_account_id()
@@ -27,6 +27,7 @@ class ECR:
         self.working_dir = working_dir
         self.ssh = ssh
         self.cache_from = cache_from
+        self.additional_accounts = additional_accounts or []
 
     def ensure_image_in_ecr(self):
         if self.version:
@@ -99,31 +100,49 @@ commit " + self.version)
                 raise ex
 
         current_account_id = get_account_id()
+        statements = []
         if current_account_id != self.account_id:
             log_intent('Setting cross account ECR access: ' + self.repo_name)
+            statements = [
+                {
+                    "Sid": "AllowCrossAccountPull-{}".format(current_account_id),
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": [current_account_id]
+                    },
+                    "Action": [
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:BatchGetImage",
+                        "ecr:InitiateLayerUpload",
+                        "ecr:PutImage",
+                        "ecr:UploadLayerPart",
+                        "ecr:CompleteLayerUpload",
+                    ]
+                }
+            ]
+
+        if len(self.additional_accounts) > 0:
+            statements.append({
+                "Sid": "AllowCrossAccountPull-Secondary",
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": self.additional_accounts
+                },
+                "Action": [
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:BatchGetImage"
+                ]
+            })
+
+        if len(statements) > 0:
             self.client.set_repository_policy(
                 repositoryName=self.repo_name,
                 policyText=json.dumps(
                     {
                         "Version": "2008-10-17",
-                        "Statement": [
-                            {
-                                "Sid": "AllowCrossAccountPull-{}".format(current_account_id),
-                                "Effect": "Allow",
-                                "Principal": {
-                                    "AWS": [current_account_id]
-                                },
-                                "Action": [
-                                    "ecr:GetDownloadUrlForLayer",
-                                    "ecr:BatchCheckLayerAvailability",
-                                    "ecr:BatchGetImage",
-                                    "ecr:InitiateLayerUpload",
-                                    "ecr:PutImage",
-                                    "ecr:UploadLayerPart",
-                                    "ecr:CompleteLayerUpload",
-                                ]
-                            }
-                        ]
+                        "Statement": statements
                     }
                 )
             )
