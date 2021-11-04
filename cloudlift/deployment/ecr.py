@@ -85,6 +85,7 @@ commit " + self.version)
             self._add_image_tag(self.version, new_tag)
 
     def ensure_repository(self):
+        statements = {}
         try:
             self.client.create_repository(
                 repositoryName=self.repo_name,
@@ -96,35 +97,35 @@ commit " + self.version)
         except Exception as ex:
             if type(ex).__name__ == 'RepositoryAlreadyExistsException':
                 log_intent('Repo exists with name: ' + self.repo_name)
+                statements = self._get_existing_statements()
             else:
                 raise ex
 
         current_account_id = get_account_id()
-        statements = []
         if current_account_id != self.account_id:
             log_intent('Setting cross account ECR access: ' + self.repo_name)
-            statements = [
-                {
-                    "Sid": "AllowCrossAccountPull-{}".format(current_account_id),
-                    "Effect": "Allow",
-                    "Principal": {
-                        "AWS": [current_account_id]
-                    },
-                    "Action": [
-                        "ecr:GetDownloadUrlForLayer",
-                        "ecr:BatchCheckLayerAvailability",
-                        "ecr:BatchGetImage",
-                        "ecr:InitiateLayerUpload",
-                        "ecr:PutImage",
-                        "ecr:UploadLayerPart",
-                        "ecr:CompleteLayerUpload",
-                    ]
-                }
-            ]
+            sid_default = "AllowCrossAccountPull-{}".format(current_account_id)
+            statements[sid_default] = {
+                "Sid": sid_default,
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": [current_account_id]
+                },
+                "Action": [
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:BatchGetImage",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:PutImage",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload",
+                ]
+            }
 
         if len(self.additional_accounts) > 0:
-            statements.append({
-                "Sid": "AllowCrossAccountPull-Secondary",
+            sid_secondary = "AllowCrossAccountPull-Secondary"
+            statements[sid_secondary] = {
+                "Sid": sid_secondary,
                 "Effect": "Allow",
                 "Principal": {
                     "AWS": self.additional_accounts
@@ -134,7 +135,7 @@ commit " + self.version)
                     "ecr:BatchCheckLayerAvailability",
                     "ecr:BatchGetImage"
                 ]
-            })
+            }
 
         if len(statements) > 0:
             self.client.set_repository_policy(
@@ -142,7 +143,7 @@ commit " + self.version)
                 policyText=json.dumps(
                     {
                         "Version": "2008-10-17",
-                        "Statement": statements
+                        "Statement": [s for s in statements.values()]
                     }
                 )
             )
@@ -294,6 +295,15 @@ branch or commit SHA")
             for k, v in self.build_args.items():
                 build_args_command_fragment.append("--build-arg " + "=".join((k, v)))
             return build_args_command_fragment
+
+    def _get_existing_statements(self):
+        try:
+            resp = self.client.get_repository_policy(repositoryName=self.repo_name)
+        except Exception as ex:
+            if type(ex).__name__ == 'RepositoryPolicyNotFoundException':
+                return {}
+        policy = json.loads(resp['policyText'])
+        return {s['Sid']: s for s in policy['Statement']}
 
 
 def _create_ecr_client(region, assume_role_arn=None):
