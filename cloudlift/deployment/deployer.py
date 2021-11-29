@@ -253,7 +253,7 @@ def filter_secrets_by_access_role(secrets, access_role, access_file):
         log_warning(f'Zero configs returned from access file: {access_file} for role {access_role}')
         return secrets
     for config in configs:
-        filtered_secrets[config] = secrets[config]
+        filtered_secrets[config] = secrets.get(config, "")
     return filtered_secrets
 
 
