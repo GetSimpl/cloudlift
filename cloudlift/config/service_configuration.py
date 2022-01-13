@@ -42,12 +42,47 @@ class ServiceConfiguration(object):
             environment
         ).Table(SERVICE_CONFIGURATION_TABLE)
 
+    def _ensure_table(self):
+        table_names = self.dynamodb_client.list_tables()['TableNames']
+        if SERVICE_CONFIGURATION_TABLE not in table_names:
+            log_warning("Could not find configuration table, creating one..")
+            self._create_configuration_table()
+
+    def _create_configuration_table(self):
+        self.dynamodb.create_table(
+            TableName=SERVICE_CONFIGURATION_TABLE,
+            KeySchema=[
+                {
+                    'AttributeName': 'service_name',
+                    'KeyType': 'HASH'
+                },
+                {
+                    'AttributeName': 'environment',
+                    'KeyType': 'RANGE'
+                }
+            ],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'service_name',
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': 'environment',
+                    'AttributeType': 'S'
+                }
+            ],
+            BillingMode='PAY_PER_REQUEST'
+        )
+        log_bold("Configuration table created!")
+
     def edit_config(self):
         '''
             Open editor to update configuration
         '''
 
         try:
+            log_warning("Find configuration table, creating one..")
+            self.table = self._ensure_table()
             from cloudlift.version import VERSION
             current_configuration = self.get_config(VERSION)
 
@@ -89,6 +124,8 @@ class ServiceConfiguration(object):
         '''
 
         try:
+            log_warning("Find configuration table, creating one..")
+            self.table = self._ensure_table()
             configuration_response = self.table.get_item(
                 Key={
                     'service_name': self.service_name,
