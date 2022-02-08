@@ -181,6 +181,19 @@ class ServiceConfiguration(object):
                         "container_port"
                     ]
                 },
+                "custom_metrics": {
+                    "type": "object",
+                    "properties": {
+                        "enable": {
+                            "type" : "boolean"
+                        },
+                        "metrics_port" : {"type": "string"},
+                        "metrics_path": {"type": "string"}
+                    },
+                    "required": [
+                        "enable"
+                    ]
+                },
                 "memory_reservation": {
                     "type": "number",
                     "minimum": 10,
@@ -208,7 +221,7 @@ class ServiceConfiguration(object):
                     ]
                 }
             },
-            "required": ["memory_reservation", "command"]
+            "required": ["memory_reservation", "command", "custom_metrics"]
         }
         schema = {
             # "$schema": "http://json-schema.org/draft-04/schema#",
@@ -248,7 +261,12 @@ class ServiceConfiguration(object):
                         u'health_check_path': u'/elb-check'
                     },
                     u'memory_reservation': 1000,
-                    u'command': None
+                    u'command': None,
+                    u'custom_metrics': {
+                        u'enable': False,
+                        u'metrics_port': u'8005',
+                        u'metrics_path': u'/metrics'
+                    }
                 }
             }
         }
