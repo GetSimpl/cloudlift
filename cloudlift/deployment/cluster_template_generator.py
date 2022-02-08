@@ -4,7 +4,7 @@ import re
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
-                         cloudformation)
+                         cloudformation, Export, GetAtt)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
@@ -18,6 +18,7 @@ from troposphere.logs import LogGroup
 from troposphere.policies import (AutoScalingRollingUpdate, CreationPolicy,
                                   ResourceSignal)
 from troposphere.rds import DBSubnetGroup
+from troposphere.servicediscovery import PrivateDnsNamespace
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
@@ -49,12 +50,22 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.configuration['vpc']['nat-gateway']['elastic-ip-allocation-id'],
         )
         self._create_log_group()
+        self._setup_cloudmap()
         self._add_cluster_outputs()
         self._add_cluster_parameters()
         self._add_mappings()
         self._add_metadata()
         self._add_cluster()
         return to_yaml(json.dumps(self.template.to_dict(), cls=DecimalEncoder))
+
+    def _setup_cloudmap(self):
+        self.cloudmap = PrivateDnsNamespace(
+            camelcase("{self.env}Cloudmap".format(**locals())),
+            Name=Ref('AWS::StackName'),
+            Vpc=Ref(self.vpc)
+        )
+        self.template.add_resource(self.cloudmap)
+        return None
 
     def _get_availability_zones(self):
         client = get_client_for('ec2', self.env)
@@ -646,6 +657,13 @@ for cluster for 15 minutes.',
             Description="Key Pair name for accessing the instances",
             Value=str(self.configuration['cluster']['key_name']))
         )
+        self.template.add_output(Output(
+            "CloudmapId",
+            Description="CloudMap Namespace ID for service discovery",
+            Export=Export("{self.env}Cloudmap".format(**locals())),
+            Value=GetAtt(self.cloudmap, 'Id'))
+        )
+
 
     def _add_metadata(self):
         self.template.add_metadata({
