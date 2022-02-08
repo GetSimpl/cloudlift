@@ -11,20 +11,22 @@ from awacs.aws import PolicyDocument, Statement, Allow, Principal
 from awacs.sts import AssumeRole
 from cfn_flip import to_yaml
 from stringcase import pascalcase
-from troposphere import GetAtt, Output, Parameter, Ref, Sub
+from troposphere import GetAtt, Output, Parameter, Ref, Sub, ImportValue, Tags
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Environment,
                              LoadBalancer, LogConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition)
+                             PortMapping, Service, TaskDefinition, ServiceRegistry)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
 from troposphere.iam import Role
+from troposphere.servicediscovery import Service as SD
+from troposphere.servicediscovery import DnsConfig, DnsRecord
 
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
@@ -237,8 +239,37 @@ service is down',
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
+            NetworkMode="awsvpc" if config['custom_metrics']['enable'] else "bridge",
             **launch_type_td
         )
+        if config['custom_metrics']['enable']:
+            sd = SD(
+                service_name + "ServiceRegistry",
+                DnsConfig=DnsConfig(
+                    RoutingPolicy="MULTIVALUE",
+                    DnsRecords=[DnsRecord(
+                        TTL="60",
+                        Type="SRV"
+                    )],
+                    NamespaceId=ImportValue(
+                    "{self.env}Cloudmap".format(**locals()))
+                ),
+                Tags=Tags(
+                    {'METRICS_PATH': config['custom_metrics']['metrics_path']},
+                    {'METRICS_PORT': config['custom_metrics']['metrics_port']}
+                )
+            )
+            self.template.add_resource(sd)
+            service_security_group_sr = SecurityGroup(
+                pascalcase("ServiceRegistry" + self.env + service_name),
+                GroupName=pascalcase(
+                    "ServiceRegistry" + self.env + service_name),
+                SecurityGroupIngress=[],
+                VpcId=Ref(self.vpc),
+                GroupDescription=pascalcase(
+                    "ServiceRegistry" + self.env + service_name)
+            )
+            self.template.add_resource(service_security_group_sr)
 
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
@@ -280,10 +311,31 @@ service is down',
                     )
                 }
             else:
-                launch_type_svc = {
-                    'Role': Ref(self.ecs_service_role),
-                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
-                }
+                if config['custom_metrics']['enable']:
+                    launch_type_svc = {
+                        "ServiceRegistries": [ServiceRegistry(
+                            RegistryArn=GetAtt(sd, 'Arn'),
+                            Port=int(
+                                config['custom_metrics']['metrics_port'])
+                        )],
+                        "NetworkConfiguration": NetworkConfiguration(
+                            AwsvpcConfiguration=AwsvpcConfiguration(
+                                SecurityGroups=[
+                                    Ref(service_security_group_sr)],
+                                Subnets=[
+                                    Ref(self.private_subnet1),
+                                    Ref(self.private_subnet2)
+                                ]
+                            )
+                        ),
+                        'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                    }
+                else:
+                    launch_type_svc = {
+                        'Role': Ref(self.ecs_service_role),
+                        'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                    }
+            
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
@@ -336,9 +388,29 @@ service is down',
                     )
                 }
             else:
-                launch_type_svc = {
-                    'PlacementStrategies': self.PLACEMENT_STRATEGIES
-                }
+                if config['custom_metrics']['enable']:
+                    launch_type_svc = {
+                        "ServiceRegistries": [ServiceRegistry(
+                            RegistryArn=GetAtt(sd, 'Arn'),
+                            Port=int(
+                                config['custom_metrics']['metrics_port'])
+                        )],
+                        "NetworkConfiguration": NetworkConfiguration(
+                            AwsvpcConfiguration=AwsvpcConfiguration(
+                                SecurityGroups=[
+                                    Ref(service_security_group_sr)],
+                                Subnets=[
+                                    Ref(self.private_subnet1),
+                                    Ref(self.private_subnet2)
+                                ]
+                            )
+                        ),
+                        'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                    }
+                else:
+                    launch_type_svc = {
+                        'PlacementStrategies': self.PLACEMENT_STRATEGIES
+                    }
             svc = Service(
                 service_name,
                 Cluster=self.cluster_name,
@@ -430,6 +502,8 @@ service is down',
 
         target_group_config = {}
         if launch_type == self.LAUNCH_TYPE_FARGATE:
+            target_group_config['TargetType'] = 'ip'
+        elif config['custom_metrics']['enable']:
             target_group_config['TargetType'] = 'ip'
 
         service_target_group = TargetGroup(
