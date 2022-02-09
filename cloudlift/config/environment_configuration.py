@@ -143,6 +143,7 @@ class EnvironmentConfiguration(object):
         cluster_max_instances = prompt("Max instances in cluster", default=5)
         cluster_instance_type = prompt("Instance type", default='m5.xlarge')
         key_name = prompt("SSH key name")
+        custom_metrics = prompt("Enable custom metrics [Yes/No]", default="No")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
         environment_configuration = {self.environment: {
@@ -180,7 +181,8 @@ class EnvironmentConfiguration(object):
             "environment": {
                 "notifications_arn": notifications_arn,
                 "ssl_certificate_arn": ssl_certificate_arn
-            }
+            },
+            "custom_metrics": str(custom_metrics)
         }, 'cloudlift_version': VERSION}
         self._set_config(environment_configuration)
         pass
@@ -294,6 +296,7 @@ class EnvironmentConfiguration(object):
                             ]
                         },
                         "region": {"type": "string"},
+                        "custom_metrics": {"type": "string"},
                         "vpc": {
                             "type": "object",
                             "properties": {
@@ -395,7 +398,8 @@ class EnvironmentConfiguration(object):
                         "cluster",
                         "environment",
                         "region",
-                        "vpc"
+                        "vpc",
+                        "custom_metrics"
                     ]
                 }
             },
