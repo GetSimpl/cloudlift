@@ -50,8 +50,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.configuration['vpc']['nat-gateway']['elastic-ip-allocation-id'],
         )
         self._create_log_group()
-        if self.configuration["custom_metrics"].lower() == "yes":
-            self._setup_cloudmap()
+        self._setup_cloudmap()
         self._add_cluster_outputs()
         self._add_cluster_parameters()
         self._add_mappings()
@@ -658,13 +657,12 @@ for cluster for 15 minutes.',
             Description="Key Pair name for accessing the instances",
             Value=str(self.configuration['cluster']['key_name']))
         )
-        if self.configuration["custom_metrics"].lower() == "yes":
-            self.template.add_output(Output(
-                "CloudmapId",
-                Description="CloudMap Namespace ID for service discovery",
-                Export=Export("{self.env}Cloudmap".format(**locals())),
-                Value=GetAtt(self.cloudmap, 'Id'))
-            )
+        self.template.add_output(Output(
+            "CloudmapId",
+            Description="CloudMap Namespace ID for service discovery",
+            Export=Export("{self.env}Cloudmap".format(**locals())),
+            Value=GetAtt(self.cloudmap, 'Id'))
+        )
 
 
     def _add_metadata(self):
