@@ -9,7 +9,7 @@ from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
-                             RouteTable, SecurityGroup, Subnet,
+                             RouteTable, SecurityGroup, Subnet, SecurityGroupIngress,
                              SubnetRouteTableAssociation, VPCGatewayAttachment)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
@@ -426,7 +426,7 @@ for cluster for 15 minutes.',
             GroupDescription=Sub("${AWS::StackName}-alb")
         )
         self.template.add_resource(self.sg_alb)
-        sg_hosts = SecurityGroup(
+        self.sg_hosts = SecurityGroup(
             "SecurityGroupEc2Hosts",
             SecurityGroupIngress=[
                 {
@@ -437,12 +437,23 @@ for cluster for 15 minutes.',
             VpcId=Ref(self.vpc),
             GroupDescription=Sub("${AWS::StackName}-hosts")
         )
-        self.template.add_resource(sg_hosts)
+        self.template.add_resource(self.sg_hosts)
+        
+        sg_host_ingress= SecurityGroupIngress(
+            "SecurityEc2HostsIngress",
+            SourceSecurityGroupId = Ref(self.sg_hosts),
+            IpProtocol = "-1",
+            GroupId = Ref(self.sg_hosts),
+            FromPort = "-1",
+            ToPort = "-1"
+        )
+        self.template.add_resource(sg_host_ingress)
+        
         database_security_group = SecurityGroup(
             "SecurityGroupDatabases",
             SecurityGroupIngress=[
                 {
-                    'SourceSecurityGroupId': Ref(sg_hosts),
+                    'SourceSecurityGroupId': Ref(self.sg_hosts),
                     'IpProtocol': -1
                 }
             ],
@@ -511,7 +522,7 @@ for cluster for 15 minutes.',
             'LaunchConfiguration',
             UserData=user_data,
             IamInstanceProfile=Ref(instance_profile),
-            SecurityGroups=[Ref(sg_hosts)],
+            SecurityGroups=[Ref(self.sg_hosts)],
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
             Metadata=lc_metadata,
@@ -662,6 +673,12 @@ for cluster for 15 minutes.',
             Description="CloudMap Namespace ID for service discovery",
             Export=Export("{self.env}Cloudmap".format(**locals())),
             Value=GetAtt(self.cloudmap, 'Id'))
+        )
+        self.template.add_output(Output(
+            "SecurityGroupEC2Host",
+            Export=Export("{self.env}Ec2Host".format(**locals())),
+            Description="EC2Host Security group ID",
+            Value=Ref('SecurityGroupEc2Hosts'))
         )
 
 

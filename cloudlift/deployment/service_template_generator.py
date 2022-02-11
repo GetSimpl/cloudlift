@@ -239,10 +239,10 @@ service is down',
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
-            NetworkMode="awsvpc" if config['custom_metrics']['enable'] else "bridge",
+            NetworkMode="awsvpc" if 'custom_metrics' in config else "bridge",
             **launch_type_td
         )
-        if config['custom_metrics']['enable']:
+        if 'custom_metrics' in config:
             sd = SD(
                 service_name + "ServiceRegistry",
                 DnsConfig=DnsConfig(
@@ -260,16 +260,6 @@ service is down',
                 )
             )
             self.template.add_resource(sd)
-            service_security_group_sr = SecurityGroup(
-                pascalcase("ServiceRegistry" + self.env + service_name),
-                GroupName=pascalcase(
-                    "ServiceRegistry" + self.env + service_name),
-                SecurityGroupIngress=[],
-                VpcId=Ref(self.vpc),
-                GroupDescription=pascalcase(
-                    "ServiceRegistry" + self.env + service_name)
-            )
-            self.template.add_resource(service_security_group_sr)
 
         self.template.add_resource(td)
         desired_count = self._get_desired_task_count_for_service(service_name)
@@ -311,7 +301,7 @@ service is down',
                     )
                 }
             else:
-                if config['custom_metrics']['enable']:
+                if 'custom_metrics' in config:
                     launch_type_svc = {
                         "ServiceRegistries": [ServiceRegistry(
                             RegistryArn=GetAtt(sd, 'Arn'),
@@ -321,7 +311,9 @@ service is down',
                         "NetworkConfiguration": NetworkConfiguration(
                             AwsvpcConfiguration=AwsvpcConfiguration(
                                 SecurityGroups=[
-                                    Ref(service_security_group_sr)],
+                                    ImportValue(
+                                        "{self.env}Ec2Host".format(**locals()))
+                                ],
                                 Subnets=[
                                     Ref(self.private_subnet1),
                                     Ref(self.private_subnet2)
@@ -388,7 +380,7 @@ service is down',
                     )
                 }
             else:
-                if config['custom_metrics']['enable']:
+                if 'custom_metrics' in config:
                     launch_type_svc = {
                         "ServiceRegistries": [ServiceRegistry(
                             RegistryArn=GetAtt(sd, 'Arn'),
@@ -398,7 +390,9 @@ service is down',
                         "NetworkConfiguration": NetworkConfiguration(
                             AwsvpcConfiguration=AwsvpcConfiguration(
                                 SecurityGroups=[
-                                    Ref(service_security_group_sr)],
+                                    ImportValue(
+                                        "{self.env}Ec2Host".format(**locals()))
+                                ],
                                 Subnets=[
                                     Ref(self.private_subnet1),
                                     Ref(self.private_subnet2)
@@ -501,9 +495,7 @@ service is down',
             target_group_name = target_group_name + 'Internal'
 
         target_group_config = {}
-        if launch_type == self.LAUNCH_TYPE_FARGATE:
-            target_group_config['TargetType'] = 'ip'
-        elif config['custom_metrics']['enable']:
+        if launch_type == self.LAUNCH_TYPE_FARGATE or 'custom_metrics' in config:
             target_group_config['TargetType'] = 'ip'
 
         service_target_group = TargetGroup(

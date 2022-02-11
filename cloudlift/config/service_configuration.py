@@ -184,15 +184,9 @@ class ServiceConfiguration(object):
                 "custom_metrics": {
                     "type": "object",
                     "properties": {
-                        "enable": {
-                            "type" : "boolean"
-                        },
                         "metrics_port" : {"type": "string"},
                         "metrics_path": {"type": "string"}
-                    },
-                    "required": [
-                        "enable"
-                    ]
+                    }
                 },
                 "memory_reservation": {
                     "type": "number",
@@ -221,7 +215,7 @@ class ServiceConfiguration(object):
                     ]
                 }
             },
-            "required": ["memory_reservation", "command", "custom_metrics"]
+            "required": ["memory_reservation", "command"]
         }
         schema = {
             # "$schema": "http://json-schema.org/draft-04/schema#",
@@ -263,7 +257,6 @@ class ServiceConfiguration(object):
                     u'memory_reservation': 1000,
                     u'command': None,
                     u'custom_metrics': {
-                        u'enable': False,
                         u'metrics_port': u'8005',
                         u'metrics_path': u'/metrics'
                     }
