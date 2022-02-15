@@ -188,6 +188,14 @@ class ServiceConfiguration(object):
                         "metrics_path": {"type": "string"}
                     }
                 },
+                "volume": {
+                    "type": "object",
+                    "properties": {
+                        "efs_id" : {"type": "string"},
+                        "efs_directory_path" : {"type": "string"},
+                        "container_path" : {"type": "string"}
+                    }
+                },
                 "memory_reservation": {
                     "type": "number",
                     "minimum": 10,

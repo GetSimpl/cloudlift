@@ -15,8 +15,8 @@ from troposphere import GetAtt, Output, Parameter, Ref, Sub, ImportValue, Tags
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
-                             DeploymentConfiguration, Environment,
-                             LoadBalancer, LogConfiguration,
+                             DeploymentConfiguration, Environment, MountPoint,
+                             LoadBalancer, LogConfiguration, Volume, EFSVolumeConfiguration,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, ServiceRegistry)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
@@ -209,6 +209,12 @@ service is down',
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
 
+        if 'volume' in config:
+            container_definition_arguments['MountPoints'] = [MountPoint(
+                SourceVolume=service_name + '-efs-volume',
+                ContainerPath=config['volume']['container_path']
+            )]
+
         cd = ContainerDefinition(**container_definition_arguments)
 
         task_role = self.template.add_resource(Role(
@@ -233,7 +239,17 @@ service is down',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
             }
-
+        if 'volume' in config:
+            launch_type_td = {
+                'Volumes': [Volume(
+                Name=service_name + '-efs-volume',
+                EFSVolumeConfiguration=EFSVolumeConfiguration(
+                    FilesystemId=config['volume']['efs_id'],
+                    RootDirectory=config['volume']['efs_directory_path']
+                    )
+                )]
+            }
+        
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
