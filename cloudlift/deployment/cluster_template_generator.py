@@ -4,7 +4,7 @@ import re
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
-                         cloudformation, Export, GetAtt)
+                         cloudformation, Export, GetAtt, Tags)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
@@ -62,7 +62,12 @@ class ClusterTemplateGenerator(TemplateGenerator):
         self.cloudmap = PrivateDnsNamespace(
             camelcase("{self.env}Cloudmap".format(**locals())),
             Name=Ref('AWS::StackName'),
-            Vpc=Ref(self.vpc)
+            Vpc=Ref(self.vpc),
+            Tags=Tags(
+                {'category': 'services'},
+                {'environment': self.env},
+                {'Name': Ref('AWS::StackName')}
+            )
         )
         self.template.add_resource(self.cloudmap)
         return None
