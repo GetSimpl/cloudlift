@@ -256,6 +256,9 @@ service is down',
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
             NetworkMode="awsvpc" if 'custom_metrics' in config else "bridge",
+            Tags=Tags(
+                {'NetworkMode': "awsvpc" if 'custom_metrics' in config else "bridge"}
+            ),
             **launch_type_td
         )
         if 'custom_metrics' in config:
@@ -351,6 +354,9 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DependsOn=service_listener.title,
+                Tags=Tags(
+                    {'NetworkMode': "awsvpc" if 'custom_metrics' in config else "bridge"}
+                ),
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
@@ -428,6 +434,9 @@ service is down',
                 DesiredCount=desired_count,
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
+                Tags=Tags(
+                    {'NetworkMode': "awsvpc" if 'custom_metrics' in config else "bridge"}
+                ),
                 **launch_type_svc
             )
             self.template.add_output(
