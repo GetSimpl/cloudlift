@@ -239,26 +239,23 @@ service is down',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
             }
+        
+        if 'custom_metrics' in config:
+            launch_type_td['NetworkMode'] = 'awsvpc'
         if 'volume' in config:
-            launch_type_td = {
-                'Volumes': [Volume(
+            launch_type_td['Volumes'] = [Volume(
                 Name=service_name + '-efs-volume',
                 EFSVolumeConfiguration=EFSVolumeConfiguration(
                     FilesystemId=config['volume']['efs_id'],
                     RootDirectory=config['volume']['efs_directory_path']
-                    )
-                )]
-            }
-        
+                )
+            )]
+
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
-            NetworkMode="awsvpc" if 'custom_metrics' in config else "bridge",
-            Tags=Tags(
-                {'NetworkMode': "awsvpc" if 'custom_metrics' in config else "bridge"}
-            ),
             **launch_type_td
         )
         if 'custom_metrics' in config:
@@ -292,33 +289,40 @@ service is down',
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
-                service_security_group = SecurityGroup(
-                    pascalcase("FargateService" + self.env + service_name),
-                    GroupName=pascalcase("FargateService" + self.env + service_name),
-                    SecurityGroupIngress=[{
-                        'IpProtocol': 'TCP',
-                        'SourceSecurityGroupId': Ref(alb_sg),
-                        'ToPort': int(config['http_interface']['container_port']),
-                        'FromPort': int(config['http_interface']['container_port']),
-                    }],
-                    VpcId=Ref(self.vpc),
-                    GroupDescription=pascalcase("FargateService" + self.env + service_name)
-                )
-                self.template.add_resource(service_security_group)
-
-                launch_type_svc = {
-                    'NetworkConfiguration': NetworkConfiguration(
-                        AwsvpcConfiguration=AwsvpcConfiguration(
-                            Subnets=[
-                                Ref(self.private_subnet1),
-                                Ref(self.private_subnet2)
-                            ],
-                            SecurityGroups=[
-                                Ref(service_security_group)
-                            ]
-                        )
+                if 'custom_metrics' in config:
+                    launch_type_svc = {
+                        "ServiceRegistries": [ServiceRegistry(
+                            RegistryArn=GetAtt(sd, 'Arn'),
+                            Port=int(
+                                config['custom_metrics']['metrics_port'])
+                        )]
+                    }
+                else:
+                    service_security_group = SecurityGroup(
+                        pascalcase("FargateService" + self.env + service_name),
+                        GroupName=pascalcase("FargateService" + self.env + service_name),
+                        SecurityGroupIngress=[{
+                            'IpProtocol': 'TCP',
+                            'SourceSecurityGroupId': Ref(alb_sg),
+                            'ToPort': int(config['http_interface']['container_port']),
+                            'FromPort': int(config['http_interface']['container_port']),
+                        }],
+                        VpcId=Ref(self.vpc),
+                        GroupDescription=pascalcase("FargateService" + self.env + service_name)
                     )
-                }
+                    self.template.add_resource(service_security_group)
+
+                launch_type_svc['NetworkConfiguration'] = NetworkConfiguration(
+                    AwsvpcConfiguration=AwsvpcConfiguration(
+                        Subnets=[
+                            Ref(self.private_subnet1),
+                            Ref(self.private_subnet2)
+                        ],
+                        SecurityGroups=[
+                            ImportValue("{self.env}Ec2Host".format(**locals())) if 'custom_metrics' in config else Ref(service_security_group)
+                        ]
+                    )
+                )
             else:
                 if 'custom_metrics' in config:
                     launch_type_svc = {
@@ -354,9 +358,6 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DependsOn=service_listener.title,
-                Tags=Tags(
-                    {'NetworkMode': "awsvpc" if 'custom_metrics' in config else "bridge"}
-                ),
                 LaunchType=launch_type,
                 **launch_type_svc,
             )
@@ -380,27 +381,48 @@ service is down',
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
-                service_security_group = SecurityGroup(
-                    pascalcase("FargateService" + self.env + service_name),
-                    GroupName=pascalcase("FargateService" + self.env + service_name),
-                    SecurityGroupIngress=[],
-                    VpcId=Ref(self.vpc),
-                    GroupDescription=pascalcase("FargateService" + self.env + service_name)
-                )
-                self.template.add_resource(service_security_group)
-                launch_type_svc = {
-                    'NetworkConfiguration': NetworkConfiguration(
-                        AwsvpcConfiguration=AwsvpcConfiguration(
-                            Subnets=[
-                                Ref(self.private_subnet1),
-                                Ref(self.private_subnet2)
-                            ],
-                            SecurityGroups=[
-                                Ref(service_security_group)
-                            ]
+                if 'custom_metrics' in config:
+                    launch_type_svc = {
+                        "ServiceRegistries": [ServiceRegistry(
+                            RegistryArn=GetAtt(sd, 'Arn'),
+                            Port=int(
+                                config['custom_metrics']['metrics_port'])
+                        )],
+                        'NetworkConfiguration': NetworkConfiguration(
+                            AwsvpcConfiguration=AwsvpcConfiguration(
+                                Subnets=[
+                                    Ref(self.private_subnet1),
+                                    Ref(self.private_subnet2)
+                                ],
+                                SecurityGroups=[
+                                    ImportValue(
+                                        "{self.env}Ec2Host".format(**locals()))
+                                ]
+                            )
                         )
+                    }
+                else:
+                    service_security_group = SecurityGroup(
+                        pascalcase("FargateService" + self.env + service_name),
+                        GroupName=pascalcase("FargateService" + self.env + service_name),
+                        SecurityGroupIngress=[],
+                        VpcId=Ref(self.vpc),
+                        GroupDescription=pascalcase("FargateService" + self.env + service_name)
                     )
-                }
+                    self.template.add_resource(service_security_group)
+                    launch_type_svc = {
+                        'NetworkConfiguration': NetworkConfiguration(
+                            AwsvpcConfiguration=AwsvpcConfiguration(
+                                Subnets=[
+                                    Ref(self.private_subnet1),
+                                    Ref(self.private_subnet2)
+                                ],
+                                SecurityGroups=[
+                                    Ref(service_security_group)
+                                ]
+                            )
+                        )
+                    }
             else:
                 if 'custom_metrics' in config:
                     launch_type_svc = {
@@ -434,9 +456,6 @@ service is down',
                 DesiredCount=desired_count,
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
-                Tags=Tags(
-                    {'NetworkMode': "awsvpc" if 'custom_metrics' in config else "bridge"}
-                ),
                 **launch_type_svc
             )
             self.template.add_output(
