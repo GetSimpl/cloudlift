@@ -180,7 +180,7 @@ class EnvironmentConfiguration(object):
             "environment": {
                 "notifications_arn": notifications_arn,
                 "ssl_certificate_arn": ssl_certificate_arn
-            }
+            },
         }, 'cloudlift_version': VERSION}
         self._set_config(environment_configuration)
         pass
