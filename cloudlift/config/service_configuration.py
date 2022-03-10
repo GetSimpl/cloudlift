@@ -14,12 +14,12 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
 
-from cloudlift.config import DecimalEncoder
-from cloudlift.config import print_json_changes
+from cloudlift.config import DecimalEncoder, print_json_changes, get_resource_for
 # import config.mfa as mfa
-from cloudlift.config import get_resource_for, get_client_for
 from cloudlift.config.logging import log_bold, log_err, log_warning, log
 from cloudlift.version import VERSION
+from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
+
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -38,53 +38,9 @@ class ServiceConfiguration(object):
         # mfa_region = get_region_for_environment(environment)
         # mfa_session = mfa.get_mfa_session(mfa_region)
         # ssm_client = mfa_session.client('ssm')
-        self.dynamodb_client = get_client_for('dynamodb',environment)
         self.dynamodb_resource = get_resource_for('dynamodb',environment)
-        self.table = self._get_table()
-
-    def _get_table(self):
-        table_names = self.dynamodb_client.list_tables()['TableNames']
-        if SERVICE_CONFIGURATION_TABLE not in table_names:
-            log_warning("Could not find configuration table, creating one..")
-            self._create_configuration_table()
-            self._table_status()
-        return self.dynamodb_resource.Table(SERVICE_CONFIGURATION_TABLE)
-
-    def _create_configuration_table(self):
-        self.dynamodb_resource.create_table(
-            TableName=SERVICE_CONFIGURATION_TABLE,
-            KeySchema=[
-                {
-                    'AttributeName': 'service_name',
-                    'KeyType': 'HASH'
-                },
-                {
-                    'AttributeName': 'environment',
-                    'KeyType': 'RANGE'
-                }
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': 'service_name',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'environment',
-                    'AttributeType': 'S'
-                }
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
-        log_bold("Configuration table created!")
-    
-    def _table_status(self):
-        status=""
-        log("Checking Table status...")
-        while status == "ACTIVE":
-            sleep(1)
-            status = self.dynamodb_client.describe_table(TableName=SERVICE_CONFIGURATION_TABLE)["Table"]["TableStatus"]
-        sleep(10)
-        log_bold("Table status is ACTIVE")
+        self.table = DynamodbConfiguration(SERVICE_CONFIGURATION_TABLE, [
+            ('service_name', self.service_name), ('environment', self.environment)])._get_table()
 
     def edit_config(self):
         '''

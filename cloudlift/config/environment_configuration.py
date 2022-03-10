@@ -15,12 +15,13 @@ from jsonschema.exceptions import ValidationError
 
 from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
-from cloudlift.config import DecimalEncoder
-from cloudlift.config import print_json_changes
+from cloudlift.config import DecimalEncoder, print_json_changes
+from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 # import config.mfa as mfa
 from cloudlift.config.logging import log_bold, log_err, log_warning
 
 ENVIRONMENT_CONFIGURATION_TABLE = 'environment_configurations'
+
 
 class EnvironmentConfiguration(object):
     '''
@@ -32,7 +33,8 @@ class EnvironmentConfiguration(object):
 
         session = boto3.session.Session()
         self.dynamodb = session.resource('dynamodb')
-        self.table = self._get_table()
+        self.table = DynamodbConfiguration(ENVIRONMENT_CONFIGURATION_TABLE, [
+                       ('environment', self.environment)])._get_table()
 
     def get_config(self, cloudlift_version=VERSION):
         '''
@@ -84,33 +86,6 @@ class EnvironmentConfiguration(object):
             ConsistentRead=True
         )
         return [env['environment'] for env in response['Items']]
-
-    def _get_table(self):
-        dynamodb_client = boto3.session.Session().client('dynamodb')
-        table_names = dynamodb_client.list_tables()['TableNames']
-        if ENVIRONMENT_CONFIGURATION_TABLE not in table_names:
-            log_warning("Could not find configuration table, creating one..")
-            self._create_configuration_table()
-        return self.dynamodb.Table(ENVIRONMENT_CONFIGURATION_TABLE)
-
-    def _create_configuration_table(self):
-        self.dynamodb.create_table(
-            TableName=ENVIRONMENT_CONFIGURATION_TABLE,
-            KeySchema=[
-                {
-                    'AttributeName': 'environment',
-                    'KeyType': 'HASH'
-                }
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': 'environment',
-                    'AttributeType': 'S'
-                }
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
-        log_bold("Configuration table created!")
 
     def _env_config_exists(self):
         response = self.table.get_item(
