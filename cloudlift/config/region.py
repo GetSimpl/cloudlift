@@ -1,4 +1,5 @@
 import boto3
+from botocore.exceptions import ClientError
 from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import EnvironmentConfiguration
@@ -14,15 +15,23 @@ def get_region_for_environment(environment):
 
 
 def get_client_for(resource, environment):
-    return boto3.session.Session(
-        region_name=get_region_for_environment(environment)
-    ).client(resource)
+    try:
+        return boto3.session.Session(
+            region_name=get_region_for_environment(environment)
+        ).client(resource)
+    except ClientError:
+        raise UnrecoverableException(
+            "Unable to find valid AWS credentials")
 
 
 def get_resource_for(resource, environment):
-    return boto3.session.Session(
-        region_name=get_region_for_environment(environment)
-    ).resource(resource)
+    try:
+        return boto3.session.Session(
+            region_name=get_region_for_environment(environment)
+        ).resource(resource)
+    except ClientError:
+        raise UnrecoverableException(
+            "Unable to find valid AWS credentials")
 
 
 def get_notifications_arn_for_environment(environment):
