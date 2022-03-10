@@ -18,7 +18,7 @@ class DynamodbConfiguration:
     def _get_table(self):
         table_names = self.dynamodb_client.list_tables()['TableNames']
         if self.table_name not in table_names:
-            log_warning("Could not find configuration table, creating one..")
+            log_warning("Could not find {} table, creating one..".format(self.table_name))
             self._create_configuration_table()
             self._table_status()
         return self.dynamodb.Table(self.table_name)
@@ -40,7 +40,7 @@ class DynamodbConfiguration:
     def _table_status(self):
         status = ""
         while status == "ACTIVE":
-            log("Checking Table status...")
+            log("Checking {} table status...".format(self.table_name))
             sleep(1)
             status = self.dynamodb_client.describe_table(
                 TableName=self.table_name)["Table"]["TableStatus"]
