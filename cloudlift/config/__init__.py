@@ -8,4 +8,3 @@ from .banner import *
 from .mfa import *
 from .service_configuration import *
 from .stack import *
-from .dynamodb_configuration import *
