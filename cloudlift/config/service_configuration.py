@@ -181,6 +181,21 @@ class ServiceConfiguration(object):
                         "container_port"
                     ]
                 },
+                "custom_metrics": {
+                    "type": "object",
+                    "properties": {
+                        "metrics_port" : {"type": "string"},
+                        "metrics_path": {"type": "string"}
+                    }
+                },
+                "volume": {
+                    "type": "object",
+                    "properties": {
+                        "efs_id" : {"type": "string"},
+                        "efs_directory_path" : {"type": "string"},
+                        "container_path" : {"type": "string"}
+                    }
+                },
                 "memory_reservation": {
                     "type": "number",
                     "minimum": 10,
@@ -248,7 +263,11 @@ class ServiceConfiguration(object):
                         u'health_check_path': u'/elb-check'
                     },
                     u'memory_reservation': 1000,
-                    u'command': None
+                    u'command': None,
+                    u'custom_metrics': {
+                        u'metrics_port': u'8005',
+                        u'metrics_path': u'/metrics'
+                    }
                 }
             }
         }

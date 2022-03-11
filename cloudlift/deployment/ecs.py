@@ -64,7 +64,6 @@ class EcsClient(object):
             fargate_td = {
                 'executionRoleArn': execution_role_arn or u'',
                 'requiresCompatibilities': requires_compatibilities or [],
-                'networkMode': network_mode or u'',
                 'cpu': cpu,
                 'memory': memory,
             }
@@ -73,6 +72,7 @@ class EcsClient(object):
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn or u'',
+            networkMode=network_mode,
             **fargate_td
         )
 
@@ -425,7 +425,6 @@ class EcsAction(object):
             fargate_td = {
                 'execution_role_arn': task_definition.execution_role_arn or u'',
                 'requires_compatibilities': task_definition.requires_compatibilities or [],
-                'network_mode': task_definition.network_mode or u'',
                 'cpu' : task_definition.cpu or u'',
                 'memory' : task_definition.memory or u'',
 
@@ -435,7 +434,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
-
+            network_mode=task_definition.network_mode or u'bridge',
             **fargate_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
