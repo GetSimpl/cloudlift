@@ -4,6 +4,7 @@ retrieving service configuration.
 '''
 
 import json
+from time import sleep
 
 import dictdiffer
 from botocore.exceptions import ClientError
@@ -13,12 +14,12 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
 
-from cloudlift.config import DecimalEncoder
-from cloudlift.config import print_json_changes
+from cloudlift.config import DecimalEncoder, print_json_changes, get_resource_for
 # import config.mfa as mfa
-from cloudlift.config import get_resource_for
-from cloudlift.config.logging import log_bold, log_err, log_warning
+from cloudlift.config.logging import log_bold, log_err, log_warning, log
 from cloudlift.version import VERSION
+from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
+
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -37,10 +38,9 @@ class ServiceConfiguration(object):
         # mfa_region = get_region_for_environment(environment)
         # mfa_session = mfa.get_mfa_session(mfa_region)
         # ssm_client = mfa_session.client('ssm')
-        self.table = get_resource_for(
-            'dynamodb',
-            environment
-        ).Table(SERVICE_CONFIGURATION_TABLE)
+        self.dynamodb_resource = get_resource_for('dynamodb',environment)
+        self.table = DynamodbConfiguration(SERVICE_CONFIGURATION_TABLE, [
+            ('service_name', self.service_name), ('environment', self.environment)])._get_table()
 
     def edit_config(self):
         '''
