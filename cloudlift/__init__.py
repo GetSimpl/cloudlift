@@ -164,7 +164,7 @@ def get_version(name, environment, short):
 service task")
 @_require_environment
 @_require_name
-@click.option('--mfa', help='MFA code', prompt='MFA Code')
+@click.option('--mfa', help='MFA code')
 def start_session(name, environment, mfa):
     SessionCreator(name, environment).start_session(mfa)
 
