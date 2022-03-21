@@ -688,7 +688,7 @@ for cluster for 15 minutes.',
 
 
     def _add_metadata(self):
-        self.template.add_metadata({
+        self.template.set_metadata({
             'AWS::CloudFormation::Interface': {
                 'ParameterGroups': [
                     {
