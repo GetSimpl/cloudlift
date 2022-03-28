@@ -547,6 +547,11 @@ for cluster for 15 minutes.',
                     'PropagateAtLaunch': True,
                     'Value': Sub('${AWS::StackName} - ECS Host'),
                     'Key': 'Name'
+                },
+                {
+                    'PropagateAtLaunch': True, 
+                    'Key': 'environment', 
+                    'Value': self.env
                 }
             ],
             MinSize=Ref('MinSize'),
