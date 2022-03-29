@@ -17,11 +17,11 @@ class EnvironmentCreator(object):
 
     def __init__(self, environment):
         self.environment = environment
-        environment_configuration = EnvironmentConfiguration(
+        self.environment_configuration = EnvironmentConfiguration(
             self.environment
         )
-        environment_configuration.update_config()
-        self.configuration = environment_configuration.get_config()[self.environment]
+        self.environment_configuration.update_config()
+        self.configuration = self.environment_configuration.get_config()[self.environment]
         self.cluster_name = get_cluster_name(environment)
         self.client = get_client_for('cloudformation', self.environment)
         self.key_name = self.configuration['cluster']['key_name']
@@ -75,6 +75,8 @@ class EnvironmentCreator(object):
             self.__run_ecs_container_agent_udpate()
         try:
             log("Initiating environment stack update.")
+            # self.environment_configuration.update_cloudlift_version()
+
             environment_stack_template_body = ClusterTemplateGenerator(
                 self.environment,
                 self.configuration,
@@ -84,6 +86,7 @@ class EnvironmentCreator(object):
             change_set = create_change_set(
                 self.client,
                 environment_stack_template_body,
+                "TemplateBody",
                 self.cluster_name,
                 self.key_name,
                 self.environment
@@ -93,6 +96,9 @@ class EnvironmentCreator(object):
                 self.cluster_name
             )
             log_bold("Executing changeset. Checking progress...")
+
+            if change_set is None:
+                return
             self.client.execute_change_set(
                 ChangeSetName=change_set['ChangeSetId']
             )
@@ -127,8 +133,9 @@ class EnvironmentCreator(object):
                 AutoScalingGroupNames=[auto_scaling_group_name]
             )
             return response['AutoScalingGroups'][0]['DesiredCapacity']
-        except Exception:
-            raise UnrecoverableException("Unable to fetch desired instance count.")
+        except Exception as err:
+            raise err
+            raise UnrecoverableException("Unable to fetch desired instance count. {}".format(err))
 
 
     def __print_progress(self):

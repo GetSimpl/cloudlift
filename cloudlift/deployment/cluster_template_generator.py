@@ -5,12 +5,12 @@ import pathlib
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
-                         cloudformation, GetAtt, Join)
+                         cloudformation, Export, GetAtt, Join, Tags)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
                                      ScalingPolicy, LifecycleHook)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
-                             RouteTable, SecurityGroup, Subnet,
+                             RouteTable, SecurityGroup, Subnet, SecurityGroupIngress,
                              SubnetRouteTableAssociation, VPCGatewayAttachment)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
@@ -20,6 +20,7 @@ from troposphere.policies import (AutoScalingRollingUpdate, CreationPolicy,
                                   ResourceSignal)
 from troposphere.rds import DBSubnetGroup
 from troposphere.awslambda import Function, Code, MEMORY_VALUES, Permission
+from troposphere.servicediscovery import PrivateDnsNamespace
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
@@ -53,12 +54,27 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.configuration['vpc']['nat-gateway']['elastic-ip-allocation-id'],
         )
         self._create_log_group()
+        self._setup_cloudmap()
         self._add_cluster_outputs()
         self._add_cluster_parameters()
         self._add_mappings()
         self._add_metadata()
         self._add_cluster()
         return to_yaml(json.dumps(self.template.to_dict(), cls=DecimalEncoder))
+
+    def _setup_cloudmap(self):
+        self.cloudmap = PrivateDnsNamespace(
+            camelcase("{self.env}Cloudmap".format(**locals())),
+            Name=Ref('AWS::StackName'),
+            Vpc=Ref(self.vpc),
+            Tags=Tags(
+                {'category': 'services'},
+                {'environment': self.env},
+                {'Name': Ref('AWS::StackName')}
+            )
+        )
+        self.template.add_resource(self.cloudmap)
+        return None
 
     def _get_availability_zones(self):
         client = get_client_for('ec2', self.env)
@@ -420,7 +436,7 @@ for cluster for 15 minutes.',
             GroupDescription=Sub("${AWS::StackName}-alb")
         )
         self.template.add_resource(self.sg_alb)
-        sg_hosts = SecurityGroup(
+        self.sg_hosts = SecurityGroup(
             "SecurityGroupEc2Hosts",
             SecurityGroupIngress=[
                 {
@@ -431,12 +447,23 @@ for cluster for 15 minutes.',
             VpcId=Ref(self.vpc),
             GroupDescription=Sub("${AWS::StackName}-hosts")
         )
-        self.template.add_resource(sg_hosts)
+        self.template.add_resource(self.sg_hosts)
+        
+        sg_host_ingress= SecurityGroupIngress(
+            "SecurityEc2HostsIngress",
+            SourceSecurityGroupId = Ref(self.sg_hosts),
+            IpProtocol = "-1",
+            GroupId = Ref(self.sg_hosts),
+            FromPort = "-1",
+            ToPort = "-1"
+        )
+        self.template.add_resource(sg_host_ingress)
+        
         database_security_group = SecurityGroup(
             "SecurityGroupDatabases",
             SecurityGroupIngress=[
                 {
-                    'SourceSecurityGroupId': Ref(sg_hosts),
+                    'SourceSecurityGroupId': Ref(self.sg_hosts),
                     'IpProtocol': -1
                 }
             ],
@@ -505,7 +532,7 @@ for cluster for 15 minutes.',
             'LaunchConfiguration',
             UserData=user_data,
             IamInstanceProfile=Ref(instance_profile),
-            SecurityGroups=[Ref(sg_hosts)],
+            SecurityGroups=[Ref(self.sg_hosts)],
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
             Metadata=lc_metadata,
@@ -611,7 +638,7 @@ for cluster for 15 minutes.',
         self.template.add_resource(self.lambda_function_for_asg)
         self.asg_sns_topic = Topic(
             "ASGSNSTopic",
-            TopicName=Join("-", [Ref(cluster),"Topic"]),
+            TopicName=Join("-", [Ref(cluster),"Scaling"]),
             Subscription=[Subscription(
                 Protocol="lambda",
                 Endpoint=GetAtt(self.lambda_function_for_asg, "Arn")
@@ -750,6 +777,19 @@ for cluster for 15 minutes.',
             Description="Key Pair name for accessing the instances",
             Value=str(self.configuration['cluster']['key_name']))
         )
+        self.template.add_output(Output(
+            "CloudmapId",
+            Description="CloudMap Namespace ID for service discovery",
+            Export=Export("{self.env}Cloudmap".format(**locals())),
+            Value=GetAtt(self.cloudmap, 'Id'))
+        )
+        self.template.add_output(Output(
+            "SecurityGroupEC2Host",
+            Export=Export("{self.env}Ec2Host".format(**locals())),
+            Description="EC2Host Security group ID",
+            Value=Ref('SecurityGroupEc2Hosts'))
+        )
+
 
     def _add_metadata(self):
         self.template.add_metadata({

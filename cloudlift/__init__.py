@@ -11,6 +11,7 @@ from cloudlift.config.logging import log_err
 from cloudlift.deployment.service_creator import ServiceCreator
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
+from cloudlift.deployment.task_definition_creator import TaskDefinitionCreator
 from cloudlift.session import SessionCreator
 from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
@@ -24,6 +25,7 @@ def _require_environment(func):
         if kwargs['environment'] == 'production':
             highlight_production()
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -35,7 +37,9 @@ repo')
         if kwargs['name'] is None:
             kwargs['name'] = deduce_name(None)
         return func(*args, **kwargs)
+
     return wrapper
+
 
 class CommandWrapper(click.Group):
     def __call__(self, *args, **kwargs):
@@ -114,6 +118,30 @@ def deploy_service(name, environment, version, build_arg):
 
 
 @cli.command()
+@_require_environment
+@_require_name
+@click.option('--version', default=None,
+              help='local image version tag')
+@click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
+                                                                  "as --build-args. Supports multiple.\
+                                                                   Please leave space between name and value" )
+def create_task_definition(name, environment, version, build_arg):
+    TaskDefinitionCreator(name, environment, version, dict(build_arg)).create()
+
+
+@cli.command()
+@_require_environment
+@_require_name
+@click.option('--version', default=None,
+              help='local image version tag')
+@click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
+                                                                  "as --build-args. Supports multiple.\
+                                                                   Please leave space between name and value" )
+def update_task_definition(name, environment, version, build_arg):
+    TaskDefinitionCreator(name, environment, version, dict(build_arg)).update()
+
+
+@cli.command()
 @click.option('--local_tag', help='Commit sha for image to be uploaded')
 @click.option('--additional_tags', default=[], multiple=True,
               help='Additional tags for the image apart from commit SHA')
@@ -136,9 +164,10 @@ def get_version(name, environment, short):
 service task")
 @_require_environment
 @_require_name
-@click.option('--mfa', help='MFA code', prompt='MFA Code')
+@click.option('--mfa', help='MFA code')
 def start_session(name, environment, mfa):
     SessionCreator(name, environment).start_session(mfa)
+
 
 if __name__ == '__main__':
     cli()
