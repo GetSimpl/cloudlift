@@ -19,7 +19,7 @@ from troposphere.logs import LogGroup
 from troposphere.policies import (AutoScalingRollingUpdate, CreationPolicy,
                                   ResourceSignal)
 from troposphere.rds import DBSubnetGroup
-from troposphere.awslambda import Function, Code, MEMORY_VALUES, Permission
+from troposphere.awslambda import Function, Code, Permission
 from troposphere.servicediscovery import PrivateDnsNamespace
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
@@ -404,6 +404,27 @@ for cluster.',
         )
         self.template.add_resource(
             self.cluster_high_memory_reservation_autoscale_alarm)
+        self.cluster_low_memory_reservation_autoscale_alarm = Alarm(
+            'ClusterLowMemoryReservationAlarm',
+            EvaluationPeriods=1,
+            Dimensions=[
+                MetricDimension(Name='ClusterName', Value=Ref(cluster))
+            ],
+            AlarmActions=[
+                Ref(self.cluster_down_scaling_policy)
+            ],
+            AlarmDescription='Alarm if memory reservation is below 60% \
+for cluster.',
+            Namespace='AWS/ECS',
+            Period=300,
+            ComparisonOperator='LessThanThreshold',
+            Statistic='Average',
+            Threshold='60',
+            MetricName='MemoryReservation'
+        )
+        self.template.add_resource(
+            self.cluster_low_memory_reservation_autoscale_alarm)
+
         self.cluster_high_memory_reservation_user_notification_alarm = Alarm(
             'ClusterHighMemoryReservationUserNotifcationAlarm',
             EvaluationPeriods=3,
@@ -572,6 +593,15 @@ for cluster for 15 minutes.',
             ScalingAdjustment=1
         )
         self.template.add_resource(self.cluster_scaling_policy)
+        self.cluster_down_scaling_policy = ScalingPolicy(
+            'AutoDownScalingPolicy',
+            AdjustmentType='ChangeInCapacity',
+            AutoScalingGroupName=Ref(self.auto_scaling_group),
+            Cooldown=300,
+            PolicyType='SimpleScaling',
+            ScalingAdjustment=-1
+        )
+        self.template.add_resource(self.cluster_down_scaling_policy)
 
     def _add_instance_draining(self, cluster):
         self.sns_asg_role = Role(
@@ -625,12 +655,13 @@ for cluster for 15 minutes.',
         with open (str(pathlib.Path(__file__).parent.absolute())+"/ecs_instance_draining_lambda.py", "r") as ecs_instance_draining_lambda:
             lambda_code=ecs_instance_draining_lambda.readlines()
         self.lambda_function_for_asg = Function(
-            "LambdaFunctionForASG",
+            "ECSInstanceDraining",
             Handler="index.lambda_handler",
+            Description="Drain ECS instance",
             Role=GetAtt(self.lambda_execution_role, "Arn"),
             Runtime="python3.6",
             MemorySize=128,
-            Timeout=60,
+            Timeout=300,
             Code=Code(
                 ZipFile=Join("", lambda_code)
             )
@@ -792,7 +823,7 @@ for cluster for 15 minutes.',
 
 
     def _add_metadata(self):
-        self.template.add_metadata({
+        self.template.set_metadata({
             'AWS::CloudFormation::Interface': {
                 'ParameterGroups': [
                     {
