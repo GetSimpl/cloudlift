@@ -1,7 +1,6 @@
 import json
 import re
 import uuid
-import math
 
 import boto3
 from botocore.exceptions import ClientError
