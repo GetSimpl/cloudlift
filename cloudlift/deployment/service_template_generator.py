@@ -194,7 +194,7 @@ service is down',
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
             "LogConfiguration": self._gen_log_config(service_name),
-            "Memory": math.ceil(int(config['memory_reservation']) + (int(config['memory_reservation']) * 50 )/100),
+            "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100),
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
