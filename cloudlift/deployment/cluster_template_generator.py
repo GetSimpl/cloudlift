@@ -531,7 +531,15 @@ for cluster for 15 minutes.',
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
             Metadata=lc_metadata,
-            KeyName=Ref(self.key_pair)
+            KeyName=Ref(self.key_pair),
+            BlockDeviceMappings=[
+                {
+                    "DeviceName": "/dev/xvda",
+                    "Ebs": {
+                        "VolumeSize": 60 if self.env == "production" else 30
+                    }
+                }
+            ]
         )
         self.template.add_resource(launch_configuration)
         # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
