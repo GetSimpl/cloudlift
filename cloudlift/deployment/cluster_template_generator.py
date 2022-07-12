@@ -35,9 +35,9 @@ class ClusterTemplateGenerator(TemplateGenerator):
         super(ClusterTemplateGenerator, self).__init__(environment)
         self.configuration = environment_configuration
         if desired_instances is None:
-            self.desired_instances = self.configuration['cluster']['min_instances']
+            self.desired_instances = str(self.configuration['cluster']['min_instances'])
         else:
-            self.desired_instances = desired_instances
+            self.desired_instances = str(desired_instances)
         self.private_subnets = []
         self.public_subnets = []
         self._get_availability_zones()
