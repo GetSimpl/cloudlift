@@ -41,6 +41,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         self.private_subnets = []
         self.public_subnets = []
         self._get_availability_zones()
+        self.teamname = (self.notifications_arn.split(':')[-1])
 
     def generate_cluster(self):
         self.__validate_parameters()
@@ -66,6 +67,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             Tags=Tags(
                 {'category': 'services'},
                 {'environment': self.env},
+                {'Team': self.teamname},
                 {'Name': Ref('AWS::StackName')}
             )
         )
@@ -104,6 +106,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             Tags=[
                 {'Key': 'category', 'Value': 'services'},
                 {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.teamname},
                 {'Key': 'Name', 'Value': "{self.env}-vpc".format(**locals())}]
         )
         self.template.add_resource(self.vpc)
@@ -114,7 +117,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-internet-gateway".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.teamname}
             ]
         )
         self.template.add_resource(self.internet_gateway)
@@ -135,7 +139,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-public".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.teamname}
             ],
             DependsOn=self.vpc.title)
         self.template.add_resource(public_route_table)
@@ -158,7 +163,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 MapPublicIpOnLaunch=True,
                 Tags=[
                     {'Key': 'Name', 'Value': subnet_name},
-                    {'Key': 'environment', 'Value': self.env}
+                    {'Key': 'environment', 'Value': self.env},
+                    {'Key': 'Team', 'Value': self.teamname}
                 ]
             )
             self.public_subnets.append(subnet)
@@ -188,7 +194,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-private".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.teamname}
             ]
         )
         self.template.add_resource(private_route_table)
@@ -210,7 +217,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 MapPublicIpOnLaunch=False,
                 Tags=[
                     {'Key': 'Name', 'Value': subnet_name},
-                    {'Key': 'environment', 'Value': self.env}
+                    {'Key': 'environment', 'Value': self.env},
+                    {'Key': 'Team', 'Value': self.teamname}
                 ]
             )
             self.private_subnets.append(subnet)
@@ -232,7 +240,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-nat-gateway".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.teamname}
             ]
         )
         self.template.add_resource(nat_gateway)
@@ -251,7 +260,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
             DBSubnetGroupName="{self.env}-subnet".format(**locals()),
             Tags=[
                 {'Key': 'category', 'Value': 'services'},
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.teamname}
             ],
             DBSubnetGroupDescription="{self.env} subnet group".format(
                 **locals()),
@@ -443,7 +453,7 @@ for cluster for 15 minutes.',
             GroupDescription=Sub("${AWS::StackName}-hosts")
         )
         self.template.add_resource(self.sg_hosts)
-        
+
         sg_host_ingress= SecurityGroupIngress(
             "SecurityEc2HostsIngress",
             SourceSecurityGroupId = Ref(self.sg_hosts),
@@ -453,7 +463,7 @@ for cluster for 15 minutes.',
             ToPort = "-1"
         )
         self.template.add_resource(sg_host_ingress)
-        
+
         database_security_group = SecurityGroup(
             "SecurityGroupDatabases",
             SecurityGroupIngress=[
@@ -547,7 +557,9 @@ for cluster for 15 minutes.',
                     'PropagateAtLaunch': True,
                     'Value': Sub('${AWS::StackName} - ECS Host'),
                     'Key': 'Name'
-                }
+                },
+                {'PropagateAtLaunch': True, 'Key': 'Team', 'Value': self.teamname},
+                {'PropagateAtLaunch': True, 'Key': 'environment', 'Value':self.env},
             ],
             MinSize=Ref('MinSize'),
             MaxSize=Ref('MaxSize'),

@@ -64,6 +64,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.bucket_name = 'cloudlift-service-template'
         self.environment = service_configuration.environment
         self.client = get_client_for('s3', self.environment)
+        self.teamname = (self.notifications_arn.split(':')[-1])
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
@@ -239,7 +240,7 @@ service is down',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
             }
-        
+
         if 'custom_metrics' in config:
             launch_type_td['NetworkMode'] = 'awsvpc'
         if 'volume' in config:
@@ -257,6 +258,7 @@ service is down',
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
             **launch_type_td
+            Tags=Tags(Team=self.teamname, environment=self.env)
         )
         if 'custom_metrics' in config:
             sd = SD(
@@ -309,6 +311,7 @@ service is down',
                         }],
                         VpcId=Ref(self.vpc),
                         GroupDescription=pascalcase("FargateService" + self.env + service_name)
+                        Tags=Tags(Team=self.teamname, environment=self.env)
                     )
                     self.template.add_resource(service_security_group)
 
@@ -350,7 +353,7 @@ service is down',
                         'Role': Ref(self.ecs_service_role),
                         'PlacementStrategies': self.PLACEMENT_STRATEGIES
                     }
-            
+
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
@@ -360,6 +363,7 @@ service is down',
                 DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
+                Tags=Tags(Team=self.teamname, environment=self.env)
             )
             self.template.add_output(
                 Output(
@@ -407,7 +411,8 @@ service is down',
                         GroupName=pascalcase("FargateService" + self.env + service_name),
                         SecurityGroupIngress=[],
                         VpcId=Ref(self.vpc),
-                        GroupDescription=pascalcase("FargateService" + self.env + service_name)
+                        GroupDescription=pascalcase("FargateService" + self.env + service_name),
+                        Tags=Tags(Team=self.teamname, environment=self.env)
                     )
                     self.template.add_resource(service_security_group)
                     launch_type_svc = {
@@ -456,7 +461,8 @@ service is down',
                 DesiredCount=desired_count,
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
-                **launch_type_svc
+                **launch_type_svc,
+                Tags=Tags(Team=self.teamname, environment=self.env)
             )
             self.template.add_output(
                 Output(
@@ -487,7 +493,8 @@ service is down',
                 config
             ),
             VpcId=Ref(self.vpc),
-            GroupDescription=Sub(service_name + "-alb-sg")
+            GroupDescription=Sub(service_name + "-alb-sg"),
+            Tags=Tags(Team=self.teamname, environment=self.env)
         )
         self.template.add_resource(svc_alb_sg)
         alb_name = service_name + pascalcase(self.env)
@@ -508,7 +515,9 @@ service is down',
                 ],
                 Name=alb_name,
                 Tags=[
-                    {'Value': alb_name, 'Key': 'Name'}
+                    {'Value': alb_name, 'Key': 'Name'},
+                    {"Key": "Team", "Value": self.teamname},
+                    {'Key': 'environment', 'Value': self.env}
                 ],
                 Scheme=scheme
             )
@@ -527,7 +536,9 @@ service is down',
                 ],
                 Name=alb_name,
                 Tags=[
-                    {'Value': alb_name, 'Key': 'Name'}
+                    {'Value': alb_name, 'Key': 'Name'},
+                    {"Key": "Team", "Value": self.teamname},
+                    {'Key': 'environment', 'Value': self.env}
                 ]
             )
 
@@ -559,7 +570,11 @@ service is down',
             Port=int(config['http_interface']['container_port']),
             HealthCheckTimeoutSeconds=10,
             UnhealthyThresholdCount=3,
-            **target_group_config
+            **target_group_config,
+            Tags=[
+                {"Key": "Team", "Value": self.teamname},
+                {'Key': 'environment', 'Value': self.env}
+            ]
         )
 
         self.template.add_resource(service_target_group)
