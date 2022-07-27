@@ -1,14 +1,19 @@
 import os
+from json import dumps
 
 from stringcase import pascalcase
 from troposphere.ecs import (ContainerDefinition,
                              Environment,
                              LogConfiguration,
                              TaskDefinition)
+from troposphere.iam import Role
+from botocore.exceptions import ClientError
 
 from cloudlift.config.logging import log_bold, log_intent, log_warning
 from cloudlift.deployment import EcrClient, UnrecoverableException, EcsClient, DeployAction, EcsTaskDefinition
 from cloudlift.deployment.deployer import build_config, print_task_diff
+from cloudlift.config import get_client_for
+from cloudlift.exceptions import UnrecoverableException
 
 
 def _complete_image_url(ecr_client: EcrClient):
@@ -22,6 +27,7 @@ class TaskDefinitionCreator:
         self.build_args = build_args
         self.region = region
         self.version = version
+        self.client = get_client_for('iam', self.environment)
         self.env_sample_file = './env.sample'
         self.cluster_name = f'cluster-{self.environment}'
         self.name_with_env = f"{pascalcase(self.name)}{pascalcase(self.environment)}"
@@ -52,8 +58,27 @@ class TaskDefinitionCreator:
             "memoryReservation": 1024
         }
 
+        task_role = dumps({
+            "Version": "2012-10-17",
+            "Statement": {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        })
+        try:
+            create_task_role = self.client.create_role(RoleName=self.name_with_env + "Role", AssumeRolePolicyDocument=task_role)
+            task_role_arn = create_task_role["Role"]["Arn"]
+        except ClientError as boto_client_error:
+            error_code = boto_client_error.response['Error']['Code']
+            if error_code == 'EntityAlreadyExists':
+                task_role_arn = self.name_with_env + "Role"
+            else:
+                raise boto_client_error
         ecs_client = EcsClient(region=self.region)
-        ecs_client.register_task_definition(self._task_defn_family(), [container_definition_arguments], [], None)
+        ecs_client.register_task_definition(self._task_defn_family(), [container_definition_arguments], [], task_role_arn, None)
         log_bold("Task definition successfully created\n")
 
     def update(self):

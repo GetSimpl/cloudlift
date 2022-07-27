@@ -35,9 +35,9 @@ class ClusterTemplateGenerator(TemplateGenerator):
         super(ClusterTemplateGenerator, self).__init__(environment)
         self.configuration = environment_configuration
         if desired_instances is None:
-            self.desired_instances = self.configuration['cluster']['min_instances']
+            self.desired_instances = str(self.configuration['cluster']['min_instances'])
         else:
-            self.desired_instances = desired_instances
+            self.desired_instances = str(desired_instances)
         self.private_subnets = []
         self.public_subnets = []
         self._get_availability_zones()
@@ -558,8 +558,17 @@ for cluster for 15 minutes.',
                     'Value': Sub('${AWS::StackName} - ECS Host'),
                     'Key': 'Name'
                 },
-                {'PropagateAtLaunch': True, 'Key': 'Team', 'Value': self.teamname},
+<<<<<<< HEAD
+
                 {'PropagateAtLaunch': True, 'Key': 'environment', 'Value':self.env},
+=======
+                {
+                    'PropagateAtLaunch': True,
+                    'Key': 'environment',
+                    'Value': self.env
+                },
+                {'PropagateAtLaunch': True, 'Key': 'Team', 'Value': self.teamname}
+>>>>>>> a1c8652bba39b2297ab2bcab37f21be848165bd4
             ],
             MinSize=Ref('MinSize'),
             MaxSize=Ref('MaxSize'),
@@ -591,9 +600,9 @@ for cluster for 15 minutes.',
             "KeyPair", Description='', Type="AWS::EC2::KeyPair::KeyName", Default="")
         self.template.add_parameter(self.key_pair)
         self.template.add_parameter(Parameter(
-            "MinSize", Description='', Type="Number", Default=str(self.configuration['cluster']['min_instances'])))
+            "MinSize", Description='', Type="String", Default=str(self.configuration['cluster']['min_instances'])))
         self.template.add_parameter(Parameter(
-            "MaxSize", Description='', Type="Number", Default=str(self.configuration['cluster']['max_instances'])))
+            "MaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['max_instances'])))
         self.notification_sns_arn = Parameter("NotificationSnsArn",
                                               Description='',
                                               Type="String",
@@ -700,7 +709,7 @@ for cluster for 15 minutes.',
 
 
     def _add_metadata(self):
-        self.template.add_metadata({
+        self.template.set_metadata({
             'AWS::CloudFormation::Interface': {
                 'ParameterGroups': [
                     {
@@ -736,7 +745,7 @@ for cluster for 15 minutes.',
                         'default': 'Min. no. of instances in cluster'
                     },
                     'NotificationSnsArn': {
-                        'default': 'The SNS topic to which notifactions has to be triggered'
+                        'default': 'The SNS topic to which notifications has to be triggered'
                     },
                     'Subnet1': {
                         'default': 'Enter the ID of the 1st subnet'

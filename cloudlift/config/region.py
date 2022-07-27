@@ -26,6 +26,8 @@ def get_client_for(resource, environment):
             raise UnrecoverableException("AWS token that was passed could not be validated by Amazon Web Services")
         elif error.response['Error']['Code'] == 'RegionDisabledException':
             raise UnrecoverableException("STS is not activated in the requested region for the account that is being asked to generate credentials")
+        elif error.response['Error']['Code'] == 'AccessDeniedException':
+            raise UnrecoverableException("User is not authorized to perform get boto3 client session on %s" % resource)
         else:
             raise UnrecoverableException("Unable to find valid AWS credentials")
 
@@ -44,6 +46,8 @@ def get_resource_for(resource, environment):
         elif error.response['Error']['Code'] == 'RegionDisabledException':
             raise UnrecoverableException(
                 "STS is not activated in the requested region for the account that is being asked to generate credentials")
+        elif error.response['Error']['Code'] == 'AccessDeniedException':
+            raise UnrecoverableException("User is not authorized to perform get boto3 resource session on %s" % resource)
         else:
             raise UnrecoverableException(
                 "Unable to find valid AWS credentials")
