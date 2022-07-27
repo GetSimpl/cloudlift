@@ -243,7 +243,7 @@ class ServiceConfiguration(object):
                     "type": "string"
                 }
             },
-            "required": ["cloudlift_version", "services"]
+            "required": ["cloudlift_version", "services", "notifications_arn"]
         }
         try:
             validate(configuration, schema)
@@ -254,6 +254,7 @@ class ServiceConfiguration(object):
 
     def _default_service_configuration(self):
         return {
+            u'notifications_arn': None,
             u'services': {
                 pascalcase(self.service_name): {
                     u'http_interface': {
