@@ -64,7 +64,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.bucket_name = 'cloudlift-service-template'
         self.environment = service_configuration.environment
         self.client = get_client_for('s3', self.environment)
-        self.teamname = (self.notifications_arn.split(':')[-1])
+        self.team_name = (self.notifications_arn.split(':')[-1])
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
@@ -258,7 +258,7 @@ service is down',
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
             **launch_type_td
-            Tags=Tags(Team=self.teamname, environment=self.env)
+            Tags=Tags(Team=self.team_name, environment=self.env)
         )
         if 'custom_metrics' in config:
             sd = SD(
@@ -311,7 +311,7 @@ service is down',
                         }],
                         VpcId=Ref(self.vpc),
                         GroupDescription=pascalcase("FargateService" + self.env + service_name)
-                        Tags=Tags(Team=self.teamname, environment=self.env)
+                        Tags=Tags(Team=self.team_name, environment=self.env)
                     )
                     self.template.add_resource(service_security_group)
 
@@ -363,7 +363,7 @@ service is down',
                 DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.teamname, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env)
             )
             self.template.add_output(
                 Output(
@@ -412,7 +412,7 @@ service is down',
                         SecurityGroupIngress=[],
                         VpcId=Ref(self.vpc),
                         GroupDescription=pascalcase("FargateService" + self.env + service_name),
-                        Tags=Tags(Team=self.teamname, environment=self.env)
+                        Tags=Tags(Team=self.team_name, environment=self.env)
                     )
                     self.template.add_resource(service_security_group)
                     launch_type_svc = {
@@ -462,7 +462,7 @@ service is down',
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.teamname, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env)
             )
             self.template.add_output(
                 Output(
@@ -494,7 +494,7 @@ service is down',
             ),
             VpcId=Ref(self.vpc),
             GroupDescription=Sub(service_name + "-alb-sg"),
-            Tags=Tags(Team=self.teamname, environment=self.env)
+            Tags=Tags(Team=self.team_name, environment=self.env)
         )
         self.template.add_resource(svc_alb_sg)
         alb_name = service_name + pascalcase(self.env)
@@ -516,7 +516,7 @@ service is down',
                 Name=alb_name,
                 Tags=[
                     {'Value': alb_name, 'Key': 'Name'},
-                    {"Key": "Team", "Value": self.teamname},
+                    {"Key": "Team", "Value": self.team_name},
                     {'Key': 'environment', 'Value': self.env}
                 ],
                 Scheme=scheme
@@ -537,7 +537,7 @@ service is down',
                 Name=alb_name,
                 Tags=[
                     {'Value': alb_name, 'Key': 'Name'},
-                    {"Key": "Team", "Value": self.teamname},
+                    {"Key": "Team", "Value": self.team_name},
                     {'Key': 'environment', 'Value': self.env}
                 ]
             )
@@ -572,7 +572,7 @@ service is down',
             UnhealthyThresholdCount=3,
             **target_group_config,
             Tags=[
-                {"Key": "Team", "Value": self.teamname},
+                {"Key": "Team", "Value": self.team_name},
                 {'Key': 'environment', 'Value': self.env}
             ]
         )
