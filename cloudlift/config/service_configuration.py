@@ -262,8 +262,12 @@ class ServiceConfiguration(object):
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
                     },
-                    u'memory_reservation': 250,
-                    u'command': None
+                    u'memory_reservation': 1000,
+                    u'command': None,
+                    u'custom_metrics': {
+                        u'metrics_port': u'8005',
+                        u'metrics_path': u'/metrics'
+                    }
                 }
             }
         }
