@@ -248,7 +248,7 @@ class EnvironmentConfiguration(object):
                                 "min_instances": {"type": "integer"},
                                 "max_instances": {"type": "integer"},
                                 "instance_type": {"type": "string"},
-                                "key_name": {"type": "string"}
+                                "key_name": {"type": "string"},
                             },
                             "required": [
                                 "min_instances",
