@@ -531,15 +531,7 @@ for cluster for 15 minutes.',
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
             Metadata=lc_metadata,
-            KeyName=Ref(self.key_pair),
-            BlockDeviceMappings=[
-                {
-                    "DeviceName": "/dev/xvda",
-                    "Ebs": {
-                        "VolumeSize": Ref("InstanceRootVolume")
-                    }
-                }
-            ]
+            KeyName=Ref(self.key_pair)
         )
         self.template.add_resource(launch_configuration)
         # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
@@ -595,9 +587,6 @@ for cluster for 15 minutes.',
                                               Type="String",
                                               Default=self.notifications_arn)
         self.template.add_parameter(self.notification_sns_arn)
-        self.instance_root_volume = Parameter("InstanceRootVolume", Description="Root device volume size in GB's", Type="Number", Default=str(
-            self.configuration['cluster']['instance_root_volume']))
-        self.template.add_parameter(self.instance_root_volume)
         self.template.add_parameter(Parameter(
             "InstanceType", Description='', Type="String", Default=self.configuration['cluster']['instance_type']))
 
@@ -712,7 +701,6 @@ for cluster for 15 minutes.',
                             'MinSize',
                             'MaxSize',
                             'InstanceType',
-                            'InstanceRootVolume',
                             'VPC',
                             'Subnet1',
                             'Subnet2',
@@ -726,9 +714,6 @@ for cluster for 15 minutes.',
                     },
                     'InstanceType': {
                         'default': 'Type of instance'
-                    },
-                    'InstanceRootVolume': {
-                        'default': 'Root Volume Size'
                     },
                     'KeyPair': {
                         'default': 'Select the key with which you want to login to the ec2 instances'},
