@@ -567,7 +567,7 @@ for cluster for 15 minutes.',
             'AutoScalingPolicy',
             AdjustmentType='ChangeInCapacity',
             AutoScalingGroupName=Ref(self.auto_scaling_group),
-            Cooldown=300,
+            Cooldown="300",
             PolicyType='SimpleScaling',
             ScalingAdjustment=1
         )
