@@ -554,10 +554,10 @@ for cluster for 15 minutes.',
                     '06_add_locahost_nameserver': {
                         'command': "sed -i '/search ap-south-1.compute.internal/a nameserver 127.0.0.1' /etc/resolv.conf"
                     },
-                    '07_enable_dnsmaq_service': {
+                    '07_enable_dnsmasq_service': {
                         'command': 'pidof systemd && systemctl restart dnsmasq.service || service dnsmasq restart'
                     },
-                    '08_start_dnsmaq_service': {
+                    '08_start_dnsmasq_service': {
                         'command': 'pidof systemd && systemctl enable  dnsmasq.service || chkconfig dnsmasq on'
                     },
                     '09_configure_dhclient': {
