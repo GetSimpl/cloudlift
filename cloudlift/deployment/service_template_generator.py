@@ -289,6 +289,7 @@ service is down',
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
                 # otherwise, we need to specify a security group for the service
+                launch_type_svc = {}
                 if 'custom_metrics' in config:
                     launch_type_svc = {
                         "ServiceRegistries": [ServiceRegistry(
