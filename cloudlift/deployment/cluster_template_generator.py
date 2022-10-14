@@ -3,14 +3,16 @@ import re
 
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
-from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
-                         cloudformation, Export, GetAtt, Tags)
-from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
+
+from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub, GetAtt,
+                         cloudformation, Export, Tags)
+from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
-                             RouteTable, SecurityGroup, Subnet, SecurityGroupIngress,
-                             SubnetRouteTableAssociation, VPCGatewayAttachment)
+                             RouteTable, SecurityGroup, Subnet,
+                             SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress,
+                              LaunchTemplateData, LaunchTemplate, IamInstanceProfile)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
 from troposphere.iam import InstanceProfile, Role
@@ -470,7 +472,7 @@ for cluster for 15 minutes.',
             "#!/bin/bash",
             "yum update -y",
             "yum install -y aws-cfn-bootstrap",
-            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration",
+            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate",
             "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup",
             "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
             "systemctl enable amazon-ssm-agent",
@@ -498,7 +500,7 @@ for cluster for 15 minutes.',
                                 '[cfn-auto-reloader-hook]',
                                 'triggers=post.update',
                                 'path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init',
-                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration',
+                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate',
                                 ''
                             ])
                         ),
@@ -566,17 +568,23 @@ for cluster for 15 minutes.',
                 }
             )
         })
-        launch_configuration = LaunchConfiguration(
-            'LaunchConfiguration',
+        launch_template_data = LaunchTemplateData(
+            'LaunchTemplateData',
             UserData=user_data,
-            IamInstanceProfile=Ref(instance_profile),
-            SecurityGroups=[Ref(self.sg_hosts)],
+            IamInstanceProfile=IamInstanceProfile(
+                Arn=GetAtt(instance_profile, 'Arn')
+            ),
+            SecurityGroupIds=[GetAtt(sg_hosts, 'GroupId')],
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
-            Metadata=lc_metadata,
             KeyName=Ref(self.key_pair)
         )
-        self.template.add_resource(launch_configuration)
+        launch_template = LaunchTemplate(
+            "LaunchTemplate",
+            LaunchTemplateData=launch_template_data,
+            Metadata=lc_metadata
+        )
+        self.template.add_resource(launch_template)
         # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
         up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
         # TODO: clean up
@@ -600,7 +608,10 @@ for cluster for 15 minutes.',
             MinSize=Ref('MinSize'),
             MaxSize=Ref('MaxSize'),
             VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
-            LaunchConfigurationName=Ref(launch_configuration),
+            LaunchTemplate=LaunchTemplateSpecification(
+                LaunchTemplateId=Ref(launch_template),
+                Version=GetAtt(launch_template, 'LatestVersionNumber')
+            ),
             CreationPolicy=CreationPolicy(
                 ResourceSignal=ResourceSignal(Timeout='PT15M')
             )
