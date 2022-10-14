@@ -1,5 +1,7 @@
 import functools
 import operator
+import re
+from click import prompt
 
 from cloudlift.exceptions import UnrecoverableException
 
@@ -16,8 +18,14 @@ class SessionCreator(object):
     self.sts_client = get_client_for("sts", self.environment)
 
   def start_session(self, mfa_code):
-    mfa.do_mfa_login(mfa_code, get_region_for_environment(self.environment))
-    target_instance = self._get_target_instance()
+    user_id = (self.sts_client.get_caller_identity()['Arn'].split("/")[0]).split(":")[-1]
+    if user_id == "user":
+      if mfa_code == None:
+        mfa_code = prompt("MFA code") 
+      mfa.do_mfa_login(mfa_code, get_region_for_environment(self.environment))
+      target_instance = self._get_target_instance()
+    elif user_id == "assumed-role":
+      target_instance = self._get_target_instance()
     self._initiate_session(target_instance)
 
   def _get_target_instance(self):

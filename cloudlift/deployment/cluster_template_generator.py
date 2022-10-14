@@ -3,14 +3,15 @@ import re
 
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
+
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub, GetAtt,
-                         cloudformation)
+                         cloudformation, Export, Tags)
 from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
-                             SubnetRouteTableAssociation, VPCGatewayAttachment,
+                             SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress,
                               LaunchTemplateData, LaunchTemplate, IamInstanceProfile)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
@@ -19,6 +20,7 @@ from troposphere.logs import LogGroup
 from troposphere.policies import (AutoScalingRollingUpdate, CreationPolicy,
                                   ResourceSignal)
 from troposphere.rds import DBSubnetGroup
+from troposphere.servicediscovery import PrivateDnsNamespace
 
 from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
@@ -35,9 +37,9 @@ class ClusterTemplateGenerator(TemplateGenerator):
         super(ClusterTemplateGenerator, self).__init__(environment)
         self.configuration = environment_configuration
         if desired_instances is None:
-            self.desired_instances = self.configuration['cluster']['min_instances']
+            self.desired_instances = str(self.configuration['cluster']['min_instances'])
         else:
-            self.desired_instances = desired_instances
+            self.desired_instances = str(desired_instances)
         self.private_subnets = []
         self.public_subnets = []
         self._get_availability_zones()
@@ -50,12 +52,27 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.configuration['vpc']['nat-gateway']['elastic-ip-allocation-id'],
         )
         self._create_log_group()
+        self._setup_cloudmap()
         self._add_cluster_outputs()
         self._add_cluster_parameters()
         self._add_mappings()
         self._add_metadata()
         self._add_cluster()
         return to_yaml(json.dumps(self.template.to_dict(), cls=DecimalEncoder))
+
+    def _setup_cloudmap(self):
+        self.cloudmap = PrivateDnsNamespace(
+            camelcase("{self.env}Cloudmap".format(**locals())),
+            Name=Ref('AWS::StackName'),
+            Vpc=Ref(self.vpc),
+            Tags=Tags(
+                {'category': 'services'},
+                {'environment': self.env},
+                {'Name': Ref('AWS::StackName')}
+            )
+        )
+        self.template.add_resource(self.cloudmap)
+        return None
 
     def _get_availability_zones(self):
         client = get_client_for('ec2', self.env)
@@ -416,7 +433,7 @@ for cluster for 15 minutes.',
             GroupDescription=Sub("${AWS::StackName}-alb")
         )
         self.template.add_resource(self.sg_alb)
-        sg_hosts = SecurityGroup(
+        self.sg_hosts = SecurityGroup(
             "SecurityGroupEc2Hosts",
             SecurityGroupIngress=[
                 {
@@ -427,12 +444,23 @@ for cluster for 15 minutes.',
             VpcId=Ref(self.vpc),
             GroupDescription=Sub("${AWS::StackName}-hosts")
         )
-        self.template.add_resource(sg_hosts)
+        self.template.add_resource(self.sg_hosts)
+        
+        sg_host_ingress= SecurityGroupIngress(
+            "SecurityEc2HostsIngress",
+            SourceSecurityGroupId = Ref(self.sg_hosts),
+            IpProtocol = "-1",
+            GroupId = Ref(self.sg_hosts),
+            FromPort = "-1",
+            ToPort = "-1"
+        )
+        self.template.add_resource(sg_host_ingress)
+        
         database_security_group = SecurityGroup(
             "SecurityGroupDatabases",
             SecurityGroupIngress=[
                 {
-                    'SourceSecurityGroupId': Ref(sg_hosts),
+                    'SourceSecurityGroupId': Ref(self.sg_hosts),
                     'IpProtocol': -1
                 }
             ],
@@ -476,6 +504,25 @@ for cluster for 15 minutes.',
                                 ''
                             ])
                         ),
+                    ),
+                    "/etc/dnsmasq.conf": cloudformation.InitFile(
+                        content=Sub(
+                            '\n'.join([
+                                '# Server Configuration'
+                                'listen-address=127.0.0.1',
+                                'port=53',
+                                'bind-interfaces',
+                                'user=dnsmasq',
+                                'group=dnsmasq',
+                                'pid-file=/var/run/dnsmasq.pid',
+                                '# Name resolution options',
+                                'resolv-file=/etc/resolv.dnsmasq',
+                                'cache-size=500',
+                                'neg-ttl=60',
+                                'domain-needed',
+                                'bogus-priv'
+                            ])
+                        ),
                     )
                 }),
                 services={
@@ -493,6 +540,30 @@ for cluster for 15 minutes.',
                         'command': Sub(
                             'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256" > /etc/ecs/ecs.config'
                         )
+                    },
+                    '02_set_nameserver': {
+                        'command': "INTERFACE=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -n1); IS_IT_CLASSIC=$(curl --write-out %{http_code} --silent --output /dev/null http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/vpc-id); if [[ $IS_IT_CLASSIC == '404' ]]; then bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 172.16.0.23;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 172.16.0.23' > /etc/resolv.dnsmasq\"; else  bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 169.254.169.253;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 169.254.169.253' > /etc/resolv.dnsmasq\"; fi"
+                    },
+                    '03_install_dnsmasq_package': {
+                        'command': 'yum install -y dnsmasq bind-utils'
+                    },
+                    '04_create_group': {
+                        'command': 'groupadd -r dnsmasq'
+                    },
+                    '05_create_user': {
+                        'command': 'useradd -r -g dnsmasq dnsmasq'
+                    },
+                    '06_add_locahost_nameserver': {
+                        'command': "sed -i '/search ap-south-1.compute.internal/a nameserver 127.0.0.1' /etc/resolv.conf"
+                    },
+                    '07_enable_dnsmasq_service': {
+                        'command': 'pidof systemd && systemctl restart dnsmasq.service || service dnsmasq restart'
+                    },
+                    '08_start_dnsmasq_service': {
+                        'command': 'pidof systemd && systemctl enable  dnsmasq.service || chkconfig dnsmasq on'
+                    },
+                    '09_configure_dhclient': {
+                        'command': 'bash -c "dhclient"'
                     }
                 }
             )
@@ -527,6 +598,11 @@ for cluster for 15 minutes.',
                     'PropagateAtLaunch': True,
                     'Value': Sub('${AWS::StackName} - ECS Host'),
                     'Key': 'Name'
+                },
+                {
+                    'PropagateAtLaunch': True, 
+                    'Key': 'environment', 
+                    'Value': self.env
                 }
             ],
             MinSize=Ref('MinSize'),
@@ -545,7 +621,7 @@ for cluster for 15 minutes.',
             'AutoScalingPolicy',
             AdjustmentType='ChangeInCapacity',
             AutoScalingGroupName=Ref(self.auto_scaling_group),
-            Cooldown=300,
+            Cooldown="300",
             PolicyType='SimpleScaling',
             ScalingAdjustment=1
         )
@@ -562,9 +638,9 @@ for cluster for 15 minutes.',
             "KeyPair", Description='', Type="AWS::EC2::KeyPair::KeyName", Default="")
         self.template.add_parameter(self.key_pair)
         self.template.add_parameter(Parameter(
-            "MinSize", Description='', Type="Number", Default=str(self.configuration['cluster']['min_instances'])))
+            "MinSize", Description='', Type="String", Default=str(self.configuration['cluster']['min_instances'])))
         self.template.add_parameter(Parameter(
-            "MaxSize", Description='', Type="Number", Default=str(self.configuration['cluster']['max_instances'])))
+            "MaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['max_instances'])))
         self.notification_sns_arn = Parameter("NotificationSnsArn",
                                               Description='',
                                               Type="String",
@@ -656,9 +732,22 @@ for cluster for 15 minutes.',
             Description="Key Pair name for accessing the instances",
             Value=str(self.configuration['cluster']['key_name']))
         )
+        self.template.add_output(Output(
+            "CloudmapId",
+            Description="CloudMap Namespace ID for service discovery",
+            Export=Export("{self.env}Cloudmap".format(**locals())),
+            Value=GetAtt(self.cloudmap, 'Id'))
+        )
+        self.template.add_output(Output(
+            "SecurityGroupEC2Host",
+            Export=Export("{self.env}Ec2Host".format(**locals())),
+            Description="EC2Host Security group ID",
+            Value=Ref('SecurityGroupEc2Hosts'))
+        )
+
 
     def _add_metadata(self):
-        self.template.add_metadata({
+        self.template.set_metadata({
             'AWS::CloudFormation::Interface': {
                 'ParameterGroups': [
                     {
@@ -694,7 +783,7 @@ for cluster for 15 minutes.',
                         'default': 'Min. no. of instances in cluster'
                     },
                     'NotificationSnsArn': {
-                        'default': 'The SNS topic to which notifactions has to be triggered'
+                        'default': 'The SNS topic to which notifications has to be triggered'
                     },
                     'Subnet1': {
                         'default': 'Enter the ID of the 1st subnet'
