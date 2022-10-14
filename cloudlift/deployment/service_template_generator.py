@@ -257,8 +257,9 @@ service is down',
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
             TaskRoleArn=Ref(task_role),
+            Tags=Tags(Team=self.team_name, environment=self.env),
             **launch_type_td
-            Tags=Tags(Team=self.team_name, environment=self.env)
+            
         )
         if 'custom_metrics' in config:
             sd = SD(
@@ -310,7 +311,7 @@ service is down',
                             'FromPort': int(config['http_interface']['container_port']),
                         }],
                         VpcId=Ref(self.vpc),
-                        GroupDescription=pascalcase("FargateService" + self.env + service_name)
+                        GroupDescription=pascalcase("FargateService" + self.env + service_name),
                         Tags=Tags(Team=self.team_name, environment=self.env)
                     )
                     self.template.add_resource(service_security_group)
