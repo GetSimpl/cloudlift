@@ -15,5 +15,4 @@ def check_sns_topic_exists(topic_name, environment):
             raise UnrecoverableException(
                 "Unable to find SNS topic {topic_name} in {environment} environment".format(**locals()))
         else:
-            log_err(e.response['Error']['Message'])
-            raise e
+            raise UnrecoverableException(e.response['Error']['Message'])
