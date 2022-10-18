@@ -49,8 +49,7 @@ class TaskDefinitionCreator:
             "image": _complete_image_url(ecr_client),
             "essential": True,
             "logConfiguration": self._gen_log_config(pascalcase(self.name)),
-            "memoryReservation": 1024,
-            "memory": 1536
+            "memoryReservation": 1024
         }
 
         ecs_client = EcsClient(region=self.region)
