@@ -17,7 +17,7 @@ from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config import DecimalEncoder, print_json_changes
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
-from cloudlift.config.check import check_sns_topic_exists
+from cloudlift.config.pre_flight import check_sns_topic_exists
 
 # import config.mfa as mfa
 from cloudlift.config.logging import log_bold, log_err, log_warning

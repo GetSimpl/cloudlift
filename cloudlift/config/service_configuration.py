@@ -19,7 +19,7 @@ from cloudlift.config import DecimalEncoder, print_json_changes, get_resource_fo
 from cloudlift.config.logging import log_bold, log_err, log_warning, log
 from cloudlift.version import VERSION
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
-from cloudlift.config.check import check_sns_topic_exists
+from cloudlift.config.pre_flight import check_sns_topic_exists
 
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
