@@ -574,7 +574,7 @@ for cluster for 15 minutes.',
             IamInstanceProfile=IamInstanceProfile(
                 Arn=GetAtt(instance_profile, 'Arn')
             ),
-            SecurityGroupIds=[GetAtt(sg_hosts, 'GroupId')],
+            SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
             KeyName=Ref(self.key_pair)
