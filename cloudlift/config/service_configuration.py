@@ -250,8 +250,11 @@ class ServiceConfiguration(object):
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
-            raise UnrecoverableException(validation_error.message + " in " +
-                    str(".".join(list(validation_error.relative_path))))
+            if validation_error.relative_path:
+                raise UnrecoverableException(validation_error.message + " in " +
+                        str(".".join(list(validation_error.relative_path))))
+            else:
+                raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
