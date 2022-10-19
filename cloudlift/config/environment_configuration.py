@@ -17,6 +17,8 @@ from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config import DecimalEncoder, print_json_changes
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
+from cloudlift.config.pre_flight import check_sns_topic_exists
+
 # import config.mfa as mfa
 from cloudlift.config.logging import log_bold, log_err, log_warning
 
@@ -205,6 +207,8 @@ class EnvironmentConfiguration(object):
         '''
         self._validate_changes(config)
         config['cloudlift_version'] = VERSION
+        sns_arn = config[self.environment]['environment']['notifications_arn']
+        check_sns_topic_exists(sns_arn, self.environment)
 
         try:
             configuration_response = self.table.update_item(
