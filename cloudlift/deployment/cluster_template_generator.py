@@ -481,12 +481,30 @@ for cluster for 15 minutes.',
         user_data = Base64(Sub('\n'.join([
             "#!/bin/bash",
             "yum update -y",
-            "yum install -y aws-cfn-bootstrap",
+            "yum install -y aws-cfn-bootstrap wget",
             "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate",
             "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup",
             "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
             "systemctl enable amazon-ssm-agent",
             "systemctl start amazon-ssm-agent",
+            "wget -P /opt/ https://github.com/prometheus/node_exporter/releases/download/v1.4.0/node_exporter-1.4.0.linux-amd64.tar.gz",
+            "tar xzv -C /opt -f /opt/node_exporter-1.4.0.linux-amd64.tar.gz",
+            """sudo tee /etc/systemd/system/node_exporter.service <<"EOF"
+            [Unit]
+            Description=Node Exporter
+
+            [Service]
+            User=ec2-user
+            Group=ec2-user
+            Restart=on-failure
+            ExecStart=/opt/node_exporter-1.4.0.linux-amd64/node_exporter
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF""",
+            "systemctl daemon-reload",
+            "systemctl enable node_exporter.service",
+            "systemctl start node_exporter.service"
             ""])))
         lc_metadata = cloudformation.Init({
             "config": cloudformation.InitConfig(
