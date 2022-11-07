@@ -2,6 +2,7 @@ from terminaltables import SingleTable
 
 from cloudlift.config.logging import log_bold
 
+import json
 
 def print_parameter_changes(differences):
     changes_to_show = [["Type", "Config", "Old val", "New val"]]
@@ -47,15 +48,15 @@ def print_json_changes(differences):
                     'add',
                     difference[1],
                     '',
-                    str(added_item[0])+" : "+str(added_item[1])
+                    str(added_item[0])+" : "+json.dumps(added_item[1], indent=2)
                 ])
         if difference[0] == 'remove':
             difference[2].sort(key=lambda x: x[0])
             for removed_item in difference[2]:
                 changes_to_show.append([
                     'remove',
-                    str(difference[1])+"."+str(removed_item[0]),
-                    removed_item[1],
+                    difference[1],
+                    str(removed_item[0])+" : "+json.dumps(removed_item[1], indent=2),
                     ''
                 ])
     log_bold("Modifications to config:")
