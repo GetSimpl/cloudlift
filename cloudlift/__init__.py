@@ -165,8 +165,9 @@ service task")
 @_require_environment
 @_require_name
 @click.option('--mfa', help='MFA code')
-def start_session(name, environment, mfa):
-    SessionCreator(name, environment).start_session(mfa)
+@click.option('--instance_id', help='enter the instance id')
+def start_session(name, environment, mfa, instance_id):
+    SessionCreator(name, environment).start_session(mfa, instance_id)
 
 
 if __name__ == '__main__':

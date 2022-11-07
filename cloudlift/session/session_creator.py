@@ -7,7 +7,7 @@ from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.config import mfa
-from cloudlift.config.logging import log, log_bold, log_err
+from cloudlift.config.logging import log, log_bold, log_err, log_warning
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from awscli.clidriver import create_clidriver
 
@@ -17,24 +17,41 @@ class SessionCreator(object):
     self.environment = environment
     self.sts_client = get_client_for("sts", self.environment)
 
-  def start_session(self, mfa_code):
+  def start_session(self, mfa_code, instance):
     user_id = (self.sts_client.get_caller_identity()['Arn'].split("/")[0]).split(":")[-1]
     if user_id == "user":
-      if mfa_code == None:
-        mfa_code = prompt("MFA code") 
-      mfa.do_mfa_login(mfa_code, get_region_for_environment(self.environment))
-      target_instance = self._get_target_instance()
+        if mfa_code == None:
+            mfa_code = prompt("MFA code")
+        mfa.do_mfa_login(mfa_code, get_region_for_environment(self.environment))
+        target_instance = self._get_target_instance(instance)
     elif user_id == "assumed-role":
-      target_instance = self._get_target_instance()
+        target_instance = self._get_target_instance(instance)
     self._initiate_session(target_instance)
 
-  def _get_target_instance(self):
+  def _get_target_instance(self, instance):
     service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
     if not service_instance_ids:
       raise UnrecoverableException("Couldn't find instances. Exiting.")
     instance_ids = list(set(functools.reduce(operator.add,service_instance_ids.values())))
-    log("Found " + str(len(instance_ids)) + " instances to start session")
-    return instance_ids[0]
+    target_instance_id = self.get_target_instance_id(instance_ids, instance)
+    return target_instance_id
+
+  def get_target_instance_id(self, instance_ids, instance):
+      if instance == None:
+          return instance_ids[0]
+      else:
+          for instance_id in instance_ids:
+              if instance_id == instance:
+                  return instance
+      log_err("instance entered does not belong to the service")
+      log("Found " + str(len(instance_ids)) + " instances to start session")
+      print(*instance_ids, sep="\n")
+      log_bold("enter the instance id you want to SSH into:")
+      inputinstance = input()
+      for instance in instance_ids:
+          if instance == inputinstance:
+              return inputinstance
+      raise UnrecoverableException("instance entered does not belong to this service")
 
   def _initiate_session(self, target_instance):
     log_bold("Starting session in " + target_instance)
