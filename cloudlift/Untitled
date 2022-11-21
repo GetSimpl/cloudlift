@@ -1,0 +1,1033 @@
+$ ls
+Applications Documents    Library      Music        Public       cloudliftgit get-pip.py   test123
+Desktop      Downloads    Movies       Pictures     cloudlift    env.sample   mytest
+
+~                                                                                                                                                                    ✔  813  00:38:05
+$ mkdir tmptest
+
+~                                                                                                                                                                    ✔  814  00:38:32
+$ python -m ensurepip --upgrade
+
+~                                                                                                                                                          SIGINT(2) ↵  814  00:40:00
+$ history | grep s3
+
+~                                                                                                                                                          SIGINT(2) ↵  814  00:40:04
+$ python3 -m venv tmptest
+
+~                                                                                                                                                                    ✔  815  00:40:17
+$ source tmptest/bin/activate
+
+~                                                                                                                                                                    ✔  816  00:40:39
+$ which python3
+/Users/priyalatha/tmptest/bin/python3
+
+~                                                                                                                                                                    ✔  817  00:40:45
+$ pip install cloudlift
+Collecting cloudlift
+ Downloading cloudlift-1.5.2-py3-none-any.whl (55 kB)
+    |████████████████████████████████| 55 kB 2.2 MB/s
+Collecting jsonschema==2.6.0
+ Using cached jsonschema-2.6.0-py2.py3-none-any.whl (39 kB)
+Collecting dictdiffer==0.7.0
+ Using cached dictdiffer-0.7.0-py2.py3-none-any.whl (18 kB)
+Collecting moto==1.3.7
+ Using cached moto-1.3.7-py2.py3-none-any.whl (552 kB)
+Collecting requests>=2.20.0
+ Using cached requests-2.28.1-py3-none-any.whl (62 kB)
+Collecting idna==2.6
+ Using cached idna-2.6-py2.py3-none-any.whl (56 kB)
+Collecting pytest==4.0.0
+ Using cached pytest-4.0.0-py2.py3-none-any.whl (217 kB)
+Collecting chardet==3.0.4
+ Using cached chardet-3.0.4-py2.py3-none-any.whl (133 kB)
+Collecting click==6.7
+ Using cached click-6.7-py2.py3-none-any.whl (71 kB)
+Collecting certifi==2017.7.27.1
+ Using cached certifi-2017.7.27.1-py2.py3-none-any.whl (349 kB)
+Collecting colorclass==2.2.2
+ Downloading colorclass-2.2.2-py2.py3-none-any.whl (18 kB)
+Collecting docutils==0.14
+ Using cached docutils-0.14-py3-none-any.whl (543 kB)
+Collecting boto3==1.24.2
+ Downloading boto3-1.24.2-py3-none-any.whl (132 kB)
+    |████████████████████████████████| 132 kB 5.3 MB/s
+Collecting six==1.10.0
+ Using cached six-1.10.0-py2.py3-none-any.whl (10 kB)
+Collecting botocore==1.27.2
+ Downloading botocore-1.27.2-py3-none-any.whl (8.8 MB)
+    |████████████████████████████████| 8.8 MB 5.5 MB/s
+Collecting jmespath==0.9.3
+ Using cached jmespath-0.9.3-py2.py3-none-any.whl (23 kB)
+Collecting stringcase==1.0.6
+ Using cached stringcase-1.0.6.tar.gz (2.6 kB)
+Collecting futures==3.1.1
+ Using cached futures-3.1.1-py3-none-any.whl (2.8 kB)
+Collecting future==0.16.0
+ Using cached future-0.16.0.tar.gz (824 kB)
+Collecting python-dateutil==2.8.2
+ Downloading python_dateutil-2.8.2-py2.py3-none-any.whl (247 kB)
+    |████████████████████████████████| 247 kB 5.6 MB/s
+Collecting awscli==1.25.2
+ Downloading awscli-1.25.2-py3-none-any.whl (3.9 MB)
+    |████████████████████████████████| 3.9 MB 7.1 MB/s
+Collecting terminaltables==3.1.0
+ Using cached terminaltables-3.1.0.tar.gz (12 kB)
+Collecting awacs==2.0.1
+ Using cached awacs-2.0.1-py3-none-any.whl (238 kB)
+Collecting troposphere==4.0.0
+ Using cached troposphere-4.0.0-py3-none-any.whl (380 kB)
+Collecting cfn-flip==1.0.3
+ Using cached cfn_flip-1.0.3.tar.gz (12 kB)
+Collecting colorama<0.4.5,>=0.2.5
+ Using cached colorama-0.4.4-py2.py3-none-any.whl (16 kB)
+Collecting rsa<4.8,>=3.1.2
+ Using cached rsa-4.7.2-py3-none-any.whl (34 kB)
+Collecting PyYAML<5.5,>=3.10
+ Using cached PyYAML-5.4.1-cp39-cp39-macosx_10_9_universal2.whl
+Collecting s3transfer<0.7.0,>=0.6.0
+ Using cached s3transfer-0.6.0-py3-none-any.whl (79 kB)
+Collecting urllib3<1.27,>=1.25.4
+ Using cached urllib3-1.26.12-py2.py3-none-any.whl (140 kB)
+Collecting pyaml
+ Using cached pyaml-21.10.1-py2.py3-none-any.whl (24 kB)
+Collecting cryptography>=2.3.0
+ Downloading cryptography-38.0.3-cp36-abi3-macosx_10_10_universal2.whl (5.4 MB)
+    |████████████████████████████████| 5.4 MB 8.5 MB/s
+Collecting docker>=2.5.1
+ Downloading docker-6.0.1-py3-none-any.whl (147 kB)
+    |████████████████████████████████| 147 kB 7.9 MB/s
+Collecting werkzeug
+ Using cached Werkzeug-2.2.2-py3-none-any.whl (232 kB)
+Collecting mock
+ Using cached mock-4.0.3-py3-none-any.whl (28 kB)
+Collecting xmltodict
+ Using cached xmltodict-0.13.0-py2.py3-none-any.whl (10.0 kB)
+Collecting python-jose<3.0.0
+ Using cached python_jose-2.0.2-py2.py3-none-any.whl (21 kB)
+Collecting boto>=2.36.0
+ Using cached boto-2.49.0-py2.py3-none-any.whl (1.4 MB)
+Collecting pytz
+ Downloading pytz-2022.6-py2.py3-none-any.whl (498 kB)
+    |████████████████████████████████| 498 kB 8.7 MB/s
+Collecting Jinja2>=2.7.3
+ Using cached Jinja2-3.1.2-py3-none-any.whl (133 kB)
+Collecting jsondiff==1.1.1
+ Using cached jsondiff-1.1.1.tar.gz (7.8 kB)
+Collecting aws-xray-sdk<0.96,>=0.93
+ Using cached aws_xray_sdk-0.95-py2.py3-none-any.whl (52 kB)
+Collecting responses>=0.9.0
+ Using cached responses-0.22.0-py3-none-any.whl (51 kB)
+Collecting py>=1.5.0
+ Using cached py-1.11.0-py2.py3-none-any.whl (98 kB)
+Collecting attrs>=17.4.0
+ Using cached attrs-22.1.0-py2.py3-none-any.whl (58 kB)
+Collecting more-itertools>=4.0.0
+ Using cached more_itertools-9.0.0-py3-none-any.whl (52 kB)
+Requirement already satisfied: setuptools in ./tmptest/lib/python3.9/site-packages (from pytest==4.0.0->cloudlift) (58.0.4)
+Collecting atomicwrites>=1.0
+ Using cached atomicwrites-1.4.1.tar.gz (14 kB)
+Collecting pluggy>=0.7
+ Using cached pluggy-1.0.0-py2.py3-none-any.whl (13 kB)
+Collecting jsonpickle
+ Using cached jsonpickle-2.2.0-py2.py3-none-any.whl (39 kB)
+Collecting wrapt
+ Using cached wrapt-1.14.1-cp39-cp39-macosx_11_0_arm64.whl (35 kB)
+Collecting cffi>=1.12
+ Using cached cffi-1.15.1-cp39-cp39-macosx_11_0_arm64.whl (174 kB)
+Collecting pycparser
+ Using cached pycparser-2.21-py2.py3-none-any.whl (118 kB)
+Collecting websocket-client>=0.32.0
+ Downloading websocket_client-1.4.2-py3-none-any.whl (55 kB)
+    |████████████████████████████████| 55 kB 3.7 MB/s
+Collecting packaging>=14.0
+ Using cached packaging-21.3-py3-none-any.whl (40 kB)
+Collecting MarkupSafe>=2.0
+ Using cached MarkupSafe-2.1.1-cp39-cp39-macosx_10_9_universal2.whl (17 kB)
+Collecting pyparsing!=3.0.5,>=2.0.2
+ Using cached pyparsing-3.0.9-py3-none-any.whl (98 kB)
+Collecting pycryptodome<4.0.0,>=3.3.1
+ Using cached pycryptodome-3.15.0.tar.gz (4.5 MB)
+Collecting ecdsa<1.0
+ Using cached ecdsa-0.18.0-py2.py3-none-any.whl (142 kB)
+Collecting charset-normalizer<3,>=2
+ Using cached charset_normalizer-2.1.1-py3-none-any.whl (39 kB)
+Collecting toml
+ Using cached toml-0.10.2-py2.py3-none-any.whl (16 kB)
+Collecting types-toml
+ Downloading types_toml-0.10.8.1-py3-none-any.whl (4.5 kB)
+Collecting pyasn1>=0.1.3
+ Using cached pyasn1-0.4.8-py2.py3-none-any.whl (77 kB)
+WARNING: The candidate selected for download or install is a yanked version: 'futures' candidate (version 3.1.1 at https://files.pythonhosted.org/packages/05/80/f41cca0ea1ff69bce7e7a7d76182b47bb4e1a494380a532af3e8ee70b9ec/futures-3.1.1-py3-none-any.whl#sha256=3a44f286998ae64f0cc083682fcfec16c406134a81a589a5de445d7bb7c2751b (from https://pypi.org/simple/futures/))
+Reason for being yanked: Does not declare incompatibility with Python 3
+Using legacy 'setup.py install' for cfn-flip, since package 'wheel' is not installed.
+Using legacy 'setup.py install' for future, since package 'wheel' is not installed.
+Using legacy 'setup.py install' for jsondiff, since package 'wheel' is not installed.
+Using legacy 'setup.py install' for stringcase, since package 'wheel' is not installed.
+Using legacy 'setup.py install' for terminaltables, since package 'wheel' is not installed.
+Using legacy 'setup.py install' for atomicwrites, since package 'wheel' is not installed.
+Using legacy 'setup.py install' for pycryptodome, since package 'wheel' is not installed.
+Installing collected packages: six, urllib3, python-dateutil, jmespath, pyparsing, pycparser, idna, charset-normalizer, certifi, botocore, wrapt, websocket-client, types-toml, toml, s3transfer, requests, PyYAML, pycryptodome, pyasn1, packaging, MarkupSafe, jsonpickle, future, ecdsa, click, cffi, xmltodict, werkzeug, rsa, responses, pytz, python-jose, pyaml, py, pluggy, more-itertools, mock, jsondiff, Jinja2, docutils, docker, cryptography, colorama, cfn-flip, boto3, boto, aws-xray-sdk, attrs, atomicwrites, troposphere, terminaltables, stringcase, pytest, moto, jsonschema, futures, dictdiffer, colorclass, chardet, awscli, awacs, cloudlift
+   Running setup.py install for pycryptodome ... done
+   Running setup.py install for future ... done
+   Running setup.py install for jsondiff ... done
+   Running setup.py install for cfn-flip ... done
+   Running setup.py install for atomicwrites ... done
+   Running setup.py install for terminaltables ... done
+   Running setup.py install for stringcase ... done
+Successfully installed Jinja2-3.1.2 MarkupSafe-2.1.1 PyYAML-5.4.1 atomicwrites-1.4.1 attrs-22.1.0 awacs-2.0.1 aws-xray-sdk-0.95 awscli-1.25.2 boto-2.49.0 boto3-1.24.2 botocore-1.27.2 certifi-2017.7.27.1 cffi-1.15.1 cfn-flip-1.0.3 chardet-3.0.4 charset-normalizer-2.1.1 click-6.7 cloudlift-1.5.2 colorama-0.4.4 colorclass-2.2.2 cryptography-38.0.3 dictdiffer-0.7.0 docker-6.0.1 docutils-0.14 ecdsa-0.18.0 future-0.16.0 futures-3.1.1 idna-2.6 jmespath-0.9.3 jsondiff-1.1.1 jsonpickle-2.2.0 jsonschema-2.6.0 mock-4.0.3 more-itertools-9.0.0 moto-1.3.7 packaging-21.3 pluggy-1.0.0 py-1.11.0 pyaml-21.10.1 pyasn1-0.4.8 pycparser-2.21 pycryptodome-3.15.0 pyparsing-3.0.9 pytest-4.0.0 python-dateutil-2.8.2 python-jose-2.0.2 pytz-2022.6 requests-2.28.1 responses-0.22.0 rsa-4.7.2 s3transfer-0.6.0 six-1.10.0 stringcase-1.0.6 terminaltables-3.1.0 toml-0.10.2 troposphere-4.0.0 types-toml-0.10.8.1 urllib3-1.26.12 websocket-client-1.4.2 werkzeug-2.2.2 wrapt-1.14.1 xmltodict-0.13.0
+WARNING: You are using pip version 21.2.4; however, version 22.3.1 is available.
+You should consider upgrading via the '/Users/priyalatha/tmptest/bin/python3 -m pip install --upgrade pip' command.
+
+~                                                                                                                                                                    ✔  818  00:41:47
+$ cd tmptest
+
+~/tmptest                                                                                                                                                            ✔  819  00:42:11
+$ cd
+
+~                                                                                                                                                                    ✔  820  00:42:16
+$ cd cloudliftgit
+
+~/cloudliftgit   main ?                                                                                                                                            ✔  821  00:45:03
+$ cloudlift start_session -e testing13 --mfa 687546
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+[{'OutputKey': 'CloudliftgitEcsServiceName', 'OutputValue': 'cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy', 'Description': 'The ECS name which needs to be entered'}]
+Could not determine services.
+Couldn't find instances. Exiting.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  822  00:45:43
+$ cloudlift start_session -e testing13 --mfa 958338
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'CloudliftgitEcsServiceName', 'OutputValue': 'cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy', 'Description': 'The ECS name which needs to be entered'}]
+ecs_service_names
+Could not determine services.
+Couldn't find instances. Exiting.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  823  00:48:17
+$ cloudlift start_session -e testing13 --mfa 720890
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'CloudliftgitEcsServiceName', 'OutputValue': 'cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy', 'Description': 'The ECS name which needs to be entered'}]
+ecs_service_names
+Could not determine services.
+Couldn't find instances. Exiting.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  824  00:49:29
+$ cloudlift start_session -e testing13 --mfa 786643
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'CloudliftgitEcsServiceName', 'OutputValue': 'cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy', 'Description': 'The ECS name which needs to be entered'}]
+Found 2 instances to start session
+Starting session in i-02cf144c5cda6d903
+
+An error occurred (TargetNotConnected) when calling the StartSession operation: i-02cf144c5cda6d903 is not connected.
+
+~/cloudliftgit   main ?                                                                                                                                            ✔  825  00:51:04
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 464921
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 92, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 93, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  826  00:57:43
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 221843
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+ecs_service_names
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 16, in __init__
+   self.init_stack_info()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 41, in init_stack_info
+   print(ecs_service_names)
+NameError: name 'ecs_service_names' is not defined
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  827  01:00:00
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 653601
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 92, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 93, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  828  01:04:15
+$ cloudlift start_session -e testing13 --mfa 791808
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'CloudliftgitEcsServiceName', 'OutputValue': 'cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy', 'Description': 'The ECS name which needs to be entered'}]
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 93, in get_instance_ids
+   tasks = self.ecs_client.describe_tasks(
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/botocore/client.py", line 508, in _api_call
+   return self._make_api_call(operation_name, kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/botocore/client.py", line 911, in _make_api_call
+   raise error_class(parsed_response, operation_name)
+botocore.errorfactory.InvalidParameterException: An error occurred (InvalidParameterException) when calling the DescribeTasks operation: Tasks cannot be empty.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  829  02:34:47
+$ cloudlift start_session -e testing13 --mfa 069480
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'CloudliftgitEcsServiceName', 'OutputValue': 'cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy', 'Description': 'The ECS name which needs to be entered'}]
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 93, in get_instance_ids
+   tasks = self.ecs_client.describe_tasks(
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/botocore/client.py", line 508, in _api_call
+   return self._make_api_call(operation_name, kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/botocore/client.py", line 911, in _make_api_call
+   raise error_class(parsed_response, operation_name)
+botocore.errorfactory.InvalidParameterException: An error occurred (InvalidParameterException) when calling the DescribeTasks operation: Tasks cannot be empty.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  830  02:35:48
+$ cloudlift start_session -e testing13 --mfa 257968
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'CloudliftgitEcsServiceName', 'OutputValue': 'cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy', 'Description': 'The ECS name which needs to be entered'}]
+Found 1 instances to start session
+Starting session in i-0188341f3b2f55345
+
+Starting session with SessionId: priyalatha.r-0db14d2067c267507
+sh-4.2$ ^C
+sh-4.2$ exit
+exit
+
+
+Exiting session with sessionId: priyalatha.r-0db14d2067c267507.
+
+
+~/cloudliftgit   main ?                                                                                                                                            ✔  831  02:40:03
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 855122
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 5, in <module>
+   from cloudlift import cli
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 8, in <module>
+   from cloudlift.deployment.configs import deduce_name
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/__init__.py", line 8, in <module>
+   from .service_creator import *
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_creator.py", line 17, in <module>
+   from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_template_generator.py", line 38, in <module>
+   from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 43
+   self.ecs_service_names[]= [service]
+                          ^
+SyntaxError: invalid syntax
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  832  02:46:42
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 756278
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 98, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  833  02:47:18
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 356044
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 98, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  834  02:47:51
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 414284
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 98, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  835  02:48:13
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 187900
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+service does not exist
+service does not exist
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 100, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 101, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  836  02:50:29
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 812738
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+service does not exist
+service does not exist
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 100, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 101, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  837  02:51:21
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 106377
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+service does not exist
+service does not exist
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 100, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  838  02:52:14
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 995806
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+service does not exist
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 100, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  839  02:52:49
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 375173
+Using credentials for priyalatha.r
+An error occurred (AccessDenied) when calling the GetSessionToken operation: MultiFactorAuthentication failed with invalid MFA one time pass code.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  840  02:53:23
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 512425
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+Could not determine services.
+Couldn't find instances. Exiting.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  841  02:53:44
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 692392
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 98, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  842  02:59:45
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 742501
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+Could not determine services.
+Couldn't find instances. Exiting.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  843  03:02:44
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 505497
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+Could not determine services.
+Couldn't find instances. Exiting.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  844  03:03:43
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 820178
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 98, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  845  03:04:57
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 608553
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 98, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 99, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  846  03:05:17
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 798605
+Using credentials for priyalatha.r
+service_name_list
+[{'OutputKey': 'PaymentApiPerfSidekiqEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt', 'Description': 'The ECS name which needs to be entered'}, {'OutputKey': 'PaymentApiPerfEcsServiceName', 'OutputValue': 'payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm', 'Description': 'The ECS name which needs to be entered'}]
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 100, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 101, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  847  03:06:16
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 369837
+Using credentials for priyalatha.r
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+Traceback (most recent call last):
+ File "/Users/priyalatha/tmptest/bin/cloudlift", line 8, in <module>
+   sys.exit(cli())
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 47, in __call__
+   return self.main(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 697, in main
+   rv = self.invoke(ctx)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 1066, in invoke
+   return _process_result(sub_ctx.command.invoke(sub_ctx))
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 895, in invoke
+   return ctx.invoke(self.callback, **ctx.params)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/click/core.py", line 535, in invoke
+   return callback(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 27, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 39, in wrapper
+   return func(*args, **kwargs)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/__init__.py", line 169, in start_session
+   SessionCreator(name, environment).start_session(mfa)
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 26, in start_session
+   target_instance = self._get_target_instance()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/session/session_creator.py", line 32, in _get_target_instance
+   service_instance_ids = ServiceInformationFetcher(self.name, self.environment).get_instance_ids()
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 100, in get_instance_ids
+   container_instance_arns = [
+ File "/Users/priyalatha/tmptest/lib/python3.9/site-packages/cloudlift/deployment/service_information_fetcher.py", line 101, in <listcomp>
+   task['containerInstanceArn'] for task in tasks
+KeyError: 'containerInstanceArn'
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  848  03:09:45
+$ cloudlift start_session -e payment-perf --name payment-api --mfa 780408
+Using credentials for priyalatha.r
+payment-api-payment-perf-PaymentApiPerfSidekiq-3ypmnkCaKJQt
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uNm
+enter the ecs service name you want to query:
+payment-api-payment-perf-PaymentApiPerf-59K4s1yJ8uN
+Could not determine services.
+Couldn't find instances. Exiting.
+
+~/cloudliftgit   main ?                                                                                                                                          1 ↵  849  03:10:13
+$ cloudlift start_session -e testing13 --mfa 155596
+Assuming the service name to be: cloudliftgit
+Using credentials for priyalatha.r
+cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy
+enter the ecs service name you want to query:
+cloudliftgit-testing13-Cloudliftgit-GmjLMR1h38fy
+Found 2 instances to start session
+Starting session in i-0b9d9e048c5fb1eac
+
+Starting session with SessionId: priyalatha.r-0f4e8041c2deb27dd
+sh-4.2$ exit
+exit
+
+
+Exiting session with sessionId: priyalatha.r-0f4e8041c2deb27dd.
+
+
+~/cloudliftgit   main ?                                                                                                                                            ✔  850  03:11:29
+{
+   "notifications_arn": "arn:aws:sns:ap-south-1:259042324395:suhas-test",
+   "services": {
+       "Cloudliftgit": {
+           "command": null,
+           "http_interface": {
+               "container_port": 80,
+               "health_check_path": "/",
+               "internal": false,
+               "restrict_access_to": [
+                   "0.0.0.0/0"
+               ]
+           },
+           "memory_reservation": 100
+       },
+       "Cloudliftgittest": {
+           "command": null,
+           "http_interface": {
+               "container_port": 80,
+               "health_check_path": "/",
+               "internal": false,
+               "restrict_access_to": [
+                   "0.0.0.0/0"
+               ]
+           },
+           "memory_reservation": 100
+           }
+       }
+  }
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+-- INSERT --

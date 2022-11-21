@@ -165,9 +165,9 @@ service task")
 @_require_environment
 @_require_name
 @click.option('--mfa', help='MFA code')
-@click.option('--instance_id', help='enter the instance id')
-def start_session(name, environment, mfa, instance_id):
-    SessionCreator(name, environment).start_session(mfa, instance_id)
+@click.option('--component', help='nested service name')
+def start_session(name, environment, mfa, component):
+    SessionCreator(name, environment).start_session(mfa, component)
 
 
 if __name__ == '__main__':
