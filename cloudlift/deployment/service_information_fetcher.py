@@ -1,6 +1,8 @@
 
 from subprocess import call
 
+from click import confirm, edit, prompt
+
 from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import get_client_for
@@ -84,7 +86,7 @@ resetting to master")
         for svc in self.ecs_service_names:
             if svc.__contains__(component):
                 return svc
-        raise UnrecoverableException("mentioned service does not exist")
+        raise UnrecoverableException("Mentioned service does not exist.")
 
 
     def get_instance_ids(self, component):
@@ -93,8 +95,7 @@ resetting to master")
             log_bold("List of services running")
             for svc in self.ecs_display_names:
                 print(svc.strip('EcsServiceName'))
-            log_bold("choose an ecs service:")
-            component = input()
+            component = prompt("Choose an ecs service", default=self.ecs_display_names[0].strip('EcsServiceName'))
             self.ecs_service_names =[ self.check_service_name(component) ]
         else:
             self.ecs_service_names = [ self.check_service_name(component) ]
