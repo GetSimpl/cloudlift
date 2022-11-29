@@ -1,5 +1,5 @@
 from terminaltables import SingleTable
-
+from cloudlift.config.decimal_encoder import DecimalEncoder
 from cloudlift.config.logging import log_bold
 
 import json
@@ -48,15 +48,16 @@ def print_json_changes(differences):
                     'add',
                     difference[1],
                     '',
-                    str(added_item[0])+" : "+json.dumps(added_item[1], indent=2)
+                    str(added_item[0])+" : "+json.dumps(added_item[1], indent=2, cls=DecimalEncoder)
                 ])
         if difference[0] == 'remove':
             difference[2].sort(key=lambda x: x[0])
             for removed_item in difference[2]:
+                print(removed_item[1])
                 changes_to_show.append([
                     'remove',
                     difference[1],
-                    str(removed_item[0])+" : "+json.dumps(removed_item[1], indent=2),
+                    str(removed_item[0])+" : "+json.dumps(removed_item[1], indent=2, cls=DecimalEncoder),
                     ''
                 ])
     log_bold("Modifications to config:")
