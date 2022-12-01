@@ -84,7 +84,7 @@ resetting to master")
     def check_service_name(self, component):
         component = "-" + component + "-"
         for svc in self.ecs_service_names:
-            if svc.__contains__(component):
+            if component in svc:
                 return svc
         raise UnrecoverableException("Mentioned service does not exist.")
 
