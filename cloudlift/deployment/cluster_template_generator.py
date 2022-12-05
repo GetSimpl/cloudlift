@@ -3,14 +3,16 @@ import re
 
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
-from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
-                         cloudformation, Export, GetAtt, Tags)
-from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
+
+from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub, GetAtt,
+                         cloudformation, Export, Tags)
+from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
-                             RouteTable, SecurityGroup, Subnet, SecurityGroupIngress,
-                             SubnetRouteTableAssociation, VPCGatewayAttachment)
+                             RouteTable, SecurityGroup, Subnet,
+                             SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress,
+                              LaunchTemplateData, LaunchTemplate, IamInstanceProfile)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
 from troposphere.iam import InstanceProfile, Role
@@ -41,6 +43,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         self.private_subnets = []
         self.public_subnets = []
         self._get_availability_zones()
+        self.team_name = (self.notifications_arn.split(':')[-1])
 
     def generate_cluster(self):
         self.__validate_parameters()
@@ -66,6 +69,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             Tags=Tags(
                 {'category': 'services'},
                 {'environment': self.env},
+                {'Team': self.team_name},
                 {'Name': Ref('AWS::StackName')}
             )
         )
@@ -104,6 +108,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             Tags=[
                 {'Key': 'category', 'Value': 'services'},
                 {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.team_name},
                 {'Key': 'Name', 'Value': "{self.env}-vpc".format(**locals())}]
         )
         self.template.add_resource(self.vpc)
@@ -114,7 +119,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-internet-gateway".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.team_name}
             ]
         )
         self.template.add_resource(self.internet_gateway)
@@ -135,7 +141,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-public".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.team_name}
             ],
             DependsOn=self.vpc.title)
         self.template.add_resource(public_route_table)
@@ -158,7 +165,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 MapPublicIpOnLaunch=True,
                 Tags=[
                     {'Key': 'Name', 'Value': subnet_name},
-                    {'Key': 'environment', 'Value': self.env}
+                    {'Key': 'environment', 'Value': self.env},
+                    {'Key': 'Team', 'Value': self.team_name}
                 ]
             )
             self.public_subnets.append(subnet)
@@ -188,7 +196,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-private".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.team_name}
             ]
         )
         self.template.add_resource(private_route_table)
@@ -210,7 +219,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 MapPublicIpOnLaunch=False,
                 Tags=[
                     {'Key': 'Name', 'Value': subnet_name},
-                    {'Key': 'environment', 'Value': self.env}
+                    {'Key': 'environment', 'Value': self.env},
+                    {'Key': 'Team', 'Value': self.team_name}
                 ]
             )
             self.private_subnets.append(subnet)
@@ -232,7 +242,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     'Key': 'Name',
                     'Value': "{self.env}-nat-gateway".format(**locals())
                 },
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.team_name}
             ]
         )
         self.template.add_resource(nat_gateway)
@@ -251,7 +262,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
             DBSubnetGroupName="{self.env}-subnet".format(**locals()),
             Tags=[
                 {'Key': 'category', 'Value': 'services'},
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'Team', 'Value': self.team_name}
             ],
             DBSubnetGroupDescription="{self.env} subnet group".format(
                 **locals()),
@@ -443,7 +455,7 @@ for cluster for 15 minutes.',
             GroupDescription=Sub("${AWS::StackName}-hosts")
         )
         self.template.add_resource(self.sg_hosts)
-        
+
         sg_host_ingress= SecurityGroupIngress(
             "SecurityEc2HostsIngress",
             SourceSecurityGroupId = Ref(self.sg_hosts),
@@ -453,7 +465,7 @@ for cluster for 15 minutes.',
             ToPort = "-1"
         )
         self.template.add_resource(sg_host_ingress)
-        
+
         database_security_group = SecurityGroup(
             "SecurityGroupDatabases",
             SecurityGroupIngress=[
@@ -470,7 +482,7 @@ for cluster for 15 minutes.',
             "#!/bin/bash",
             "yum update -y",
             "yum install -y aws-cfn-bootstrap",
-            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration",
+            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate",
             "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup",
             "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
             "systemctl enable amazon-ssm-agent",
@@ -498,8 +510,27 @@ for cluster for 15 minutes.',
                                 '[cfn-auto-reloader-hook]',
                                 'triggers=post.update',
                                 'path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init',
-                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchConfiguration',
+                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate',
                                 ''
+                            ])
+                        ),
+                    ),
+                    "/etc/dnsmasq.conf": cloudformation.InitFile(
+                        content=Sub(
+                            '\n'.join([
+                                '# Server Configuration'
+                                'listen-address=127.0.0.1',
+                                'port=53',
+                                'bind-interfaces',
+                                'user=dnsmasq',
+                                'group=dnsmasq',
+                                'pid-file=/var/run/dnsmasq.pid',
+                                '# Name resolution options',
+                                'resolv-file=/etc/resolv.dnsmasq',
+                                'cache-size=500',
+                                'neg-ttl=60',
+                                'domain-needed',
+                                'bogus-priv'
                             ])
                         ),
                     )
@@ -519,15 +550,41 @@ for cluster for 15 minutes.',
                         'command': Sub(
                             'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256" > /etc/ecs/ecs.config'
                         )
+                    },
+                    '02_set_nameserver': {
+                        'command': "INTERFACE=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -n1); IS_IT_CLASSIC=$(curl --write-out %{http_code} --silent --output /dev/null http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/vpc-id); if [[ $IS_IT_CLASSIC == '404' ]]; then bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 172.16.0.23;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 172.16.0.23' > /etc/resolv.dnsmasq\"; else  bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 169.254.169.253;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 169.254.169.253' > /etc/resolv.dnsmasq\"; fi"
+                    },
+                    '03_install_dnsmasq_package': {
+                        'command': 'yum install -y dnsmasq bind-utils'
+                    },
+                    '04_create_group': {
+                        'command': 'groupadd -r dnsmasq'
+                    },
+                    '05_create_user': {
+                        'command': 'useradd -r -g dnsmasq dnsmasq'
+                    },
+                    '06_add_locahost_nameserver': {
+                        'command': "sed -i '/search ap-south-1.compute.internal/a nameserver 127.0.0.1' /etc/resolv.conf"
+                    },
+                    '07_enable_dnsmasq_service': {
+                        'command': 'pidof systemd && systemctl restart dnsmasq.service || service dnsmasq restart'
+                    },
+                    '08_start_dnsmasq_service': {
+                        'command': 'pidof systemd && systemctl enable  dnsmasq.service || chkconfig dnsmasq on'
+                    },
+                    '09_configure_dhclient': {
+                        'command': 'bash -c "dhclient"'
                     }
                 }
             )
         })
-        launch_configuration = LaunchConfiguration(
-            'LaunchConfiguration',
+        launch_template_data = LaunchTemplateData(
+            'LaunchTemplateData',
             UserData=user_data,
-            IamInstanceProfile=Ref(instance_profile),
-            SecurityGroups=[Ref(self.sg_hosts)],
+            IamInstanceProfile=IamInstanceProfile(
+                Arn=GetAtt(instance_profile, 'Arn')
+            ),
+            SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
             Metadata=lc_metadata,
@@ -542,7 +599,12 @@ for cluster for 15 minutes.',
                 }
             ]
         )
-        self.template.add_resource(launch_configuration)
+        launch_template = LaunchTemplate(
+            "LaunchTemplate",
+            LaunchTemplateData=launch_template_data,
+            Metadata=lc_metadata
+        )
+        self.template.add_resource(launch_template)
         # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
         up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
         # TODO: clean up
@@ -558,15 +620,19 @@ for cluster for 15 minutes.',
                     'Key': 'Name'
                 },
                 {
-                    'PropagateAtLaunch': True, 
-                    'Key': 'environment', 
+                    'PropagateAtLaunch': True,
+                    'Key': 'environment',
                     'Value': self.env
-                }
+                },
+                {'PropagateAtLaunch': True, 'Key': 'Team', 'Value': self.team_name}
             ],
             MinSize=Ref('MinSize'),
             MaxSize=Ref('MaxSize'),
             VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
-            LaunchConfigurationName=Ref(launch_configuration),
+            LaunchTemplate=LaunchTemplateSpecification(
+                LaunchTemplateId=Ref(launch_template),
+                Version=GetAtt(launch_template, 'LatestVersionNumber')
+            ),
             CreationPolicy=CreationPolicy(
                 ResourceSignal=ResourceSignal(Timeout='PT15M')
             )
@@ -576,7 +642,7 @@ for cluster for 15 minutes.',
             'AutoScalingPolicy',
             AdjustmentType='ChangeInCapacity',
             AutoScalingGroupName=Ref(self.auto_scaling_group),
-            Cooldown=300,
+            Cooldown="300",
             PolicyType='SimpleScaling',
             ScalingAdjustment=1
         )
