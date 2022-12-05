@@ -507,8 +507,12 @@ service is down',
                 Ref(self.private_subnet2)
             ]
             scheme = "internal"
-            alb_name += 'Internal'
-            alb_name = alb_name[:32]
+            if len(alb_name) > 32:
+                alb_name = service_name[:32-len(self.env[:4])-len(scheme)] + \
+                    pascalcase(self.env)[:4] + "Internal"
+            else:
+                alb_name += 'Internal'
+                alb_name = alb_name[:32]
             alb = ALBLoadBalancer(
                 'ALB' + service_name,
                 Subnets=alb_subnets,
@@ -529,7 +533,8 @@ service is down',
                 Ref(self.public_subnet1),
                 Ref(self.public_subnet2)
             ]
-            alb_name = alb_name[:32]
+            if len(alb_name) > 32:
+                alb_name = service_name[:32-len(self.env)] + pascalcase(self.env)
             alb = ALBLoadBalancer(
                 'ALB' + service_name,
                 Subnets=alb_subnets,
