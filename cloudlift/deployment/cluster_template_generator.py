@@ -5,7 +5,7 @@ from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
                          cloudformation, Export, GetAtt, Tags)
-from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration,
+from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration, BlockDeviceMapping,  EBSBlockDevice,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
@@ -533,13 +533,12 @@ for cluster for 15 minutes.',
             Metadata=lc_metadata,
             KeyName=Ref(self.key_pair),
             BlockDeviceMappings=[
-                {
-                    "DeviceName": "/dev/xvda",
-                    "Ebs": {
-                        "VolumeSize": Ref("InstanceRootVolume"),
-                        "VolumeType": "gp3"
-                    }
-                }
+                BlockDeviceMapping(
+                    DeviceName="/dev/xvda",
+                    Ebs=EBSBlockDevice(
+                        VolumeType="gp3"
+                    )
+                )
             ]
         )
         self.template.add_resource(launch_configuration)
@@ -576,7 +575,7 @@ for cluster for 15 minutes.',
             'AutoScalingPolicy',
             AdjustmentType='ChangeInCapacity',
             AutoScalingGroupName=Ref(self.auto_scaling_group),
-            Cooldown=300,
+            Cooldown="300",
             PolicyType='SimpleScaling',
             ScalingAdjustment=1
         )
@@ -601,9 +600,9 @@ for cluster for 15 minutes.',
                                               Type="String",
                                               Default=self.notifications_arn)
         self.template.add_parameter(self.notification_sns_arn)
-        self.instance_root_volume = Parameter("InstanceRootVolume", Description="Root device volume size in GB's", Type="Number", Default=str(
-            self.configuration['cluster']['instance_root_volume']))
-        self.template.add_parameter(self.instance_root_volume)
+        # self.instance_root_volume = Parameter("InstanceRootVolume", Description="Root device volume size in GB's", Type="Number", Default=str(
+            # self.configuration['cluster']['instance_root_volume']))
+        # self.template.add_parameter(self.instance_root_volume)
         self.template.add_parameter(Parameter(
             "InstanceType", Description='', Type="String", Default=self.configuration['cluster']['instance_type']))
 
@@ -718,7 +717,7 @@ for cluster for 15 minutes.',
                             'MinSize',
                             'MaxSize',
                             'InstanceType',
-                            'InstanceRootVolume',
+                            # 'InstanceRootVolume',
                             'VPC',
                             'Subnet1',
                             'Subnet2',
@@ -733,9 +732,9 @@ for cluster for 15 minutes.',
                     'InstanceType': {
                         'default': 'Type of instance'
                     },
-                    'InstanceRootVolume': {
-                        'default': 'Root Volume Size'
-                    },
+                    # 'InstanceRootVolume': {
+                    #     'default': 'Root Volume Size'
+                    # },
                     'KeyPair': {
                         'default': 'Select the key with which you want to login to the ec2 instances'},
                     'MaxSize': {
