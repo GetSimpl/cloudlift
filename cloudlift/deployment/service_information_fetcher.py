@@ -1,6 +1,10 @@
 
 from subprocess import call
 
+from click import confirm, edit, prompt
+
+from cloudlift.exceptions import UnrecoverableException
+
 from cloudlift.config import get_client_for
 from cloudlift.config import get_cluster_name, get_service_stack_name
 from cloudlift.config.logging import log, log_bold, log_err, log_intent, log_warning
@@ -29,6 +33,9 @@ class ServiceInformationFetcher(object):
                     stack['Outputs']
                 )
             )
+            self.ecs_display_names = [
+                svc_name['OutputKey'] for svc_name in service_name_list
+            ]
             self.ecs_service_names = [
                 svc_name['OutputValue'] for svc_name in service_name_list
             ]
@@ -74,8 +81,25 @@ resetting to master")
                 [log_intent(ip) for ip in ips]
             log("")
 
-    def get_instance_ids(self):
+    def check_service_name(self, component):
+        component = "-" + component + "-"
+        for svc in self.ecs_service_names:
+            if component in svc:
+                return svc
+        raise UnrecoverableException("Mentioned service does not exist.")
+
+
+    def get_instance_ids(self, component):
         instance_ids = {}
+        if not component:
+            log_bold("List of services running")
+            for svc in self.ecs_display_names:
+                print(svc.split('EcsServiceName')[0])
+            component = prompt("Choose an ecs service", default=self.ecs_display_names[0].split('EcsServiceName')[0])
+            self.ecs_service_names =[ self.check_service_name(component) ]
+        else:
+            self.ecs_service_names = [ self.check_service_name(component) ]
+            print("finding instances the service is running on")
         for service in self.ecs_service_names:
             task_arns = self.ecs_client.list_tasks(
                 cluster=self.cluster_name,

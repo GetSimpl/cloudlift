@@ -19,6 +19,7 @@ from cloudlift.config import DecimalEncoder, print_json_changes, get_resource_fo
 from cloudlift.config.logging import log_bold, log_err, log_warning, log
 from cloudlift.version import VERSION
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
+from cloudlift.config.pre_flight import check_sns_topic_exists
 
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
@@ -126,6 +127,7 @@ class ServiceConfiguration(object):
         '''
         config['cloudlift_version'] = VERSION
         self._validate_changes(config)
+        check_sns_topic_exists(config['notifications_arn'], self.environment)
         try:
             configuration_response = self.table.update_item(
                 TableName=SERVICE_CONFIGURATION_TABLE,
@@ -243,17 +245,21 @@ class ServiceConfiguration(object):
                     "type": "string"
                 }
             },
-            "required": ["cloudlift_version", "services"]
+            "required": ["cloudlift_version", "services", "notifications_arn"]
         }
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
-            raise UnrecoverableException(validation_error.message + " in " +
-                    str(".".join(list(validation_error.relative_path))))
+            if validation_error.relative_path:
+                raise UnrecoverableException(validation_error.message + " in " +
+                        str(".".join(list(validation_error.relative_path))))
+            else:
+                raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
         return {
+            u'notifications_arn': None,
             u'services': {
                 pascalcase(self.service_name): {
                     u'http_interface': {
@@ -262,12 +268,8 @@ class ServiceConfiguration(object):
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
                     },
-                    u'memory_reservation': 1000,
-                    u'command': None,
-                    u'custom_metrics': {
-                        u'metrics_port': u'8005',
-                        u'metrics_path': u'/metrics'
-                    }
+                    u'memory_reservation': 250,
+                    u'command': None
                 }
             }
         }
