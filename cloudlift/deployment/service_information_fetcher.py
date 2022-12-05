@@ -94,8 +94,8 @@ resetting to master")
         if not component:
             log_bold("List of services running")
             for svc in self.ecs_display_names:
-                print(svc.strip('EcsServiceName'))
-            component = prompt("Choose an ecs service", default=self.ecs_display_names[0].strip('EcsServiceName'))
+                print(svc.split('EcsServiceName')[0])
+            component = prompt("Choose an ecs service", default=self.ecs_display_names[0].split('EcsServiceName')[0])
             self.ecs_service_names =[ self.check_service_name(component) ]
         else:
             self.ecs_service_names = [ self.check_service_name(component) ]
