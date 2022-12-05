@@ -536,7 +536,8 @@ for cluster for 15 minutes.',
                 {
                     "DeviceName": "/dev/xvda",
                     "Ebs": {
-                        "VolumeSize": Ref("InstanceRootVolume")
+                        "VolumeSize": Ref("InstanceRootVolume"),
+                        "VolumeType": "gp3"
                     }
                 }
             ]
