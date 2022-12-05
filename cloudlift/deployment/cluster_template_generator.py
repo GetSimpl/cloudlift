@@ -518,7 +518,7 @@ for cluster for 15 minutes.',
                     "/etc/dnsmasq.conf": cloudformation.InitFile(
                         content=Sub(
                             '\n'.join([
-                                '# Server Configuration'
+                                '# Server Configuration',
                                 'listen-address=127.0.0.1',
                                 'port=53',
                                 'bind-interfaces',
@@ -530,7 +530,7 @@ for cluster for 15 minutes.',
                                 'cache-size=500',
                                 'neg-ttl=60',
                                 'domain-needed',
-                                'bogus-priv'
+                                'bogus-priv',
                             ])
                         ),
                     )
