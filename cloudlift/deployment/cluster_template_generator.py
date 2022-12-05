@@ -5,13 +5,13 @@ from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
                          cloudformation, Export, GetAtt, Tags)
-from troposphere.autoscaling import (AutoScalingGroup, LaunchConfiguration, BlockDeviceMapping,  EBSBlockDevice,
+from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
                                      ScalingPolicy)
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
                              SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress,
-                              LaunchTemplateData, LaunchTemplate, IamInstanceProfile)
+                             LaunchTemplateData, LaunchTemplate, IamInstanceProfile, LaunchTemplateBlockDeviceMapping, EBSBlockDevice)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
 from troposphere.iam import InstanceProfile, Role
@@ -586,10 +586,9 @@ for cluster for 15 minutes.',
             SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
             InstanceType=Ref('InstanceType'),
             ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
-            Metadata=lc_metadata,
             KeyName=Ref(self.key_pair),
             BlockDeviceMappings=[
-                BlockDeviceMapping(
+                LaunchTemplateBlockDeviceMapping(
                     DeviceName="/dev/xvda",
                     Ebs=EBSBlockDevice(
                         VolumeType="gp3"
