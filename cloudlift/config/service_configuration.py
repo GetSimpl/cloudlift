@@ -223,6 +223,9 @@ class ServiceConfiguration(object):
                         {"type": "string"},
                         {"type": "null"}
                     ]
+                },
+                "no_logs": {
+                    "type": "boolean"
                 }
             },
             "required": ["memory_reservation", "command"]

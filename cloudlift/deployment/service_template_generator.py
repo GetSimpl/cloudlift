@@ -193,7 +193,6 @@ service is down',
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "LogConfiguration": self._gen_log_config(service_name),
             "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value 
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
@@ -207,6 +206,13 @@ service is down',
                     )
                 )
             ]
+        if 'no_logs' not in config:
+            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name)
+
+        if 'no_logs' in config:
+            if not config['no_logs']:
+                container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name)
+
 
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
