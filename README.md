@@ -236,7 +236,9 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
-4. Service configuration with http interface without AWS CW loggig
+4. Service configuration with http interface without AWS CW logging.
+
+`Note: Do not use `no_logs: true` in production. Once conatiner deleted all logs will be lost`.
 ```json
   {
       "services": {
