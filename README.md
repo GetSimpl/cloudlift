@@ -236,6 +236,25 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
+4. Service configuration with http interface without AWS CW loggig
+```json
+  {
+      "services": {
+          "Test123": {
+              "command": null,
+              "http_interface": {
+                  "container_port": 80,
+                  "internal": false,
+                  "restrict_access_to": [
+                      "0.0.0.0/0"
+                  ]
+              },
+              "memory_reservation": 100
+              "no_logs": true
+          }
+      }
+  }
+```
 
 #### 3. Deploy service
 
