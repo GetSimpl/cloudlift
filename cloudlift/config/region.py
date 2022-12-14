@@ -1,4 +1,5 @@
 import boto3
+from botocore.exceptions import ClientError
 from cloudlift.exceptions import UnrecoverableException
 
 from cloudlift.config import EnvironmentConfiguration
@@ -14,15 +15,42 @@ def get_region_for_environment(environment):
 
 
 def get_client_for(resource, environment):
-    return boto3.session.Session(
-        region_name=get_region_for_environment(environment)
-    ).client(resource)
-
+    try:
+        return boto3.session.Session(
+            region_name=get_region_for_environment(environment)
+        ).client(resource)
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'ExpiredTokenException':
+            raise UnrecoverableException("AWS session associated with this profile has expired or is otherwise invalid")
+        elif error.response['Error']['Code'] == 'InvalidIdentityTokenException':
+            raise UnrecoverableException("AWS token that was passed could not be validated by Amazon Web Services")
+        elif error.response['Error']['Code'] == 'RegionDisabledException':
+            raise UnrecoverableException("STS is not activated in the requested region for the account that is being asked to generate credentials")
+        elif error.response['Error']['Code'] == 'AccessDeniedException':
+            raise UnrecoverableException("User is not authorized to perform get boto3 client session on %s" % resource)
+        else:
+            raise UnrecoverableException("Unable to find valid AWS credentials")
 
 def get_resource_for(resource, environment):
-    return boto3.session.Session(
-        region_name=get_region_for_environment(environment)
-    ).resource(resource)
+    try:
+        return boto3.session.Session(
+            region_name=get_region_for_environment(environment)
+        ).resource(resource)
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'ExpiredTokenException':
+            raise UnrecoverableException(
+                "AWS session associated with this profile has expired or is otherwise invalid")
+        elif error.response['Error']['Code'] == 'InvalidIdentityTokenException':
+            raise UnrecoverableException(
+                "AWS token that was passed could not be validated by Amazon Web Services")
+        elif error.response['Error']['Code'] == 'RegionDisabledException':
+            raise UnrecoverableException(
+                "STS is not activated in the requested region for the account that is being asked to generate credentials")
+        elif error.response['Error']['Code'] == 'AccessDeniedException':
+            raise UnrecoverableException("User is not authorized to perform get boto3 resource session on %s" % resource)
+        else:
+            raise UnrecoverableException(
+                "Unable to find valid AWS credentials")
 
 
 def get_notifications_arn_for_environment(environment):

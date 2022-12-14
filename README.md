@@ -6,7 +6,7 @@ services in AWS ECS.
 Cloudlift is a command-line tool for dockerized services to be deployed in AWS
 ECS. It's very simple to use. That's possible because this is heavily
 opinionated. Under the hood, it is a wrapper to AWS cloudformation templates. On
-creating/udpating a service or a cluster this creates/updates a cloudformation
+creating/updating a service or a cluster this creates/updates a cloudformation
 in AWS.
 
 ## Demo videos
@@ -126,6 +126,10 @@ This opens the `VISUAL` editor with default config similar to -
       "services": {
           "Test123": {
               "command": null,
+              "custom_metrics": {
+                  "metrics_port": "8005",
+                  "metrics_path": "/metrics"
+              },
               "http_interface": {
                   "container_port": 80,
                   "internal": false,
@@ -145,6 +149,12 @@ Definitions -
 
 `command`: Override command in Dockerfile
 
+`custom_metrics`: Configuration for custom metrics if required, do not include this if the service does not write/export custom metrics
+
+> **NOTE:** If you use custom metrics, Your ECS container Network mode will be `awsvpc`. 
+
+> **⚠ WARNING:** If you are adding custom metrics to your existing service, there will be a downtime.
+
 `http_interface`: Configuration for HTTP interface if required, do not include
 this if the services does not require a HTTP interface
 
@@ -158,6 +168,74 @@ only within the VPC
 `memory_reservation`: Memory size reserved for each task in MBs. This is a soft
 limit, i.e. at least this much memory will be available, and upto whatever
 memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
+
+`volume`: Configuration for EFS volume mount if required, do not include this if the service does not required volume mount
+
+#### Examples:
+
+1. Service configuration with custom metrics:
+```json
+  {
+      "services": {
+          "Test123": {
+              "command": null,
+              "custom_metrics": {
+                  "metrics_port": "8005",
+                  "metrics_path": "/metrics"
+              },
+              "http_interface": {
+                  "container_port": 80,
+                  "internal": false,
+                  "restrict_access_to": [
+                      "0.0.0.0/0"
+                  ]
+              },
+              "memory_reservation": 100
+          }
+      }
+  }
+```
+2. Service configuration with volume mount:
+```json
+  {
+      "services": {
+          "Test123": {
+              "command": null,
+              "volume": {
+                  "efs_id" : "fs-XXXXXXX",
+                  "efs_directory_path" : "/",
+                  "container_path" : "/"
+              },
+              "http_interface": {
+                  "container_port": 80,
+                  "internal": false,
+                  "restrict_access_to": [
+                      "0.0.0.0/0"
+                  ]
+              },
+              "memory_reservation": 100
+          }
+      }
+  }
+```
+3. Service configuration with http interface only:
+```json
+  {
+      "services": {
+          "Test123": {
+              "command": null,
+              "http_interface": {
+                  "container_port": 80,
+                  "internal": false,
+                  "restrict_access_to": [
+                      "0.0.0.0/0"
+                  ]
+              },
+              "memory_reservation": 100
+          }
+      }
+  }
+```
 
 #### 3. Deploy service
 

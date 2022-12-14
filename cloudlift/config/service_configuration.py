@@ -4,6 +4,7 @@ retrieving service configuration.
 '''
 
 import json
+from time import sleep
 
 import dictdiffer
 from botocore.exceptions import ClientError
@@ -13,12 +14,13 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
 
-from cloudlift.config import DecimalEncoder
-from cloudlift.config import print_json_changes
+from cloudlift.config import DecimalEncoder, print_json_changes, get_resource_for
 # import config.mfa as mfa
-from cloudlift.config import get_resource_for
-from cloudlift.config.logging import log_bold, log_err, log_warning
+from cloudlift.config.logging import log_bold, log_err, log_warning, log
 from cloudlift.version import VERSION
+from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
+from cloudlift.config.pre_flight import check_sns_topic_exists
+
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -37,10 +39,9 @@ class ServiceConfiguration(object):
         # mfa_region = get_region_for_environment(environment)
         # mfa_session = mfa.get_mfa_session(mfa_region)
         # ssm_client = mfa_session.client('ssm')
-        self.table = get_resource_for(
-            'dynamodb',
-            environment
-        ).Table(SERVICE_CONFIGURATION_TABLE)
+        self.dynamodb_resource = get_resource_for('dynamodb',environment)
+        self.table = DynamodbConfiguration(SERVICE_CONFIGURATION_TABLE, [
+            ('service_name', self.service_name), ('environment', self.environment)])._get_table()
 
     def edit_config(self):
         '''
@@ -48,7 +49,8 @@ class ServiceConfiguration(object):
         '''
 
         try:
-            current_configuration = self.get_config()
+            from cloudlift.version import VERSION
+            current_configuration = self.get_config(VERSION)
 
             updated_configuration = edit(
                 json.dumps(
@@ -82,7 +84,7 @@ class ServiceConfiguration(object):
         except ClientError:
             raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
 
-    def get_config(self):
+    def get_config(self, cloudlift_version):
         '''
             Get configuration from DynamoDB
         '''
@@ -100,11 +102,21 @@ class ServiceConfiguration(object):
             )
             if 'Item' in configuration_response:
                 existing_configuration = configuration_response['Item']['configuration']
+
+                from distutils.version import LooseVersion
+                previous_cloudlift_version = existing_configuration.pop("cloudlift_version", None)
+                if LooseVersion(cloudlift_version) < LooseVersion(previous_cloudlift_version):
+                    raise UnrecoverableException(f'Cloudlift Version {previous_cloudlift_version} was used to '
+                                                 f'create this service. You are using version {cloudlift_version}, '
+                                                 f'which is older and can cause corruption. Please upgrade to at least '
+                                                 f'version {previous_cloudlift_version} to proceed.\n\nUpgrade to the '
+                                                 f'latest version (Recommended):\n'
+                                                 f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
+                                                 f'\tpip install -U cloudlift=={previous_cloudlift_version}')
             else:
                 existing_configuration = self._default_service_configuration()
                 self.new_service = True
 
-            existing_configuration.pop("cloudlift_version", None)
             return existing_configuration
         except ClientError:
             raise UnrecoverableException("Unable to fetch service configuration from DynamoDB.")
@@ -115,6 +127,7 @@ class ServiceConfiguration(object):
         '''
         config['cloudlift_version'] = VERSION
         self._validate_changes(config)
+        check_sns_topic_exists(config['notifications_arn'], self.environment)
         try:
             configuration_response = self.table.update_item(
                 TableName=SERVICE_CONFIGURATION_TABLE,
@@ -136,7 +149,7 @@ class ServiceConfiguration(object):
         '''
             Updates cloudlift version in service configuration
         '''
-        config = self.get_config()
+        config = self.get_config(VERSION)
         self.set_config(config)
 
     def _validate_changes(self, configuration):
@@ -169,6 +182,21 @@ class ServiceConfiguration(object):
                         "restrict_access_to",
                         "container_port"
                     ]
+                },
+                "custom_metrics": {
+                    "type": "object",
+                    "properties": {
+                        "metrics_port" : {"type": "string"},
+                        "metrics_path": {"type": "string"}
+                    }
+                },
+                "volume": {
+                    "type": "object",
+                    "properties": {
+                        "efs_id" : {"type": "string"},
+                        "efs_directory_path" : {"type": "string"},
+                        "container_path" : {"type": "string"}
+                    }
                 },
                 "memory_reservation": {
                     "type": "number",
@@ -220,17 +248,21 @@ class ServiceConfiguration(object):
                     "type": "string"
                 }
             },
-            "required": ["cloudlift_version", "services"]
+            "required": ["cloudlift_version", "services", "notifications_arn"]
         }
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
-            raise UnrecoverableException(validation_error.message + " in " +
-                    str(".".join(list(validation_error.relative_path))))
+            if validation_error.relative_path:
+                raise UnrecoverableException(validation_error.message + " in " +
+                        str(".".join(list(validation_error.relative_path))))
+            else:
+                raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
         return {
+            u'notifications_arn': None,
             u'services': {
                 pascalcase(self.service_name): {
                     u'http_interface': {
@@ -239,7 +271,7 @@ class ServiceConfiguration(object):
                         u'container_port': 80,
                         u'health_check_path': u'/elb-check'
                     },
-                    u'memory_reservation': 1000,
+                    u'memory_reservation': 250,
                     u'command': None,
                     u'interruptable': False
                 }
