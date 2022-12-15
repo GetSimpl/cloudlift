@@ -224,7 +224,7 @@ class ServiceConfiguration(object):
                         {"type": "null"}
                     ]
                 },
-                "no_logs": {
+                "logging": {
                     "type": "boolean"
                 }
             },

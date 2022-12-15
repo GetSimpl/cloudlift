@@ -206,12 +206,11 @@ service is down',
                     )
                 )
             ]
-        if 'no_logs' not in config:
+        if 'logging' not in config:
             container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name)
 
-        if 'no_logs' in config:
-            if not config['no_logs']:
-                container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name)
+        if 'logging' in config and config['logging']:
+            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name)
 
 
         if config['command'] is not None:
