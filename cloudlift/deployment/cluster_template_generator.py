@@ -26,6 +26,7 @@ from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.version import VERSION
+from cloudlift.config.logging import log_warning
 
 
 class ClusterTemplateGenerator(TemplateGenerator):
@@ -40,6 +41,12 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.desired_instances = str(self.configuration['cluster']['min_instances'])
         else:
             self.desired_instances = str(desired_instances)
+        if not 'spot_min_instances' in self.configuration['cluster']:
+            self.configuration['cluster']['spot_min_instances'] = 0
+        if not 'spot_max_instances' in self.configuration['cluster']:
+            self.configuration['cluster']['spot_max_instances'] = 0
+        if not 'allocation_strategy' in self.configuration['cluster']:
+            self.configuration['cluster']['allocation_strategy'] = 'capacity-optimized'
         self.private_subnets = []
         self.public_subnets = []
         self._get_availability_zones()
@@ -615,7 +622,7 @@ for cluster for 15 minutes.',
             # TODO: clean up
             subnets = list(self.private_subnets)
             spot_instance_pools = {}
-            if self.configuration['cluster']['allocation_strategy'] == 'lowest-price':
+            if 'allocation_strategy' in self.configuration['cluster'] and self.configuration['cluster']['allocation_strategy'] == 'lowest-price':
                 spot_instance_pools = {
                     'SpotInstancePools' : self.configuration['cluster']['spot_instance_pools']
                 }
@@ -660,7 +667,7 @@ for cluster for 15 minutes.',
                 )
             )
             if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
-                print("Spot min instances is 0")
+                log_warning("Spot minimum instances is set to 0")
             else:
                 self.template.add_resource(self.auto_scaling_group)
             self.cluster_scaling_policy = ScalingPolicy(
@@ -672,7 +679,7 @@ for cluster for 15 minutes.',
                 ScalingAdjustment=1
             )
             if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
-                print("Skipping spot fleet")
+                log_warning("Skipping spot fleet")
             else:
                 self.template.add_resource(self.cluster_scaling_policy)
 
