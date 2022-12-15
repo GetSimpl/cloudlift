@@ -550,7 +550,7 @@ for cluster for 15 minutes.',
                     commands={
                         '01_add_instance_to_cluster': {
                             'command': Sub(
-                                'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256" > /etc/ecs/ecs.config'
+                                "echo 'ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\nECS_INSTANCE_ATTRIBUTES={\"deployment_type\": \""+ deployment_type +"\"}' > /etc/ecs/ecs.config"
                             )
                         },
                         '02_set_nameserver': {
@@ -584,8 +584,7 @@ for cluster for 15 minutes.',
                 IamInstanceProfile=IamInstanceProfile(
                     Arn=GetAtt(instance_profile, 'Arn')
                 ),
-                SecurityGroupIds=[GetAtt(sg_hosts, 'GroupId')],
-                InstanceType=Ref('InstanceType'),
+                SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
                 ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
                 KeyName=Ref(self.key_pair),
                 BlockDeviceMappings=[
@@ -600,6 +599,7 @@ for cluster for 15 minutes.',
             launch_template = LaunchTemplate(
                 "LaunchTemplate"+deployment_type,
                 LaunchTemplateData=launch_template_data,
+                LaunchTemplateName=self.env + "-LaunchTemplate"+deployment_type,
                 Metadata=lc_metadata
             )
             self.template.add_resource(launch_template)
@@ -614,6 +614,11 @@ for cluster for 15 minutes.',
             up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
             # TODO: clean up
             subnets = list(self.private_subnets)
+            spot_instance_pools = {}
+            if self.configuration['cluster']['allocation_strategy'] == 'lowest-price':
+                spot_instance_pools = {
+                    'SpotInstancePools' : self.configuration['cluster']['spot_instance_pools']
+                }
             self.auto_scaling_group = AutoScalingGroup(
                 "AutoScalingGroup"+deployment_type,
                 UpdatePolicy=up,
@@ -632,8 +637,8 @@ for cluster for 15 minutes.',
                     {'PropagateAtLaunch': True, 'Key': 'Team',
                         'Value': self.team_name}
                 ],
-                MinSize=Ref('MinSize'),
-                MaxSize=Ref('MaxSize'),
+                MinSize=Ref('MinSize') if deployment_types == 'OnDemand' else Ref('SpotMinSize'),
+                MaxSize=Ref('MaxSize') if deployment_types == 'OnDemand' else Ref('SpotMaxSize'),
                 VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
                 MixedInstancesPolicy=MixedInstancesPolicy(
                     LaunchTemplate=ASGLaunchTemplate(
@@ -646,14 +651,18 @@ for cluster for 15 minutes.',
                     InstancesDistribution=InstancesDistribution(
                         OnDemandBaseCapacity=0,
                         OnDemandPercentageAboveBaseCapacity=0 if deployment_type == 'Spot' else 100,
-                        SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster']['spot_allocation_strategy']
+                        SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster']['allocation_strategy'],
+                        **spot_instance_pools 
                     )
                 ),
                 CreationPolicy=CreationPolicy(
                     ResourceSignal=ResourceSignal(Timeout='PT15M')
                 )
             )
-            self.template.add_resource(self.auto_scaling_group)
+            if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
+                print("Spot min instances is 0")
+            else:
+                self.template.add_resource(self.auto_scaling_group)
             self.cluster_scaling_policy = ScalingPolicy(
                 'AutoScalingPolicy'+deployment_type,
                 AdjustmentType='ChangeInCapacity',
@@ -662,7 +671,10 @@ for cluster for 15 minutes.',
                 PolicyType='SimpleScaling',
                 ScalingAdjustment=1
             )
-            self.template.add_resource(self.cluster_scaling_policy)
+            if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
+                print("Skipping spot fleet")
+            else:
+                self.template.add_resource(self.cluster_scaling_policy)
 
     def _add_cluster_parameters(self):
         self.template.add_parameter(Parameter(
@@ -675,9 +687,13 @@ for cluster for 15 minutes.',
             "KeyPair", Description='', Type="AWS::EC2::KeyPair::KeyName", Default="")
         self.template.add_parameter(self.key_pair)
         self.template.add_parameter(Parameter(
-            "MinSize", Description='', Type="String", Default=str(self.configuration['cluster']['min_instances'])))
+            "OnDemandMinSize", Description='', Type="String", Default=str(self.configuration['cluster']['min_instances'])))
         self.template.add_parameter(Parameter(
-            "MaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['max_instances'])))
+            "OnDemandMaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['max_instances'])))
+        self.template.add_parameter(Parameter(
+            "SpotMinSize", Description='', Type="String", Default=str(self.configuration['cluster']['spot_min_instances'])))
+        self.template.add_parameter(Parameter(
+            "SpotMaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['spot_max_instances'])))
         self.notification_sns_arn = Parameter("NotificationSnsArn",
                                               Description='',
                                               Type="String",
@@ -703,6 +719,8 @@ for cluster for 15 minutes.',
             'env': self.env,
             'min_instances': str(self.configuration['cluster']['min_instances']),
             'max_instances': str(self.configuration['cluster']['max_instances']),
+            'spot_min_instances': str(self.configuration['cluster']['spot_min_instances']),
+            'spot_max_instances': str(self.configuration['cluster']['spot_max_instances']),
             'instance_types': self.configuration['cluster']['instance_types'],
             'key_name': self.configuration['cluster']['key_name'],
             'cloudlift_version': VERSION
@@ -739,14 +757,15 @@ for cluster for 15 minutes.',
             Description="ID of the 2nd subnet",
             Value=Ref(public_subnets.pop()))
         )
-        self.template.add_output(Output(
-            "AutoScalingGroupSpot",
-            Description="AutoScaling group for ECS container instances",
-            Value=Ref('AutoScalingGroupSpot'))
-        )
+        if self.configuration['cluster']['spot_min_instances'] > 0:
+            self.template.add_output(Output(
+                "AutoScalingGroupSpot",
+                Description="Spot AutoScaling group for ECS container instances",
+                Value=Ref('AutoScalingGroupSpot'))
+            )
         self.template.add_output(Output(
             "AutoScalingGroupOnDemand",
-            Description="AutoScaling group for ECS container instances",
+            Description="On-Demand AutoScaling group for ECS container instances",
             Value=Ref('AutoScalingGroupOnDemand'))
         )
         self.template.add_output(Output(
@@ -756,13 +775,23 @@ for cluster for 15 minutes.',
         )
         self.template.add_output(Output(
             "MinInstances",
-            Description="Minimum instances in cluster",
+            Description="Minimum on-demand instances in cluster",
             Value=str(self.configuration['cluster']['min_instances']))
         )
         self.template.add_output(Output(
             "MaxInstances",
-            Description="Maximum instances in cluster",
+            Description="Maximum on-demand instances in cluster",
             Value=str(self.configuration['cluster']['max_instances']))
+        )
+        self.template.add_output(Output(
+            "SpotMinInstances",
+            Description="Minimum spot instances in cluster",
+            Value=str(self.configuration['cluster']['spot_min_instances']))
+        )
+        self.template.add_output(Output(
+            "SpotMaxInstances",
+            Description="Maximum spot instances in cluster",
+            Value=str(self.configuration['cluster']['spot_max_instances']))
         )
         self.template.add_output(Output(
             "InstanceTypes",
@@ -799,8 +828,10 @@ for cluster for 15 minutes.',
                         'Parameters': [
                             'KeyPair',
                             'Environment',
-                            'MinSize',
-                            'MaxSize',
+                            'OnDemandMinSize',
+                            'OnDemandMaxSize',
+                            'SpotMinSize',
+                            'SpotMaxSize',
                             'InstanceTypes',
                             'VPC',
                             'Subnet1',
@@ -818,11 +849,17 @@ for cluster for 15 minutes.',
                     },
                     'KeyPair': {
                         'default': 'Select the key with which you want to login to the ec2 instances'},
-                    'MaxSize': {
-                        'default': 'Max. no. of instances in cluster'
+                    'SpotMaxSize': {
+                        'default': 'Max. no. of instances in Spot cluster'
                     },
-                    'MinSize': {
-                        'default': 'Min. no. of instances in cluster'
+                    'SpotMinSize': {
+                        'default': 'Min. no. of instances in Spot cluster'
+                    },
+                    'OnDemandMinSize': {
+                        'default': 'Min. no. of instances in On-Demand cluster'
+                    },
+                    'OnDemandMaxSize': {
+                        'default': 'Max. no. of instances in On-Demand cluster'
                     },
                     'NotificationSnsArn': {
                         'default': 'The SNS topic to which notifications has to be triggered'

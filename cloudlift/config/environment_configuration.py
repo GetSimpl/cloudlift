@@ -116,10 +116,14 @@ class EnvironmentConfiguration(object):
             "Private Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[2])
         private_subnet_2_cidr = prompt(
             "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
-        cluster_min_instances = prompt("Min instances in cluster", default=1)
-        cluster_max_instances = prompt("Max instances in cluster", default=5)
-        spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price", default='capacity-optimized')
-        cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand instance type only first instance type will be considered", default='t2.micro,m5.xlarge')
+        od_cluster_min_instances = prompt("Min instances in On-Demand cluster \nSet this to 0 if you don't require On-Demand cluster", default=1)
+        od_cluster_max_instances = prompt("Max instances in On-Demand cluster \nSet this to 0 if you don't require On-Demand cluster", default=5)
+        spot_cluster_min_instances = prompt("Min instances in Spot cluster \nSet this to 0 if you don't require Spot cluster", default=1)
+        spot_cluster_max_instances = prompt("Max instances in Spot cluster \nSet this to 0 if you don't require Spot cluster", default=5)
+        spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
+        if spot_allocation_strategy == 'lowest-price':
+            spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
+        cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
         cluster_instance_types = cluster_instance_types.split(",")
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
@@ -148,20 +152,24 @@ class EnvironmentConfiguration(object):
                             "cidr": str(private_subnet_2_cidr)
                         }
                     }
-                },
-                "cluster": {
-                    "min_instances": cluster_min_instances,
-                    "max_instances": cluster_max_instances,
-                    "instance_types": cluster_instance_types,
-                    "key_name": key_name,
-                    "spot_allocation_strategy": spot_allocation_strategy
-                },
-                "environment": {
-                    "notifications_arn": notifications_arn,
-                    "ssl_certificate_arn": ssl_certificate_arn
                 }
             },
+            "cluster": {
+                "min_instances": od_cluster_min_instances,
+                "max_instances": od_cluster_max_instances,
+                "spot_min_instances": spot_cluster_min_instances,
+                "spot_max_instances": spot_cluster_max_instances,
+                "instance_types": cluster_instance_types,
+                "key_name": key_name,
+                "allocation_strategy": spot_allocation_strategy,
+            },
+            "environment": {
+                "notifications_arn": notifications_arn,
+                "ssl_certificate_arn": ssl_certificate_arn
+            }
         }, 'cloudlift_version': VERSION}
+        if spot_allocation_strategy == 'lowest-price':
+            environment_configuration[self.environment]['vpc']['cluster']['spot_instance_pools'] = spot_instance_pools
         self._set_config(environment_configuration)
         pass
 
@@ -254,9 +262,12 @@ class EnvironmentConfiguration(object):
                             "properties": {
                                 "min_instances": {"type": "integer"},
                                 "max_instances": {"type": "integer"},
+                                "spot_min_instances": {"type": "integer"},
+                                "spot_max_instances": {"type": "integer"},
                                 "instance_types": {"type": "array"},
                                 "key_name": {"type": "string"},
-                                "spot_allocation_strategy": {"type": "string"}
+                                "allocation_strategy": {"type": "string"},
+                                "spot_instance_pools": {"type": "integer"}
                             },
                             "required": [
                                 "min_instances",
