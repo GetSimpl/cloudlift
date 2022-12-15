@@ -101,8 +101,7 @@ class TaskDefinitionCreator:
 
     def _current_task_defn(self, ecs_client: EcsClient, deployment: DeployAction):
         if not ecs_client.list_task_definitions(self._task_defn_family()):
-            log_err("Task definition was created with the help of the create_service\ntry updating with 'update_service' command")
-            raise UnrecoverableException("exiting.....")
+            raise UnrecoverableException("This task definition was created for a service. Please use cloudlift update_service to modify it.\nexiting.....")
         task_defn_arn = ecs_client.list_task_definitions(self._task_defn_family())[0]
         return deployment.get_task_definition(task_defn_arn)
 
