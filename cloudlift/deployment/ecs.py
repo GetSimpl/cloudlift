@@ -444,40 +444,36 @@ class EcsAction(object):
              task_definition_arn=task_definition.family
         )
         td_tags=response[u'tags']
-        if not td_tags:
-            response = self._client.register_task_definition(
-                family=task_definition.family,
-                containers=task_definition.containers,
-                volumes=task_definition.volumes,
-                role_arn=task_definition.role_arn,
-                network_mode=task_definition.network_mode or u'bridge',
-                **fargate_td
-            )
-        else:
-            for tag in td_tags:
-                key=tag[u'key']
-                value=tag[u'value']
-                if key=="cloudlift_version":
-                    if LooseVersion(value)<=LooseVersion(VERSION):
-                        response = self._client.register_task_definition(
-                            family=task_definition.family,
-                            containers=task_definition.containers,
-                            volumes=task_definition.volumes,
-                            role_arn=task_definition.role_arn,
-                            network_mode=task_definition.network_mode or u'bridge',
-                            **fargate_td
-                        )
-                    else:
-                        raise UnrecoverableException(f'Cloudlift Version {value} was used to '
-                                                     f'create this task_definition. You are using version {VERSION}, '
-                                                     f'which is older and can cause corruption. Please upgrade to at least '
-                                                     f'version {value} to proceed.\n\nUpgrade to the '
-                                                     f'latest version (Recommended):\n'
-                                                     f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
-                                                     f'\tpip install -U cloudlift=={value}')
+        self.check_tags(td_tags)
+        response = self._client.register_task_definition(
+            family=task_definition.family,
+            containers=task_definition.containers,
+            volumes=task_definition.volumes,
+            role_arn=task_definition.role_arn,
+            network_mode=task_definition.network_mode or u'bridge',
+            **fargate_td
+        )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
+
+    def check_tags(self, tags):
+        if tags:
+            for tag in tags:
+                if tag[u'key']=="cloudlift_version":
+                    if LooseVersion(tag[u'value'])<=LooseVersion(VERSION):
+                        return
+                    else:
+                        raise UnrecoverableException(f'Cloudlift Version {tag[u"value"]} was used to '
+                                                     f'create this task_definition. You are using version {VERSION}, '
+                                                     f'which is older and can cause corruption. Please upgrade to at least '
+                                                     f'version {tag[u"value"]} to proceed.\n\nUpgrade to the '
+                                                     f'latest version (Recommended):\n'
+                                                     f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
+                                                     f'\tpip install -U cloudlift=={tag[u"value"]}')
+
+        else:
+            return
 
     def update_service(self, service):
         response = self._client.update_service(
