@@ -9,7 +9,7 @@ from troposphere.ecs import (ContainerDefinition,
 from troposphere.iam import Role
 from botocore.exceptions import ClientError
 
-from cloudlift.config.logging import log_bold, log_intent, log_warning, log_err
+from cloudlift.config.logging import log_bold, log_intent, log_warning
 from cloudlift.deployment import EcrClient, UnrecoverableException, EcsClient, DeployAction, EcsTaskDefinition
 from cloudlift.deployment.deployer import build_config, print_task_diff
 from cloudlift.config import get_client_for
@@ -101,7 +101,7 @@ class TaskDefinitionCreator:
 
     def _current_task_defn(self, ecs_client: EcsClient, deployment: DeployAction):
         if not ecs_client.list_task_definitions(self._task_defn_family()):
-            raise UnrecoverableException("This task definition was created for a service. Please use cloudlift update_service to modify it.\nexiting.....")
+            raise UnrecoverableException("This task definition was created for a service. Please use cloudlift update_service to modify it.")
         task_defn_arn = ecs_client.list_task_definitions(self._task_defn_family())[0]
         return deployment.get_task_definition(task_defn_arn)
 
