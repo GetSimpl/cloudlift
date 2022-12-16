@@ -668,6 +668,8 @@ for cluster for 15 minutes.',
             )
             if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
                 log_warning("Spot minimum instances is set to 0")
+            elif 'od_min_instances' in self.configuration['cluster'] and deployment_type == 'OnDemand' and self.configuration['cluster']['od_min_instances'] == 0:
+                log_warning("On-Demand minimum instances is set to 0")
             else:
                 self.template.add_resource(self.auto_scaling_group)
             self.cluster_scaling_policy = ScalingPolicy(
@@ -680,6 +682,8 @@ for cluster for 15 minutes.',
             )
             if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
                 log_warning("Skipping spot fleet")
+            elif 'od_min_instances' in self.configuration['cluster'] and deployment_type == 'OnDemand' and self.configuration['cluster']['od_min_instances'] == 0:
+                log_warning("Skipping on-demand fleet")
             else:
                 self.template.add_resource(self.cluster_scaling_policy)
 
@@ -822,6 +826,13 @@ for cluster for 15 minutes.',
             Description="EC2Host Security group ID",
             Value=Ref('SecurityGroupEc2Hosts'))
         )
+        if 'ecs_default_type' in self.configuration['cluster']:
+            self.template.add_output(Output(
+                "ECSClusterDefault",
+                Export=Export("{self.env}ECSClusterDefault".format(**locals())),
+                Description="Default instance type for ECS cluster",
+                Value=str(self.configuration['cluster']['ecs_default_type']))
+            )
 
 
     def _add_metadata(self):

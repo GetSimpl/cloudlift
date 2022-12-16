@@ -124,6 +124,7 @@ class EnvironmentConfiguration(object):
         if spot_allocation_strategy == 'lowest-price':
             spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
         cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
+        ecs_cluster_default_instance_type = prompt("Default instance type for ECS cluster Spot/OnDemand", default='OnDemand')
         cluster_instance_types = cluster_instance_types.split(",")
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
@@ -162,6 +163,7 @@ class EnvironmentConfiguration(object):
                 "instance_types": cluster_instance_types,
                 "key_name": key_name,
                 "allocation_strategy": spot_allocation_strategy,
+                "ecs_default_type": ecs_cluster_default_instance_type
             },
             "environment": {
                 "notifications_arn": notifications_arn,
@@ -267,7 +269,8 @@ class EnvironmentConfiguration(object):
                                 "instance_types": {"type": "array"},
                                 "key_name": {"type": "string"},
                                 "allocation_strategy": {"type": "string"},
-                                "spot_instance_pools": {"type": "integer"}
+                                "spot_instance_pools": {"type": "integer"},
+                                "ecs_default_type": {"type": "string"}
                             },
                             "required": [
                                 "min_instances",

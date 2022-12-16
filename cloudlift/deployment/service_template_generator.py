@@ -198,10 +198,25 @@ service is down',
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
-        
-        service_interruptable = False
+        placement_constraint = {}
+        for key in self.environment_stack["Outputs"]:
+            if key["OutputKey"] == 'ECSClusterDefault':
+                service_interruptable = False if ImportValue("{self.env}ECSClusterDefault".format(**locals())) == 'OnDemand' else True
+                print(service_interruptable)
+                placement_constraint = {
+                    "PlacementConstraints": [PlacementConstraint(
+                        Type='memberOf',
+                        Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
+                    )],
+                }
         if 'interruptable' in config:
             service_interruptable = config["interruptable"]
+            placement_constraint = {
+                "PlacementConstraints" : [PlacementConstraint(
+                    Type='memberOf',
+                    Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
+                )],
+            }
 
         if 'http_interface' in config:
             container_definition_arguments['PortMappings'] = [
@@ -368,13 +383,14 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DependsOn=service_listener.title,
-                PlacementConstraints=[PlacementConstraint(
-                    Type='memberOf',
-                    Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
-                )],
+                # PlacementConstraints=[PlacementConstraint(
+                #     Type='memberOf',
+                #     Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
+                # )],
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env),
+                **placement_constraint
             )
             self.template.add_output(
                 Output(
@@ -471,13 +487,14 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DeploymentConfiguration=deployment_configuration,
-                PlacementConstraints=[PlacementConstraint(
-                    Type='memberOf',
-                    Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
-                )],
+                # PlacementConstraints=[PlacementConstraint(
+                #     Type='memberOf',
+                #     Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
+                # )],
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env),
+                **placement_constraint
             )
             self.template.add_output(
                 Output(
