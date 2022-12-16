@@ -119,6 +119,7 @@ class EnvironmentConfiguration(object):
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
         cluster_instance_type = prompt("Instance type", default='m5.xlarge')
+        cluster_ami_id = prompt("Custom AMI ID for cluster", default='None')
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
@@ -152,6 +153,7 @@ class EnvironmentConfiguration(object):
                 "min_instances": cluster_min_instances,
                 "max_instances": cluster_max_instances,
                 "instance_type": cluster_instance_type,
+                "ami_id": cluster_ami_id,
                 "key_name": key_name
             },
             "environment": {
@@ -252,6 +254,7 @@ class EnvironmentConfiguration(object):
                                 "min_instances": {"type": "integer"},
                                 "max_instances": {"type": "integer"},
                                 "instance_type": {"type": "string"},
+                                "ami_id": {"type": "string"},
                                 "key_name": {"type": "string"}
                             },
                             "required": [

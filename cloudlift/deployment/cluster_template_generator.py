@@ -669,10 +669,13 @@ for cluster for 15 minutes.',
 
     def _add_mappings(self):
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
-        ssm_client = get_client_for('ssm', self.env)
-        ami_response = ssm_client.get_parameter(
-            Name='/aws/service/ecs/optimized-ami/amazon-linux-2/recommended')
-        ami_id = json.loads(ami_response['Parameter']['Value'])['image_id']
+        if 'ami_id' in self.configuration['cluster'] and self.configuration['cluster']['ami_id'] != 'None':
+            ami_id = self.configuration['cluster']['ami_id']
+        else:
+            ssm_client = get_client_for('ssm', self.env)
+            ami_response = ssm_client.get_parameter(
+                Name='/aws/service/ecs/optimized-ami/amazon-linux-2/recommended')
+            ami_id = json.loads(ami_response['Parameter']['Value'])['image_id']
         region = get_region_for_environment(self.env)
         self.template.add_mapping('AWSRegionToAMI', {
             region: {"AMI": ami_id}
@@ -750,6 +753,12 @@ for cluster for 15 minutes.',
             Description="Key Pair name for accessing the instances",
             Value=str(self.configuration['cluster']['key_name']))
         )
+        if 'ami_id' in self.configuration['cluster'] and self.configuration['cluster']['ami_id'] != 'None':
+            self.template.add_output(Output(
+                "AmiId",
+                Description="AMI ID",
+                Value=str(self.configuration['cluster']['ami_id']))
+            )
         self.template.add_output(Output(
             "CloudmapId",
             Description="CloudMap Namespace ID for service discovery",
