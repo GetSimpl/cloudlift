@@ -251,7 +251,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
                       "0.0.0.0/0"
                   ]
               },
-              "memory_reservation": 100
+              "memory_reservation": 100,
               "logging": false
           }
       }
