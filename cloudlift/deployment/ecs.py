@@ -425,7 +425,8 @@ class EcsAction(object):
             task_definition_arn=task_definition
         )
         task_definition = EcsTaskDefinition(
-            task_definition=task_definition_payload[u'taskDefinition']
+            task_definition=task_definition_payload[u'taskDefinition'],
+            tags=task_definition_payload[u'tags']
         )
         return task_definition
 
@@ -440,10 +441,7 @@ class EcsAction(object):
                 'memory' : task_definition.memory or u'',
 
             }
-        response = self._client.describe_task_definition(
-             task_definition_arn=task_definition.family
-        )
-        td_tags=response[u'tags']
+        td_tags=task_definition[u'tags']
         self.check_tags(td_tags)
         response = self._client.register_task_definition(
             family=task_definition.family,
@@ -461,9 +459,7 @@ class EcsAction(object):
         if tags:
             for tag in tags:
                 if tag[u'key']=="cloudlift_version":
-                    if LooseVersion(tag[u'value'])<=LooseVersion(VERSION):
-                        return
-                    else:
+                    if LooseVersion(tag[u'value'])>LooseVersion(VERSION):
                         raise UnrecoverableException(f'Cloudlift Version {tag[u"value"]} was used to '
                                                      f'create this task_definition. You are using version {VERSION}, '
                                                      f'which is older and can cause corruption. Please upgrade to at least '
@@ -471,7 +467,6 @@ class EcsAction(object):
                                                      f'latest version (Recommended):\n'
                                                      f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
                                                      f'\tpip install -U cloudlift=={tag[u"value"]}')
-
         else:
             return
 
