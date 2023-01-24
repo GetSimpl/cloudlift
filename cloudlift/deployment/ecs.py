@@ -62,7 +62,6 @@ class EcsClient(object):
         fargate_td = {}
         if 'FARGATE' in requires_compatibilities:
             fargate_td = {
-                'executionRoleArn': execution_role_arn or u'',
                 'requiresCompatibilities': requires_compatibilities or [],
                 'cpu': cpu,
                 'memory': memory,
@@ -71,6 +70,7 @@ class EcsClient(object):
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
+            executionRoleArn=execution_role_arn,
             taskRoleArn=role_arn or u'',
             networkMode=network_mode,
             **fargate_td
@@ -304,8 +304,8 @@ class EcsTaskDefinition(dict):
 
     def apply_container_environment(self, container, new_environment):
         old_environment = {
-            env['name']: env['value'] for env in container.get(
-                'environment',
+            env['name']: env['valueFrom'] for env in container.get(
+                'secrets',
                 {}
             )
         }
@@ -313,16 +313,16 @@ class EcsTaskDefinition(dict):
 
         diff = EcsTaskDefinitionDiff(
             container[u'name'],
-            u'environment',
+            u'secrets',
             merged_environment,
             old_environment
         )
         self._diff.append(diff)
 
-        container[u'environment'] = [
+        container[u'secrets'] = [
             {
                 "name": e,
-                "value": merged_environment[e]
+                "valueFrom": merged_environment[e]
             } for e in merged_environment
         ]
 
@@ -423,7 +423,6 @@ class EcsAction(object):
         if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
 
             fargate_td = {
-                'execution_role_arn': task_definition.execution_role_arn or u'',
                 'requires_compatibilities': task_definition.requires_compatibilities or [],
                 'cpu' : task_definition.cpu or u'',
                 'memory' : task_definition.memory or u'',
@@ -434,6 +433,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
+            execution_role_arn=task_definition.execution_role_arn,
             network_mode=task_definition.network_mode or u'bridge',
             **fargate_td
         )
