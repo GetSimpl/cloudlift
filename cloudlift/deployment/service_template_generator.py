@@ -15,7 +15,7 @@ from troposphere import GetAtt, Output, Parameter, Ref, Sub, ImportValue, Tags
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
-                             DeploymentConfiguration, Environment, MountPoint,
+                             DeploymentConfiguration, Secret, MountPoint,
                              LoadBalancer, LogConfiguration, Volume, EFSVolumeConfiguration,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, ServiceRegistry)
@@ -187,8 +187,8 @@ service is down',
             self.env_sample_file_path
         )
         container_definition_arguments = {
-            "Environment": [
-                Environment(Name=k, Value=v) for (k, v) in env_config
+            "Secrets": [
+                Secret(Name=k, ValueFrom=v) for (k, v) in env_config
             ],
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
@@ -258,6 +258,7 @@ service is down',
             service_name + "TaskDefinition",
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
+            ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             TaskRoleArn=Ref(task_role),
             Tags=Tags(Team=self.team_name, environment=self.env),
             **launch_type_td

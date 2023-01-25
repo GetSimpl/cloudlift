@@ -45,10 +45,10 @@ class TaskDefinitionCreator:
         log_bold("Creating task definition\n")
         env_config = build_config(self.environment, self.name, self.env_sample_file)
         container_definition_arguments = {
-            "environment": [
+            "secrets": [
                 {
                     "name": k,
-                    "value": v
+                    "valueFrom": v
                 } for (k, v) in env_config
             ],
             "name": pascalcase(self.name) + "Container",

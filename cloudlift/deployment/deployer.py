@@ -52,7 +52,7 @@ def deploy_and_wait(deployment, new_task_definition, color):
 def build_config(env_name, service_name, sample_env_file_path):
     service_config = read_config(open(sample_env_file_path).read())
     try:
-        environment_config = ParameterStore(
+        environment_config, environment_configs_path = ParameterStore(
             service_name,
             env_name).get_existing_config()
     except Exception as err:
@@ -68,7 +68,7 @@ def build_config(env_name, service_name, sample_env_file_path):
         raise UnrecoverableException('There is no config value for the keys in env.sample file ' +
                 str(missing_env_sample_config))
 
-    return make_container_defn_env_conf(service_config, environment_config)
+    return make_container_defn_env_conf(service_config, environment_configs_path)
 
 
 def read_config(file_content):
@@ -82,13 +82,13 @@ def read_config(file_content):
     return config
 
 
-def make_container_defn_env_conf(service_config, environment_config):
-    container_defn_env_config = []
+def make_container_defn_env_conf(service_config, environment_configs_path):
+    container_defn_env_config_path = []
     for env_var_name in service_config:
-        container_defn_env_config.append(
-            (env_var_name, environment_config[env_var_name])
+        container_defn_env_config_path.append(
+            (env_var_name, environment_configs_path[env_var_name])
         )
-    return container_defn_env_config
+    return container_defn_env_config_path
 
 
 def wait_for_finish(action, existing_events, color):
@@ -131,7 +131,7 @@ def print_task_diff(ecs_service_name, diffs, color):
         log_with_color(ecs_service_name + " " + str(image_diff), color)
     else:
         log_with_color(ecs_service_name + " No change in image version", color)
-    env_diff = next(x for x in diffs if x.field == 'environment')
+    env_diff = next(x for x in diffs if x.field == 'secrets')
     old_env, current_env = env_diff.old_value, env_diff.value
     env_vars = sorted(
         set(env_diff.old_value.keys()).union(env_diff.value.keys())
