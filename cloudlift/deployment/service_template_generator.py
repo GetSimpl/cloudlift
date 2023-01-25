@@ -146,7 +146,7 @@ disappears indicating instance is down',
             Period=300,
             ComparisonOperator='GreaterThanThreshold',
             Statistic='Average',
-            Threshold='80',
+            Threshold='120',
             MetricName='MemoryUtilization'
         )
         self.template.add_resource(ecs_high_memory_alarm)
@@ -193,7 +193,7 @@ service is down',
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value 
+            "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
@@ -262,7 +262,7 @@ service is down',
             TaskRoleArn=Ref(task_role),
             Tags=Tags(Team=self.team_name, environment=self.env),
             **launch_type_td
-            
+
         )
         if 'custom_metrics' in config:
             sd = SD(
