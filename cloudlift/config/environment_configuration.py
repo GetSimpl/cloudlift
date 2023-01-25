@@ -119,7 +119,7 @@ class EnvironmentConfiguration(object):
         cluster_min_instances = prompt("Min instances in cluster", default=1)
         cluster_max_instances = prompt("Max instances in cluster", default=5)
         cluster_instance_type = prompt("Instance type", default='m5.xlarge')
-        cluster_ami_id_ssm = prompt("SSM parameter for Custom AMI ID for cluster", default='None')
+        cluster_ami_id_ssm = prompt("SSM parameter path of Custom AMI ID", default='None')
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
