@@ -127,10 +127,6 @@ This opens the `VISUAL` editor with default config similar to -
       "services": {
           "Test123": {
               "command": null,
-              "custom_metrics": {
-                  "metrics_port": "8005",
-                  "metrics_path": "/metrics"
-              },
               "http_interface": {
                   "container_port": 80,
                   "internal": false,
