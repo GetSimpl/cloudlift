@@ -123,6 +123,7 @@ This opens the `VISUAL` editor with default config similar to -
 
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
@@ -176,6 +177,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 1. Service configuration with custom metrics:
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
@@ -198,6 +200,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 2. Service configuration with volume mount:
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
@@ -221,6 +224,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 3. Service configuration with http interface only:
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
@@ -241,6 +245,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 `Note: Do not use `logging: false` in production. Once conatiner deleted all logs will be lost`.
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
