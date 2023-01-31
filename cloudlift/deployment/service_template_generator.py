@@ -202,15 +202,14 @@ service is down',
         for key in self.environment_stack["Outputs"]:
             if key["OutputKey"] == 'ECSClusterDefault':
                 service_interruptable = False if ImportValue("{self.env}ECSClusterDefault".format(**locals())) == 'OnDemand' else True
-                print(service_interruptable)
                 placement_constraint = {
                     "PlacementConstraints": [PlacementConstraint(
                         Type='memberOf',
                         Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
                     )],
                 }
-        if 'interruptable' in config:
-            service_interruptable = config["interruptable"]
+        if 'deployment_type' in config:
+            service_interruptable = config["spot_deployment"]
             placement_constraint = {
                 "PlacementConstraints" : [PlacementConstraint(
                     Type='memberOf',
@@ -383,10 +382,6 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DependsOn=service_listener.title,
-                # PlacementConstraints=[PlacementConstraint(
-                #     Type='memberOf',
-                #     Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
-                # )],
                 LaunchType=launch_type,
                 **launch_type_svc,
                 Tags=Tags(Team=self.team_name, environment=self.env),
@@ -487,10 +482,6 @@ service is down',
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
                 DeploymentConfiguration=deployment_configuration,
-                # PlacementConstraints=[PlacementConstraint(
-                #     Type='memberOf',
-                #     Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
-                # )],
                 LaunchType=launch_type,
                 **launch_type_svc,
                 Tags=Tags(Team=self.team_name, environment=self.env),

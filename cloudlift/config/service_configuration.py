@@ -224,7 +224,7 @@ class ServiceConfiguration(object):
                         {"type": "null"}
                     ]
                 },
-                "interruptable": {
+                "spot_deployment": {
                     "type": "boolean"
                 }
             },
@@ -273,7 +273,7 @@ class ServiceConfiguration(object):
                     },
                     u'memory_reservation': 250,
                     u'command': None,
-                    u'interruptable': False
+                    u'spot_deployment': False
                 }
             }
         }
