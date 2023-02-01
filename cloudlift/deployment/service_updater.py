@@ -110,7 +110,6 @@ class ServiceUpdater(object):
         except ClientError as client_error:
             err = str(client_error)
             if "Stack with id %s does not exist" % self.stack_name in err:
-                log_err(
-                    "%s cluster not found. Create the environment cluster using `create_environment` command." % self.environment)
+                raise UnrecoverableException(f'Stack with id {self.stack_name} does not exist. Create the service using `create_service` command.')
             else:
                 raise UnrecoverableException(str(client_error))
