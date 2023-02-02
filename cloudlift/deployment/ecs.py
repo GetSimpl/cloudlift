@@ -319,13 +319,14 @@ class EcsTaskDefinition(dict):
             old_environment
         )
         self._diff.append(diff)
-
         container[u'secrets'] = [
             {
                 "name": e,
                 "valueFrom": merged_environment[e]
             } for e in merged_environment
         ]
+        if container[u'environment'] is not None:
+            container[u'environment'] = []
 
     def validate_container_options(self, **container_options):
         for container_name in container_options:
@@ -422,7 +423,6 @@ class EcsAction(object):
     def update_task_definition(self, task_definition):
         fargate_td = {}
         if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
-
             fargate_td = {
                 'requires_compatibilities': task_definition.requires_compatibilities or [],
                 'cpu' : task_definition.cpu or u'',
