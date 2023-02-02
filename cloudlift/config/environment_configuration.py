@@ -123,8 +123,6 @@ class EnvironmentConfiguration(object):
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
-        if cluster_ami_id_ssm == 'None':
-            cluster_ami_id_ssm = '/aws/service/ecs/optimized-ami/amazon-linux-2/recommended'
         environment_configuration = {self.environment: {
             "region": region,
             "vpc": {
