@@ -4,7 +4,7 @@ import boto3
 import click
 from botocore.exceptions import ClientError
 
-from cloudlift.config import highlight_production
+from cloudlift.config import highlight_production, highlight_user_account_details
 from cloudlift.deployment.configs import deduce_name
 from cloudlift.deployment import EnvironmentCreator, editor
 from cloudlift.config.logging import log_err
@@ -16,7 +16,6 @@ from cloudlift.session import SessionCreator
 from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
 
-
 def _require_environment(func):
     @click.option('--environment', '-e', prompt='environment',
                   help='environment')
@@ -24,6 +23,7 @@ def _require_environment(func):
     def wrapper(*args, **kwargs):
         if kwargs['environment'] == 'production':
             highlight_production()
+        highlight_user_account_details()
         return func(*args, **kwargs)
 
     return wrapper
