@@ -15,6 +15,7 @@ from datetime import datetime
 from json import dumps
 
 from boto3.session import Session
+import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
 
@@ -433,7 +434,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
-            execution_role_arn=task_definition.execution_role_arn,
+            execution_role_arn=task_definition.execution_role_arn if task_definition.execution_role_arn else boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             network_mode=task_definition.network_mode or u'bridge',
             **fargate_td
         )
