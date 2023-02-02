@@ -3,7 +3,6 @@ from botocore.exceptions import ClientError
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config.logging import log_err
 
-
 def check_sns_topic_exists(topic_name, environment):
     session = boto3.session.Session()
     sns_client = session.client('sns')
@@ -16,3 +15,4 @@ def check_sns_topic_exists(topic_name, environment):
                 "Unable to find SNS topic {topic_name} in {environment} environment".format(**locals()))
         else:
             raise UnrecoverableException(e.response['Error']['Message'])
+        
