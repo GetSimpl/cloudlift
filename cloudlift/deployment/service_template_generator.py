@@ -208,7 +208,7 @@ service is down',
                         Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
                     )],
                 }
-        if 'deployment_type' in config:
+        if 'spot_deployment' in config:
             service_interruptable = config["spot_deployment"]
             placement_constraint = {
                 "PlacementConstraints" : [PlacementConstraint(
