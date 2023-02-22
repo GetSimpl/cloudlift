@@ -622,7 +622,7 @@ for cluster for 15 minutes.',
             self.template.add_resource(launch_template)
             
             overrides_instances = []
-            instance_types = self.configuration['cluster']['instance_types'].split(",")
+            instance_types = self.configuration['cluster']['instance_type'].split(",")
             if deployment_type == 'OnDemand':
                 overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_types[0])))
             elif deployment_type == 'Spot':
@@ -729,7 +729,7 @@ for cluster for 15 minutes.',
                                               Default=self.notifications_arn)
         self.template.add_parameter(self.notification_sns_arn)
         self.template.add_parameter(Parameter(
-            "InstanceTypes", Description='', Type="String", Default=str(self.configuration['cluster']['instance_types'])))
+            "InstanceTypes", Description='', Type="String", Default=str(self.configuration['cluster']['instance_type'])))
 
     def _add_mappings(self):
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
@@ -750,7 +750,7 @@ for cluster for 15 minutes.',
             'max_instances': str(self.configuration['cluster']['max_instances']),
             'spot_min_instances': str(self.configuration['cluster']['spot_min_instances']),
             'spot_max_instances': str(self.configuration['cluster']['spot_max_instances']),
-            'instance_types': self.configuration['cluster']['instance_types'],
+            'instance_types': self.configuration['cluster']['instance_type'],
             'key_name': self.configuration['cluster']['key_name'],
             'cloudlift_version': VERSION
         }
@@ -825,7 +825,7 @@ for cluster for 15 minutes.',
         self.template.add_output(Output(
             "InstanceTypes",
             Description="EC2 instance type",
-            Value=str(self.configuration['cluster']['instance_types']))
+            Value=str(self.configuration['cluster']['instance_type']))
         )
         self.template.add_output(Output(
             "KeyName",
