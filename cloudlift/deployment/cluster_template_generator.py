@@ -5,7 +5,7 @@ from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
                          cloudformation, Export, GetAtt, Tags)
-from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
+from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification, NotificationConfigurations,
                                      ScalingPolicy, MixedInstancesPolicy, LaunchTemplateOverrides, InstancesDistribution )
 from troposphere.autoscaling import LaunchTemplate as ASGLaunchTemplate
 from troposphere.cloudwatch import Alarm, MetricDimension
@@ -487,6 +487,11 @@ for cluster for 15 minutes.',
         self.template.add_resource(database_security_group)
         deployment_types = ['OnDemand', 'Spot']
         for deployment_type in deployment_types:
+            lc_metadata_override = ''
+            if deployment_types == 'Spot':
+                lc_metadata_override = '\n'.join([
+                    'echo ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config',
+                ])
             user_data = Base64(Sub('\n'.join([
                 "#!/bin/bash",
                 "yum update -y",
@@ -557,7 +562,12 @@ for cluster for 15 minutes.',
                     commands={
                         '01_add_instance_to_cluster': {
                             'command': Sub(
-                                "echo 'ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\nECS_INSTANCE_ATTRIBUTES={\"deployment_type\": \""+ deployment_type +"\"}' > /etc/ecs/ecs.config"
+                                '\n'.join([
+                                'echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config',
+                                'echo ECS_RESERVED_MEMORY=256 >> /etc/ecs/ecs.config',
+                                'echo ECS_INSTANCE_ATTRIBUTES=\'{"deployment_type": "'+ deployment_type + '"}\' >> /etc/ecs/ecs.config',
+                                lc_metadata_override,
+                                 ]).strip()
                             )
                         },
                         '02_set_nameserver': {
@@ -612,10 +622,11 @@ for cluster for 15 minutes.',
             self.template.add_resource(launch_template)
             
             overrides_instances = []
+            instance_types = self.configuration['cluster']['instance_types'].split(",")
             if deployment_type == 'OnDemand':
-                overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(self.configuration['cluster']['instance_types'][0])))
+                overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_types[0])))
             elif deployment_type == 'Spot':
-                for instance_type in self.configuration['cluster']['instance_types']:
+                for instance_type in instance_types:
                     overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
             # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
             up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
@@ -647,6 +658,13 @@ for cluster for 15 minutes.',
                 MinSize=Ref('MinSize') if deployment_types == 'OnDemand' else Ref('SpotMinSize'),
                 MaxSize=Ref('MaxSize') if deployment_types == 'OnDemand' else Ref('SpotMaxSize'),
                 VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
+                NotificationConfigurations=[
+                    NotificationConfigurations(
+                        NotificationTypes=[
+                            "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"],
+                        TopicARN=Ref(self.notification_sns_arn)
+                    )
+                ],
                 MixedInstancesPolicy=MixedInstancesPolicy(
                     LaunchTemplate=ASGLaunchTemplate(
                         LaunchTemplateSpecification=LaunchTemplateSpecification(
@@ -826,12 +844,12 @@ for cluster for 15 minutes.',
             Description="EC2Host Security group ID",
             Value=Ref('SecurityGroupEc2Hosts'))
         )
-        if 'ecs_default_type' in self.configuration['cluster']:
+        if 'ecs_instance_default_lifecycle_type' in self.configuration['cluster']:
             self.template.add_output(Output(
-                "ECSClusterDefault",
-                Export=Export("{self.env}ECSClusterDefault".format(**locals())),
+                "ECSClusterDefaultInstanceLifecycle",
+                Export=Export("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())),
                 Description="Default instance type for ECS cluster",
-                Value=str(self.configuration['cluster']['ecs_default_type']))
+                Value=str(self.configuration['cluster']['ecs_instance_default_lifecycle_type']))
             )
 
 
