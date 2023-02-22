@@ -200,20 +200,20 @@ service is down',
         }
         placement_constraint = {}
         for key in self.environment_stack["Outputs"]:
-            if key["OutputKey"] == 'ECSClusterDefault':
-                service_interruptable = False if ImportValue("{self.env}ECSClusterDefault".format(**locals())) == 'OnDemand' else True
+            if key["OutputKey"] == 'ECSClusterDefaultInstanceLifecycle':
+                spot_deployment = False if ImportValue("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())) == 'OnDemand' else True
                 placement_constraint = {
                     "PlacementConstraints": [PlacementConstraint(
                         Type='memberOf',
-                        Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
+                        Expression='attribute:deployment_type == Spot' if spot_deployment else 'attribute:deployment_type == OnDemand'
                     )],
                 }
         if 'spot_deployment' in config:
-            service_interruptable = config["spot_deployment"]
+            spot_deployment = config["spot_deployment"]
             placement_constraint = {
                 "PlacementConstraints" : [PlacementConstraint(
                     Type='memberOf',
-                    Expression='attribute:deployment_type == Spot' if service_interruptable else 'attribute:deployment_type == OnDemand'
+                    Expression='attribute:deployment_type == Spot' if spot_deployment else 'attribute:deployment_type == OnDemand'
                 )],
             }
 
