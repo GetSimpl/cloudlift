@@ -20,13 +20,14 @@ class ParameterStore(object):
         self.client = get_client_for('ssm', environment)
 
     def get_existing_config_as_string(self):
-        environment_configs = self.get_existing_config()
+        environment_configs, environment_configs_path = self.get_existing_config()
         return '\n'.join('{}={}'.format(key, val) for key, val in sorted(
             environment_configs.items()
         ))
 
     def get_existing_config(self):
         environment_configs = {}
+        environment_configs_path = {}
         next_token = None
         while True:
             if next_token:
@@ -47,12 +48,12 @@ class ParameterStore(object):
             for parameter in response['Parameters']:
                 parameter_name = parameter['Name'].split(self.path_prefix)[1]
                 environment_configs[parameter_name] = parameter['Value']
-
+                environment_configs_path[parameter_name] = parameter['ARN']
             try:
                 next_token = response['NextToken']
             except KeyError:
                 break
-        return environment_configs
+        return environment_configs, environment_configs_path
 
     def set_config(self, differences):
         self._validate_changes(differences)

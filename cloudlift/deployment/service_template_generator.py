@@ -15,7 +15,7 @@ from troposphere import GetAtt, Output, Parameter, Ref, Sub, ImportValue, Tags
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import SecurityGroup
 from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
-                             DeploymentConfiguration, Environment, MountPoint,
+                             DeploymentConfiguration, Secret, MountPoint,
                              LoadBalancer, LogConfiguration, Volume, EFSVolumeConfiguration,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint)
@@ -146,7 +146,7 @@ disappears indicating instance is down',
             Period=300,
             ComparisonOperator='GreaterThanThreshold',
             Statistic='Average',
-            Threshold='80',
+            Threshold='120',
             MetricName='MemoryUtilization'
         )
         self.template.add_resource(ecs_high_memory_alarm)
@@ -187,14 +187,13 @@ service is down',
             self.env_sample_file_path
         )
         container_definition_arguments = {
-            "Environment": [
-                Environment(Name=k, Value=v) for (k, v) in env_config
+            "Secrets": [
+                Secret(Name=k, ValueFrom=v) for (k, v) in env_config
             ],
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "LogConfiguration": self._gen_log_config(service_name),
-            "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value 
+            "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
@@ -225,6 +224,8 @@ service is down',
                     )
                 )
             ]
+        if 'logging' not in config or 'logging' in config and config['logging']:
+            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name)
 
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
@@ -275,10 +276,11 @@ service is down',
             service_name + "TaskDefinition",
             Family=service_name + "Family",
             ContainerDefinitions=[cd],
+            ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             TaskRoleArn=Ref(task_role),
             Tags=Tags(Team=self.team_name, environment=self.env),
             **launch_type_td
-            
+
         )
         if 'custom_metrics' in config:
             sd = SD(

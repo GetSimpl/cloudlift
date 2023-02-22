@@ -123,13 +123,10 @@ This opens the `VISUAL` editor with default config similar to -
 
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
-              "custom_metrics": {
-                  "metrics_port": "8005",
-                  "metrics_path": "/metrics"
-              },
               "http_interface": {
                   "container_port": 80,
                   "internal": false,
@@ -176,6 +173,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 1. Service configuration with custom metrics:
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
@@ -198,6 +196,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 2. Service configuration with volume mount:
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
@@ -221,6 +220,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 3. Service configuration with http interface only:
 ```json
   {
+      "notifications_arn": "<SNS Topic ARN>",
       "services": {
           "Test123": {
               "command": null,
@@ -232,6 +232,28 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
                   ]
               },
               "memory_reservation": 100
+          }
+      }
+  }
+```
+4. Service configuration with http interface without AWS CW logging.
+
+`Note: Do not use `logging: false` in production. Once conatiner deleted all logs will be lost`.
+```json
+  {
+      "notifications_arn": "<SNS Topic ARN>",
+      "services": {
+          "Test123": {
+              "command": null,
+              "http_interface": {
+                  "container_port": 80,
+                  "internal": false,
+                  "restrict_access_to": [
+                      "0.0.0.0/0"
+                  ]
+              },
+              "memory_reservation": 100,
+              "logging": false
           }
       }
   }

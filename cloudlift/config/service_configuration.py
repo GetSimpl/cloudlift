@@ -226,6 +226,9 @@ class ServiceConfiguration(object):
                 },
                 "spot_deployment": {
                     "type": "boolean"
+                },
+                "logging": {
+                    "type": "boolean"
                 }
             },
             "required": ["memory_reservation", "command"]
