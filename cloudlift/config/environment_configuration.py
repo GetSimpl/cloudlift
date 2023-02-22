@@ -17,7 +17,7 @@ from cloudlift.version import VERSION
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config import DecimalEncoder, print_json_changes
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
-from cloudlift.config.pre_flight import check_sns_topic_exists
+from cloudlift.config.pre_flight import check_sns_topic_exists, check_aws_instance_type
 
 # import config.mfa as mfa
 from cloudlift.config.logging import log_bold, log_err, log_warning
@@ -123,9 +123,14 @@ class EnvironmentConfiguration(object):
         spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
         if spot_allocation_strategy == 'lowest-price':
             spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
-        cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
+        check = False
+        while not check:
+            cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
+            cluster_instance_types = cluster_instance_types.replace(" ", "")
+            check, instance_type = check_aws_instance_type(cluster_instance_types)
+            if not check:
+                log_err(f"Invalid instance type: {instance_type}")
         ecs_cluster_default_instance_type = prompt("Default instance type for ECS cluster Spot/OnDemand", default='OnDemand')
-        cluster_instance_types = cluster_instance_types.split(",")
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
@@ -160,10 +165,10 @@ class EnvironmentConfiguration(object):
                 "max_instances": od_cluster_max_instances,
                 "spot_min_instances": spot_cluster_min_instances,
                 "spot_max_instances": spot_cluster_max_instances,
-                "instance_types": cluster_instance_types,
+                "instance_type": cluster_instance_types,
                 "key_name": key_name,
                 "allocation_strategy": spot_allocation_strategy,
-                "ecs_default_type": ecs_cluster_default_instance_type
+                "ecs_instance_default_lifecycle_type": ecs_cluster_default_instance_type
             },
             "environment": {
                 "notifications_arn": notifications_arn,
@@ -266,16 +271,16 @@ class EnvironmentConfiguration(object):
                                 "max_instances": {"type": "integer"},
                                 "spot_min_instances": {"type": "integer"},
                                 "spot_max_instances": {"type": "integer"},
-                                "instance_types": {"type": "array"},
+                                "instance_type": {"type": "string"},
                                 "key_name": {"type": "string"},
                                 "allocation_strategy": {"type": "string"},
                                 "spot_instance_pools": {"type": "integer"},
-                                "ecs_default_type": {"type": "string"}
+                                "ecs_instance_default_lifecycle_type": {"type": "string"}
                             },
                             "required": [
                                 "min_instances",
                                 "max_instances",
-                                "instance_types",
+                                "instance_type",
                                 "key_name"
                             ]
                         },
