@@ -27,6 +27,7 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
 from troposphere.iam import Role
 from troposphere.servicediscovery import Service as SD
 from troposphere.servicediscovery import DnsConfig, DnsRecord
+from troposphere.events import Rule, Target
 
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
@@ -101,6 +102,36 @@ class ServiceTemplateGenerator(TemplateGenerator):
             self._add_service(ecs_service_name, config)
 
     def _add_service_alarms(self, svc):
+        oom_event_rule = Rule(
+            'EcsOOM' + str(svc.name),
+            Description="Triggered when an Amazon ECS Task is stopped",
+            EventPattern={
+                "detail-type": ["ECS Task State Change"],
+                "source": ["aws.ecs"],
+                "detail": {
+                    "clusterArn": [{"anything-but": [str(self.cluster_name)]}],
+                    "containers": {
+                        "reason": [{
+                            "prefix": "OutOfMemory"
+                        }]
+                    },
+                    "desiredStatus": ["STOPPED"],
+                    "lastStatus": ["STOPPED"],
+                    "taskDefinitionArn": [{
+                        "anything-but": [str(svc.name) + "Family"]
+                    }]
+                }
+            },
+            State="ENABLED",
+            Targets=[Target(
+                    Arn=Ref(self.notification_sns_arn),
+                    Id="ECSOOMStoppedTasks",
+                    InputPath="$.detail.containers[0]"
+                )
+            ]
+        )
+        self.template.add_resource(oom_event_rule)
+
         ecs_high_cpu_alarm = Alarm(
             'EcsHighCPUAlarm' + str(svc.name),
             EvaluationPeriods=1,
