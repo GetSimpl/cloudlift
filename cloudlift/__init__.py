@@ -5,6 +5,7 @@ import click
 from botocore.exceptions import ClientError
 
 from cloudlift.config import highlight_production, highlight_user_account_details
+from cloudlift.config.pre_flight import check_stack_exists
 from cloudlift.deployment.configs import deduce_name
 from cloudlift.deployment import EnvironmentCreator, editor
 from cloudlift.config.logging import log_err
@@ -71,6 +72,7 @@ ECS services")
 @_require_environment
 @_require_name
 def create_service(name, environment):
+    check_stack_exists(name, environment, "create")
     ServiceCreator(name, environment).create()
 
 
@@ -78,6 +80,7 @@ def create_service(name, environment):
 @_require_environment
 @_require_name
 def update_service(name, environment):
+    check_stack_exists(name, environment, "update")
     ServiceCreator(name, environment).update()
 
 
