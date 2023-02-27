@@ -168,6 +168,8 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 
 `volume`: Configuration for EFS volume mount if required, do not include this if the service does not required volume mount
 
+`logging`: Configuration for service logging.
+
 #### Examples:
 
 1. Service configuration with custom metrics:
@@ -238,7 +240,10 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 ```
 4. Service configuration with http interface without AWS CW logging.
 
-`Note: Do not use `logging: false` in production. Once conatiner deleted all logs will be lost`.
+`Note: Do not use `logging: null` in production. Once conatiner deleted all logs will be lost`.
+
+logging configuration should be one of the following: `awslog`, `fluentd`,`null`
+
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -253,7 +258,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
                   ]
               },
               "memory_reservation": 100,
-              "logging": false
+              "logging": null
           }
       }
   }
