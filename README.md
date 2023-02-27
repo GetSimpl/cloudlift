@@ -32,7 +32,7 @@ pip install cloudlift
 ```
 
 
-### 2. Configure AWS
+### 3. Configure AWS
 
 ```perl
 aws configure
@@ -140,7 +140,35 @@ This opens the `VISUAL` editor with default config similar to -
   }
 ```
 
-Definitions -
+#### Configuration schema
+```json
+  {
+      "notifications_arn": string,
+      "services": {
+          "Test123": {
+              "command": string|null,
+              "custom_metrics": {
+                  "metrics_port": string,
+                  "metrics_path": string
+              },
+              "http_interface": {
+                  "container_port": number,
+                  "internal": boolean,
+                  "restrict_access_to": array
+              },
+              "volume": {
+                  "efs_id" : string,
+                  "efs_directory_path" : string,
+                  "container_path" : string
+              },
+              "memory_reservation": number,
+              "logging": string|null
+          }
+      }
+  }
+```
+
+#### Definitions
 
 `services`: Map of all ECS services with configuration for current application
 
@@ -172,7 +200,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
 
 #### Examples:
 
-1. Service configuration with custom metrics:
+#### 1. Service configuration with custom metrics:
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -195,7 +223,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
-2. Service configuration with volume mount:
+#### 2. Service configuration with volume mount:
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -219,7 +247,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
-3. Service configuration with http interface only:
+#### 3. Service configuration with http interface only:
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -238,11 +266,9 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
-4. Service configuration with http interface without AWS CW logging.
+#### 4. Service configuration with http interface without AWS CW logging.
 
-`Note: Do not use `logging: null` in production. Once conatiner deleted all logs will be lost`.
-
-logging configuration should be one of the following: `awslog`, `fluentd`,`null`
+> **_NOTE:_** Do not use `logging: null` in production. Once container  gets deleted all logs will be lost. Logging configuration should be one of the following: `awslog`, `fluentd`,`null`
 
 ```json
   {
@@ -283,7 +309,7 @@ This example is bit comprehensive to show
 - it can execute shell commands with "`".
 - It's wrapped with double quotes to avoid line-breaks in SSH keys breaking the command.
 
-### 6. Starting shell on container instance for service
+#### 4. Starting shell on container instance for service
 
 You can start a shell on a container instance which is running a task for given
 application using the `start_session` command. One pre-requisite for this is
