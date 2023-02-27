@@ -143,26 +143,26 @@ This opens the `VISUAL` editor with default config similar to -
 #### Configuration schema
 ```json
   {
-      "notifications_arn": string,
+      "notifications_arn": "string",
       "services": {
           "Test123": {
-              "command": string|null,
+              "command": "string"/null,
               "custom_metrics": {
-                  "metrics_port": string,
-                  "metrics_path": string
+                  "metrics_port": "string",
+                  "metrics_path": "string"
               },
               "http_interface": {
                   "container_port": number,
                   "internal": boolean,
-                  "restrict_access_to": array
+                  "restrict_access_to": [array]
               },
               "volume": {
-                  "efs_id" : string,
-                  "efs_directory_path" : string,
-                  "container_path" : string
+                  "efs_id" : "string",
+                  "efs_directory_path" : "string",
+                  "container_path" : "string"
               },
               "memory_reservation": number,
-              "logging": string|null
+              "logging": "string"/null
           }
       }
   }
