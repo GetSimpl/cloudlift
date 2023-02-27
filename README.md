@@ -143,26 +143,26 @@ This opens the `VISUAL` editor with default config similar to -
 #### Configuration schema
 ```json
   {
-      "notifications_arn": "string",
+      "notifications_arn": "string", // Required
       "services": {
           "Test123": {
-              "command": "string"/null,
-              "custom_metrics": {
-                  "metrics_port": "string",
-                  "metrics_path": "string"
+              "command": "string"/null, // Required, defaul is `null`, Override command in Dockerfile
+              "custom_metrics": {   // Optional, use only for exporting custom metrics to prometheus server
+                  "metrics_port": "string", // Port number on which custom metrics is exported
+                  "metrics_path": "string" // Path on which custom metrics are exported
               },
-              "http_interface": {
-                  "container_port": number,
-                  "internal": boolean,
-                  "restrict_access_to": [array]
+              "http_interface": { // Optional, use only if your service required an ALB
+                  "container_port": "number", // Container port number
+                  "internal": "boolean", // Set to false for internal ALB
+                  "restrict_access_to": [ "string", "string" ] // List of IP's
               },
-              "volume": {
-                  "efs_id" : "string",
-                  "efs_directory_path" : "string",
-                  "container_path" : "string"
+              "volume": { // Optional, use only if your service requires an EFS volume
+                  "efs_id" : "string", // ID of EFS volume
+                  "efs_directory_path" : "string", // EFS Directory path
+                  "container_path" : "string" // Container mount path
               },
-              "memory_reservation": number,
-              "logging": "string"/null
+              "memory_reservation": "number", // Required, Memory soft limit for container. (Hard Limit will automatically be set as 1.5X of soft limit)
+              "logging": "string"/null // Optional, use if you want to use any one of the following (fluentbit/awslogs/null) as log driver, default is awslogs (CloudWatch Logs)
           }
       }
   }
@@ -174,7 +174,7 @@ This opens the `VISUAL` editor with default config similar to -
 
 `command`: Override command in Dockerfile
 
-`custom_metrics`: Configuration for custom metrics if required, do not include this if the service does not write/export custom metrics
+`custom_metrics`: Configuration for custom metrics, do not include this if the service does not write/export custom metrics
 
 > **NOTE:** If you use custom metrics, Your ECS container Network mode will be `awsvpc`. 
 
