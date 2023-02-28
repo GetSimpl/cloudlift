@@ -494,7 +494,8 @@ service is down',
                 LogDriver="fluentd",
                 Options={
                     'fluentd-address': 'unix:///var/run/fluent.sock',
-                    'tag': service_name
+                    'labels': 'com.amazonaws.ecs.cluster,com.amazonaws.ecs.container-name,com.amazonaws.ecs.task-arn,com.amazonaws.ecs.task-definition-family,com.amazonaws.ecs.task-definition-version',
+                    'fluentd-async': 'true'
                 }
             )
         elif config == 'null':
