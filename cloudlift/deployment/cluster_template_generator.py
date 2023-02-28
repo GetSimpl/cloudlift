@@ -547,7 +547,7 @@ for cluster for 15 minutes.',
                 commands={
                     '01_add_instance_to_cluster': {
                         'command': Sub(
-                            'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256" > /etc/ecs/ecs.config'
+                            'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\nECS_AVAILABLE_LOGGING_DRIVERS=[\"awslogs\",\"fluentd\"]" > /etc/ecs/ecs.config'
                         )
                     },
                     '02_set_nameserver': {
