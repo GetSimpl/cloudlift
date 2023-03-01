@@ -1,6 +1,6 @@
 
 from subprocess import call
-
+from terminaltables import SingleTable
 from click import confirm, edit, prompt
 
 from cloudlift.exceptions import UnrecoverableException
@@ -30,6 +30,12 @@ class ServiceInformationFetcher(object):
             service_name_list = list(
                 filter(
                     lambda x: x['OutputKey'].endswith('EcsServiceName'),
+                    stack['Outputs']
+                )
+            )
+            self.output = list(
+                filter(
+                    lambda x: x['OutputKey'],
                     stack['Outputs']
                 )
             )
@@ -168,3 +174,12 @@ fetched.")
             return commit_sha
         except Exception:
             return None
+
+    def get_stack_outputs(self):
+        changes_to_show = [["Name", "Value"]]
+        for svc_name in self.output:
+            if svc_name['OutputKey'] != "CloudliftOptions":
+                changes_to_show.append([
+                    svc_name['OutputKey'], svc_name['OutputValue']])
+        print(SingleTable(changes_to_show).table)
+
