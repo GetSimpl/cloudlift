@@ -113,8 +113,9 @@ def edit_config(name, environment):
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def deploy_service(name, environment, version, build_arg):
-    ServiceUpdater(name, environment, None, version, dict(build_arg)).run()
+@click.option('--component', help='nested service name')
+def deploy_service(name, environment, version, build_arg, component):
+    ServiceUpdater(name, environment, None, version, dict(build_arg)).run(component)
 
 
 @cli.command()
