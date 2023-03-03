@@ -37,10 +37,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
     def __init__(self, environment, environment_configuration, desired_instances=None):
         super(ClusterTemplateGenerator, self).__init__(environment)
         self.configuration = environment_configuration
-        if desired_instances is None:
-            self.desired_instances = str(self.configuration['cluster']['min_instances'])
-        else:
-            self.desired_instances = str(desired_instances)
+        self.desired_instances = desired_instances
         if not 'spot_min_instances' in self.configuration['cluster']:
             self.configuration['cluster']['spot_min_instances'] = 0
         if not 'spot_max_instances' in self.configuration['cluster']:
@@ -602,7 +599,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.auto_scaling_group = AutoScalingGroup(
                 "AutoScalingGroup"+deployment_type,
                 UpdatePolicy=up,
-                DesiredCapacity=self.desired_instances,
+                DesiredCapacity=self.desired_instances if self.desired_instances is not None else Ref('OnDemandMinSize') if deployment_type == 'OnDemand' else Ref('SpotMinSize'),
                 Tags=[
                     {
                         'PropagateAtLaunch': True,
@@ -692,7 +689,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             )
             if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
                 log_warning("Skipping spot fleet")
-            elif 'od_min_instances' in self.configuration['cluster'] and deployment_type == 'OnDemand' and self.configuration['cluster']['od_min_instances'] == 0:
+            elif 'min_instances' in self.configuration['cluster'] and deployment_type == 'OnDemand' and self.configuration['cluster']['min_instances'] == 0:
                 log_warning("Skipping on-demand fleet")
             else:
                 self.template.add_resource(launch_template)
@@ -788,11 +785,12 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 Description="Spot AutoScaling group for ECS container instances",
                 Value=Ref('AutoScalingGroupSpot'))
             )
-        self.template.add_output(Output(
-            "AutoScalingGroupOnDemand",
-            Description="On-Demand AutoScaling group for ECS container instances",
-            Value=Ref('AutoScalingGroupOnDemand'))
-        )
+        if self.configuration['cluster']['min_instances'] > 0:
+            self.template.add_output(Output(
+                "AutoScalingGroupOnDemand",
+                Description="On-Demand AutoScaling group for ECS container instances",
+                Value=Ref('AutoScalingGroupOnDemand'))
+            )
         self.template.add_output(Output(
             "SecurityGroupAlb",
             Description="Security group ID for ALB",
