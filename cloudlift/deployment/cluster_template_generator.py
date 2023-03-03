@@ -344,24 +344,6 @@ class ClusterTemplateGenerator(TemplateGenerator):
         return cluster
 
     def _add_cluster_alarms(self, cluster):
-        ec2_hosts_high_cpu_alarm = Alarm(
-            'Ec2HostsHighCPUAlarm',
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(Name='AutoScalingGroupName',
-                                Value=Ref(self.auto_scaling_group))
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Alarm if CPU too high or metric disappears \
-indicating instance is down',
-            Namespace='AWS/EC2',
-            Period=60,
-            ComparisonOperator='GreaterThanThreshold',
-            Statistic='Average',
-            Threshold='60',
-            MetricName='CPUUtilization'
-        )
-        self.template.add_resource(ec2_hosts_high_cpu_alarm)
         cluster_high_cpu_alarm = Alarm(
             'ClusterHighCPUAlarm',
             EvaluationPeriods=1,
@@ -398,26 +380,7 @@ indicating instance is down',
             MetricName='MemoryUtilization'
         )
         self.template.add_resource(cluster_high_memory_alarm)
-        self.cluster_high_memory_reservation_autoscale_alarm = Alarm(
-            'ClusterHighMemoryReservationAlarm',
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(Name='ClusterName', Value=Ref(cluster))
-            ],
-            AlarmActions=[
-                Ref(self.cluster_scaling_policy)
-            ],
-            AlarmDescription='Alarm if memory reservation is over 75% \
-for cluster.',
-            Namespace='AWS/ECS',
-            Period=300,
-            ComparisonOperator='GreaterThanThreshold',
-            Statistic='Average',
-            Threshold='75',
-            MetricName='MemoryReservation'
-        )
-        self.template.add_resource(
-            self.cluster_high_memory_reservation_autoscale_alarm)
+
         self.cluster_high_memory_reservation_user_notification_alarm = Alarm(
             'ClusterHighMemoryReservationUserNotifcationAlarm',
             EvaluationPeriods=3,
@@ -431,7 +394,7 @@ for cluster.',
                 Ref(self.notification_sns_arn)
             ],
             AlarmDescription='Alarm if memory reservation is over 75% \
-for cluster for 15 minutes.',
+                for cluster for 15 minutes.',
             Namespace='AWS/ECS',
             Period=300,
             ComparisonOperator='GreaterThanThreshold',
@@ -488,7 +451,7 @@ for cluster for 15 minutes.',
         deployment_types = ['OnDemand', 'Spot']
         for deployment_type in deployment_types:
             lc_metadata_override = ''
-            if deployment_types == 'Spot':
+            if deployment_type == 'Spot':
                 lc_metadata_override = '\n'.join([
                     'echo ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config',
                 ])
@@ -619,7 +582,6 @@ for cluster for 15 minutes.',
                 LaunchTemplateName=self.env + "-LaunchTemplate"+deployment_type,
                 Metadata=lc_metadata
             )
-            self.template.add_resource(launch_template)
             
             overrides_instances = []
             instance_types = self.configuration['cluster']['instance_type'].split(",")
@@ -655,8 +617,8 @@ for cluster for 15 minutes.',
                     {'PropagateAtLaunch': True, 'Key': 'Team',
                         'Value': self.team_name}
                 ],
-                MinSize=Ref('MinSize') if deployment_types == 'OnDemand' else Ref('SpotMinSize'),
-                MaxSize=Ref('MaxSize') if deployment_types == 'OnDemand' else Ref('SpotMaxSize'),
+                MinSize=Ref('OnDemandMinSize') if deployment_type == 'OnDemand' else Ref('SpotMinSize'),
+                MaxSize=Ref('OnDemandMaxSize') if deployment_type == 'OnDemand' else Ref('SpotMaxSize'),
                 VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
                 NotificationConfigurations=[
                     NotificationConfigurations(
@@ -684,12 +646,6 @@ for cluster for 15 minutes.',
                     ResourceSignal=ResourceSignal(Timeout='PT15M')
                 )
             )
-            if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
-                log_warning("Spot minimum instances is set to 0")
-            elif 'od_min_instances' in self.configuration['cluster'] and deployment_type == 'OnDemand' and self.configuration['cluster']['od_min_instances'] == 0:
-                log_warning("On-Demand minimum instances is set to 0")
-            else:
-                self.template.add_resource(self.auto_scaling_group)
             self.cluster_scaling_policy = ScalingPolicy(
                 'AutoScalingPolicy'+deployment_type,
                 AdjustmentType='ChangeInCapacity',
@@ -698,12 +654,52 @@ for cluster for 15 minutes.',
                 PolicyType='SimpleScaling',
                 ScalingAdjustment=1
             )
+            ec2_hosts_high_cpu_alarm = Alarm(
+                'Ec2HostsHighCPUAlarm'+deployment_type,
+                EvaluationPeriods=1,
+                Dimensions=[
+                    MetricDimension(Name='AutoScalingGroupName',
+                                    Value=Ref(self.auto_scaling_group))
+                ],
+                AlarmActions=[Ref(self.notification_sns_arn)],
+                AlarmDescription='Alarm if CPU too high or metric disappears \
+                    indicating instance is down',
+                Namespace='AWS/EC2',
+                Period=60,
+                ComparisonOperator='GreaterThanThreshold',
+                Statistic='Average',
+                Threshold='60',
+                MetricName='CPUUtilization'
+            )
+            self.cluster_high_memory_reservation_autoscale_alarm = Alarm(
+                'ClusterHighMemoryReservationAlarm'+deployment_type,
+                EvaluationPeriods=1,
+                Dimensions=[
+                    MetricDimension(Name='ClusterName',
+                                    Value=Ref('AWS::StackName'))
+                ],
+                AlarmActions=[
+                    Ref(self.cluster_scaling_policy)
+                ],
+                AlarmDescription='Alarm if memory reservation is over 75% \
+                    for cluster.',
+                Namespace='AWS/ECS',
+                Period=300,
+                ComparisonOperator='GreaterThanThreshold',
+                Statistic='Average',
+                Threshold='75',
+                MetricName='MemoryReservation'
+            )
             if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
                 log_warning("Skipping spot fleet")
             elif 'od_min_instances' in self.configuration['cluster'] and deployment_type == 'OnDemand' and self.configuration['cluster']['od_min_instances'] == 0:
                 log_warning("Skipping on-demand fleet")
             else:
+                self.template.add_resource(launch_template)
+                self.template.add_resource(self.auto_scaling_group)
+                self.template.add_resource(ec2_hosts_high_cpu_alarm)
                 self.template.add_resource(self.cluster_scaling_policy)
+                self.template.add_resource(self.cluster_high_memory_reservation_autoscale_alarm)
 
     def _add_cluster_parameters(self):
         self.template.add_parameter(Parameter(

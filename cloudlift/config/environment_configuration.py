@@ -116,34 +116,41 @@ class EnvironmentConfiguration(object):
             "Private Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[2])
         private_subnet_2_cidr = prompt(
             "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
-        cluster_types = prompt("Cluster type \n [1] On-Demand \n [2] Spot \n [3] Both", default=3)
+        cluster_types = prompt("Cluster type \n [1] On-Demand \n [2] Spot \n [3] Both \n default ", default=3)
         if cluster_types == 1:
             od_cluster_min_instances = prompt("Min instances in On-Demand cluster", default=1)
             od_cluster_max_instances = prompt("Max instances in On-Demand cluster", default=5)
             spot_cluster_min_instances = 0
             spot_cluster_max_instances = 0
+            ecs_cluster_default_instance_type = "ondeamnd"
+            cluster_instance_types = prompt("Instance types", default='t2.micro')
         elif cluster_types == 2:
             spot_cluster_min_instances = prompt("Min instances in Spot cluster", default=1)
             spot_cluster_max_instances = prompt("Max instances in Spot cluster", default=5)
             od_cluster_min_instances = 0
             od_cluster_max_instances = 0
+            ecs_cluster_default_instance_type = "spot"
+            cluster_instance_types = prompt("Instance types in comma delimited string", default='t2.micro,m5.xlarge')
         else:
             od_cluster_min_instances = prompt("Min instances in On-Demand cluster", default=1)
             od_cluster_max_instances = prompt("Max instances in On-Demand cluster", default=5)
             spot_cluster_min_instances = prompt("Min instances in Spot cluster", default=1)
             spot_cluster_max_instances = prompt("Max instances in Spot cluster", default=5)
-        if cluster_types != 1:
-            spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
-            if spot_allocation_strategy == 'lowest-price':
-                spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
+            cluster_instance_types = prompt("Instance types in comma delimited string, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
         check = False
         while not check:
-            cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
             cluster_instance_types = cluster_instance_types.replace(" ", "")
             check, instance_type = check_aws_instance_type(cluster_instance_types)
             if not check:
                 log_err(f"Invalid instance type: {instance_type}")
-        ecs_cluster_default_instance_type = prompt("Default instance type for ECS cluster Spot/OnDemand", default='OnDemand')
+                cluster_instance_types = prompt( "Instance types in comma delimited string, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
+
+        if cluster_types != 1:
+            spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
+            if spot_allocation_strategy == 'lowest-price':
+                spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
+        if cluster_types == 3:
+            ecs_cluster_default_instance_type = prompt("Default instance type for ECS cluster Spot/OnDemand", default='OnDemand')
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
@@ -180,16 +187,17 @@ class EnvironmentConfiguration(object):
                 "spot_max_instances": spot_cluster_max_instances,
                 "instance_type": cluster_instance_types,
                 "key_name": key_name,
-                "allocation_strategy": spot_allocation_strategy,
-                "ecs_instance_default_lifecycle_type": ecs_cluster_default_instance_type
+                "ecs_instance_default_lifecycle_type": ecs_cluster_default_instance_type.lower()
             },
             "environment": {
                 "notifications_arn": notifications_arn,
                 "ssl_certificate_arn": ssl_certificate_arn
             }
         }, 'cloudlift_version': VERSION}
-        if spot_allocation_strategy == 'lowest-price':
-            environment_configuration[self.environment]['vpc']['cluster']['spot_instance_pools'] = spot_instance_pools
+        if cluster_types != 1:
+            environment_configuration[self.environment]['cluster']['spot_allocation_strategy'] = spot_allocation_strategy
+            if spot_allocation_strategy == 'lowest-price':
+                environment_configuration[self.environment]['vpc']['cluster']['spot_instance_pools'] = spot_instance_pools
         self._set_config(environment_configuration)
         pass
 

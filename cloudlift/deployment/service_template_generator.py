@@ -200,11 +200,11 @@ service is down',
         placement_constraint = {}
         for key in self.environment_stack["Outputs"]:
             if key["OutputKey"] == 'ECSClusterDefaultInstanceLifecycle':
-                spot_deployment = False if ImportValue("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())) == 'OnDemand' else True
+                spot_deployment = False if ImportValue("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())) == 'ondemand' else True
                 placement_constraint = {
                     "PlacementConstraints": [PlacementConstraint(
                         Type='memberOf',
-                        Expression='attribute:deployment_type == Spot' if spot_deployment else 'attribute:deployment_type == OnDemand'
+                        Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
                     )],
                 }
         if 'spot_deployment' in config:
@@ -212,7 +212,7 @@ service is down',
             placement_constraint = {
                 "PlacementConstraints" : [PlacementConstraint(
                     Type='memberOf',
-                    Expression='attribute:deployment_type == Spot' if spot_deployment else 'attribute:deployment_type == OnDemand'
+                    Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
                 )],
             }
 
