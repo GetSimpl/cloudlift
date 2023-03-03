@@ -116,13 +116,26 @@ class EnvironmentConfiguration(object):
             "Private Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[2])
         private_subnet_2_cidr = prompt(
             "Private Subnet 2 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[3])
-        od_cluster_min_instances = prompt("Min instances in On-Demand cluster \nSet this to 0 if you don't require On-Demand cluster", default=1)
-        od_cluster_max_instances = prompt("Max instances in On-Demand cluster \nSet this to 0 if you don't require On-Demand cluster", default=5)
-        spot_cluster_min_instances = prompt("Min instances in Spot cluster \nSet this to 0 if you don't require Spot cluster", default=1)
-        spot_cluster_max_instances = prompt("Max instances in Spot cluster \nSet this to 0 if you don't require Spot cluster", default=5)
-        spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
-        if spot_allocation_strategy == 'lowest-price':
-            spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
+        cluster_types = prompt("Cluster type \n [1] On-Demand \n [2] Spot \n [3] Both", default=3)
+        if cluster_types == 1:
+            od_cluster_min_instances = prompt("Min instances in On-Demand cluster", default=1)
+            od_cluster_max_instances = prompt("Max instances in On-Demand cluster", default=5)
+            spot_cluster_min_instances = 0
+            spot_cluster_max_instances = 0
+        elif cluster_types == 2:
+            spot_cluster_min_instances = prompt("Min instances in Spot cluster", default=1)
+            spot_cluster_max_instances = prompt("Max instances in Spot cluster", default=5)
+            od_cluster_min_instances = 0
+            od_cluster_max_instances = 0
+        else:
+            od_cluster_min_instances = prompt("Min instances in On-Demand cluster", default=1)
+            od_cluster_max_instances = prompt("Max instances in On-Demand cluster", default=5)
+            spot_cluster_min_instances = prompt("Min instances in Spot cluster", default=1)
+            spot_cluster_max_instances = prompt("Max instances in Spot cluster", default=5)
+        if cluster_types != 1:
+            spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
+            if spot_allocation_strategy == 'lowest-price':
+                spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
         check = False
         while not check:
             cluster_instance_types = prompt("Instance types in comma delimited list, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
