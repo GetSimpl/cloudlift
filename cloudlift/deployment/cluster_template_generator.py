@@ -599,7 +599,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.auto_scaling_group = AutoScalingGroup(
                 "AutoScalingGroup"+deployment_type,
                 UpdatePolicy=up,
-                DesiredCapacity=self.desired_instances if self.desired_instances is not None else Ref('OnDemandMinSize') if deployment_type == 'OnDemand' else Ref('SpotMinSize'),
+                DesiredCapacity=str(self.desired_instances if self.desired_instances is not None else Ref('OnDemandMinSize') if deployment_type == 'OnDemand' else Ref('SpotMinSize')),
                 Tags=[
                     {
                         'PropagateAtLaunch': True,
