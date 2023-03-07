@@ -137,6 +137,7 @@ class EnvironmentConfiguration(object):
             spot_cluster_min_instances = prompt("Min instances in Spot cluster", default=1)
             spot_cluster_max_instances = prompt("Max instances in Spot cluster", default=5)
             cluster_instance_types = prompt("Instance types in comma delimited string, \nFor On-Demand only first instance type will be considered", default='t2.micro,m5.xlarge')
+            ecs_cluster_default_instance_type = prompt("Default instance type for ECS cluster Spot/OnDemand", default='OnDemand')
         check = False
         while not check:
             cluster_instance_types = cluster_instance_types.replace(" ", "")
@@ -149,8 +150,6 @@ class EnvironmentConfiguration(object):
             spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
             if spot_allocation_strategy == 'lowest-price':
                 spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
-        if cluster_types == 3:
-            ecs_cluster_default_instance_type = prompt("Default instance type for ECS cluster Spot/OnDemand", default='OnDemand')
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
