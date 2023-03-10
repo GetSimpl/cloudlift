@@ -56,8 +56,12 @@ class ServiceDeletion(object):
                         self.client_iam.detach_role_policy(
                             RoleName=resource['PhysicalResourceId'], PolicyArn=policy['PolicyArn'])
                     print(f"All the attached policies of {resource['PhysicalResourceId']} has been removed from IAM role")
-                except Exception as e:
-                    raise UnrecoverableException(e)
+                except ClientError as boto_client_error:
+                    if boto_client_error.response['Error']['Code'] == 'LimitExceededException':
+                        log_bold("Limit Exceeded Exception, waiting for 5 sec..")
+                        sleep(5)
+                        continue
+                    raise UnrecoverableException(boto_client_error)
     
     def delete_ssm_parameter(self):
         log("Deleting SSM Parameters..")
@@ -68,8 +72,12 @@ class ServiceDeletion(object):
                 self.client_ssm.delete_parameter(
                     Name=v
                 )
-            except Exception as e:
-                print(e)
+            except ClientError as boto_client_error:
+                if boto_client_error.response['Error']['Code'] == 'ParameterNotFound':
+                    log_err(f"Parameter {v} does not exist")
+                    continue
+                else:
+                    raise UnrecoverableException(boto_client_error)
 
     def _print_progress(self):
         while True:
@@ -83,7 +91,6 @@ class ServiceDeletion(object):
                 sleep(5)
             except ClientError as boto_client_error:
                 if boto_client_error.response['Error']['Code'] == 'ValidationError' and 'does not exist' in boto_client_error.response['Error']['Message']:
-                    log_bold(
-                        "Stack " + self.stack_name + " deleted")
+                    log_bold("Stack " + self.stack_name + " deleted")
                     break
                 raise UnrecoverableException(boto_client_error)
