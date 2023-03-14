@@ -162,7 +162,7 @@ This opens the `VISUAL` editor with default config similar to -
                   "container_path" : "string" // Container mount path
               },
               "memory_reservation": "number", // Required, Memory soft limit for container. (Hard Limit will automatically be set as 1.5X of soft limit)
-              "logging": "string"/null // Optional, use if you want to use any one of the following (fluentbit/awslogs/null) as log driver, default is awslogs (CloudWatch Logs)
+              "logging": "string"/null // Optional, use if you want to use any one of the following (fluentd/awslogs/null) as log driver, default is awslogs (CloudWatch Logs)
           }
       }
   }
