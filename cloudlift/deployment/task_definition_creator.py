@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError
 from cloudlift.config.logging import log_bold, log_intent, log_warning
 from cloudlift.deployment import EcrClient, UnrecoverableException, EcsClient, DeployAction, EcsTaskDefinition
 from cloudlift.deployment.deployer import build_config, print_task_diff
-from cloudlift.config import get_client_for
+from cloudlift.config import get_client_for, get_resource_for
 from cloudlift.exceptions import UnrecoverableException
 
 
@@ -28,6 +28,7 @@ class TaskDefinitionCreator:
         self.region = region
         self.version = version
         self.client = get_client_for('iam', self.environment)
+        self.resource = get_resource_for('iam', self.environment)
         self.env_sample_file = './env.sample'
         self.cluster_name = f'cluster-{self.environment}'
         self.name_with_env = f"{pascalcase(self.name)}{pascalcase(self.environment)}"
@@ -57,28 +58,10 @@ class TaskDefinitionCreator:
             "logConfiguration": self._gen_log_config(pascalcase(self.name)),
             "memoryReservation": 1024
         }
-
-        task_role = dumps({
-            "Version": "2012-10-17",
-            "Statement": {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "ecs-tasks.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-            }
-        })
-        try:
-            create_task_role = self.client.create_role(RoleName=self.name_with_env + "Role", AssumeRolePolicyDocument=task_role)
-            task_role_arn = create_task_role["Role"]["Arn"]
-        except ClientError as boto_client_error:
-            error_code = boto_client_error.response['Error']['Code']
-            if error_code == 'EntityAlreadyExists':
-                task_role_arn = self.name_with_env + "Role"
-            else:
-                raise boto_client_error
+        task_role_arn = self._task_role()
         ecs_client = EcsClient(region=self.region)
-        ecs_client.register_task_definition(self._task_defn_family(), [container_definition_arguments], [], task_role_arn, None)
+        execution_role_arn = self.resource.Role('ecsTaskExecutionRole').arn
+        ecs_client.register_task_definition(self._task_defn_family(), [container_definition_arguments], [], task_role_arn, False, False, execution_role_arn)
         log_bold("Task definition successfully created\n")
 
     def update(self):
@@ -114,6 +97,8 @@ class TaskDefinitionCreator:
             ecr_client.version,
             **{container_name: _complete_image_url(ecr_client)}
         )
+        if "taskRoleArn" not in current_task_defn:
+            current_task_defn["taskRoleArn"] = self._task_role()
         for container in current_task_defn.containers:
             current_task_defn.apply_container_environment(container, env_config)
         print_task_diff(self.name, current_task_defn.diff, 'white')
@@ -121,6 +106,27 @@ class TaskDefinitionCreator:
 
     def _task_defn_family(self):
         return f"{self.name_with_env}Family"
+
+    def _task_role(self):
+        task_role = dumps({
+            "Version": "2012-10-17",
+            "Statement": {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        })
+        try:
+            create_task_role = self.client.create_role(RoleName=self.name_with_env + "Role", AssumeRolePolicyDocument=task_role)
+            return create_task_role["Role"]["Arn"]
+        except ClientError as boto_client_error:
+            error_code = boto_client_error.response['Error']['Code']
+            if error_code == 'EntityAlreadyExists':
+                return self.name_with_env + "Role"
+            else:
+                raise boto_client_error
 
     def _gen_log_config(self, stream_prefix):
         return {
