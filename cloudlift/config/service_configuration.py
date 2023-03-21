@@ -224,6 +224,9 @@ class ServiceConfiguration(object):
                         {"type": "null"}
                     ]
                 },
+                "spot_deployment": {
+                    "type": "boolean"
+                },
                 "logging": {
                     "type": "boolean"
                 }
@@ -272,7 +275,8 @@ class ServiceConfiguration(object):
                         u'health_check_path': u'/elb-check'
                     },
                     u'memory_reservation': 250,
-                    u'command': None
+                    u'command': None,
+                    u'spot_deployment': False
                 }
             }
         }
