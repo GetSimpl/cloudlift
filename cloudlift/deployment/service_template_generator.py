@@ -18,7 +18,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Secret, MountPoint,
                              LoadBalancer, LogConfiguration, Volume, EFSVolumeConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition, ServiceRegistry)
+                             PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -197,6 +197,24 @@ service is down',
             "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
+        placement_constraint = {}
+        for key in self.environment_stack["Outputs"]:
+            if key["OutputKey"] == 'ECSClusterDefaultInstanceLifecycle':
+                spot_deployment = False if ImportValue("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())) == 'ondemand' else True
+                placement_constraint = {
+                    "PlacementConstraints": [PlacementConstraint(
+                        Type='memberOf',
+                        Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
+                    )],
+                }
+        if 'spot_deployment' in config:
+            spot_deployment = config["spot_deployment"]
+            placement_constraint = {
+                "PlacementConstraints" : [PlacementConstraint(
+                    Type='memberOf',
+                    Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
+                )],
+            }
 
         if 'http_interface' in config:
             container_definition_arguments['PortMappings'] = [
@@ -368,7 +386,8 @@ service is down',
                 DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env),
+                **placement_constraint
             )
             self.template.add_output(
                 Output(
@@ -467,7 +486,8 @@ service is down',
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env),
+                **placement_constraint
             )
             self.template.add_output(
                 Output(
