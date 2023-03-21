@@ -80,6 +80,7 @@ includes -
 - 2 Private Subnet CIDRs
 - Minimum instances for cluster
 - Maximum instances for cluster
+- SSM parameter path of Custom AMI ID
 - SSH key name
 - SNS ARN for notifications
 - AWS ACM ARN for SSL certificate
