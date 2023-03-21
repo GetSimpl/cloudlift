@@ -224,8 +224,6 @@ service is down',
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value
-            "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
         placement_constraint = {}
@@ -266,6 +264,9 @@ service is down',
                 SourceVolume=service_name + '-efs-volume',
                 ContainerPath=config['volume']['container_path']
             )]
+        if launch_type == self.LAUNCH_TYPE_EC2:
+            container_definition_arguments['MemoryReservation'] = int(config['memory_reservation'])
+            container_definition_arguments['Memory'] = int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value
 
         cd = ContainerDefinition(**container_definition_arguments)
 
@@ -286,7 +287,6 @@ service is down',
         if launch_type == self.LAUNCH_TYPE_FARGATE:
             launch_type_td = {
                 'RequiresCompatibilities': ['FARGATE'],
-                'ExecutionRoleArn': boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
                 'NetworkMode': 'awsvpc',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
