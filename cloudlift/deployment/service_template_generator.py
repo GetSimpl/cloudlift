@@ -18,7 +18,7 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Secret, MountPoint,
                              LoadBalancer, LogConfiguration, Volume, EFSVolumeConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition, ServiceRegistry)
+                             PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -27,6 +27,7 @@ from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
 from troposphere.iam import Role
 from troposphere.servicediscovery import Service as SD
 from troposphere.servicediscovery import DnsConfig, DnsRecord
+from troposphere.events import Rule, Target
 
 from cloudlift.config import region as region_service
 from cloudlift.config import get_account_id
@@ -101,6 +102,36 @@ class ServiceTemplateGenerator(TemplateGenerator):
             self._add_service(ecs_service_name, config)
 
     def _add_service_alarms(self, svc):
+        oom_event_rule = Rule(
+            'EcsOOM' + str(svc.name),
+            Description="Triggered when an Amazon ECS Task is stopped",
+            EventPattern={
+                "detail-type": ["ECS Task State Change"],
+                "source": ["aws.ecs"],
+                "detail": {
+                    "clusterArn": [{"anything-but": [str(self.cluster_name)]}],
+                    "containers": {
+                        "reason": [{
+                            "prefix": "OutOfMemory"
+                        }]
+                    },
+                    "desiredStatus": ["STOPPED"],
+                    "lastStatus": ["STOPPED"],
+                    "taskDefinitionArn": [{
+                        "anything-but": [str(svc.name) + "Family"]
+                    }]
+                }
+            },
+            State="ENABLED",
+            Targets=[Target(
+                    Arn=Ref(self.notification_sns_arn),
+                    Id="ECSOOMStoppedTasks",
+                    InputPath="$.detail.containers[0]"
+                )
+            ]
+        )
+        self.template.add_resource(oom_event_rule)
+
         ecs_high_cpu_alarm = Alarm(
             'EcsHighCPUAlarm' + str(svc.name),
             EvaluationPeriods=1,
@@ -193,10 +224,26 @@ service is down',
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "Memory": int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value
-            "MemoryReservation": int(config['memory_reservation']),
             "Cpu": 0
         }
+        placement_constraint = {}
+        for key in self.environment_stack["Outputs"]:
+            if key["OutputKey"] == 'ECSClusterDefaultInstanceLifecycle':
+                spot_deployment = False if ImportValue("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())) == 'ondemand' else True
+                placement_constraint = {
+                    "PlacementConstraints": [PlacementConstraint(
+                        Type='memberOf',
+                        Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
+                    )],
+                }
+        if 'spot_deployment' in config:
+            spot_deployment = config["spot_deployment"]
+            placement_constraint = {
+                "PlacementConstraints" : [PlacementConstraint(
+                    Type='memberOf',
+                    Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
+                )],
+            }
 
         if 'http_interface' in config:
             container_definition_arguments['PortMappings'] = [
@@ -217,6 +264,9 @@ service is down',
                 SourceVolume=service_name + '-efs-volume',
                 ContainerPath=config['volume']['container_path']
             )]
+        if launch_type == self.LAUNCH_TYPE_EC2:
+            container_definition_arguments['MemoryReservation'] = int(config['memory_reservation'])
+            container_definition_arguments['Memory'] = int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value
 
         cd = ContainerDefinition(**container_definition_arguments)
 
@@ -237,7 +287,6 @@ service is down',
         if launch_type == self.LAUNCH_TYPE_FARGATE:
             launch_type_td = {
                 'RequiresCompatibilities': ['FARGATE'],
-                'ExecutionRoleArn': boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
                 'NetworkMode': 'awsvpc',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
@@ -368,7 +417,8 @@ service is down',
                 DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env),
+                **placement_constraint
             )
             self.template.add_output(
                 Output(
@@ -467,7 +517,8 @@ service is down',
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env)
+                Tags=Tags(Team=self.team_name, environment=self.env),
+                **placement_constraint
             )
             self.template.add_output(
                 Output(

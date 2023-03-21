@@ -5,8 +5,9 @@ from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
 from troposphere import (Base64, FindInMap, Output, Parameter, Ref, Sub,
                          cloudformation, Export, GetAtt, Tags)
-from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification,
-                                     ScalingPolicy)
+from troposphere.autoscaling import (AutoScalingGroup, LaunchTemplateSpecification, NotificationConfigurations,
+                                     ScalingPolicy, MixedInstancesPolicy, LaunchTemplateOverrides, InstancesDistribution )
+from troposphere.autoscaling import LaunchTemplate as ASGLaunchTemplate
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
@@ -25,6 +26,7 @@ from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.version import VERSION
+from cloudlift.config.logging import log_warning
 
 
 class ClusterTemplateGenerator(TemplateGenerator):
@@ -35,10 +37,13 @@ class ClusterTemplateGenerator(TemplateGenerator):
     def __init__(self, environment, environment_configuration, desired_instances=None):
         super(ClusterTemplateGenerator, self).__init__(environment)
         self.configuration = environment_configuration
-        if desired_instances is None:
-            self.desired_instances = str(self.configuration['cluster']['min_instances'])
-        else:
-            self.desired_instances = str(desired_instances)
+        self.desired_instances = desired_instances
+        if not 'spot_min_instances' in self.configuration['cluster']:
+            self.configuration['cluster']['spot_min_instances'] = 0
+        if not 'spot_max_instances' in self.configuration['cluster']:
+            self.configuration['cluster']['spot_max_instances'] = 0
+        if not 'allocation_strategy' in self.configuration['cluster']:
+            self.configuration['cluster']['allocation_strategy'] = 'capacity-optimized'
         self.private_subnets = []
         self.public_subnets = []
         self._get_availability_zones()
@@ -336,24 +341,6 @@ class ClusterTemplateGenerator(TemplateGenerator):
         return cluster
 
     def _add_cluster_alarms(self, cluster):
-        ec2_hosts_high_cpu_alarm = Alarm(
-            'Ec2HostsHighCPUAlarm',
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(Name='AutoScalingGroupName',
-                                Value=Ref(self.auto_scaling_group))
-            ],
-            AlarmActions=[Ref(self.notification_sns_arn)],
-            AlarmDescription='Alarm if CPU too high or metric disappears \
-indicating instance is down',
-            Namespace='AWS/EC2',
-            Period=60,
-            ComparisonOperator='GreaterThanThreshold',
-            Statistic='Average',
-            Threshold='60',
-            MetricName='CPUUtilization'
-        )
-        self.template.add_resource(ec2_hosts_high_cpu_alarm)
         cluster_high_cpu_alarm = Alarm(
             'ClusterHighCPUAlarm',
             EvaluationPeriods=1,
@@ -390,26 +377,7 @@ indicating instance is down',
             MetricName='MemoryUtilization'
         )
         self.template.add_resource(cluster_high_memory_alarm)
-        self.cluster_high_memory_reservation_autoscale_alarm = Alarm(
-            'ClusterHighMemoryReservationAlarm',
-            EvaluationPeriods=1,
-            Dimensions=[
-                MetricDimension(Name='ClusterName', Value=Ref(cluster))
-            ],
-            AlarmActions=[
-                Ref(self.cluster_scaling_policy)
-            ],
-            AlarmDescription='Alarm if memory reservation is over 75% \
-for cluster.',
-            Namespace='AWS/ECS',
-            Period=300,
-            ComparisonOperator='GreaterThanThreshold',
-            Statistic='Average',
-            Threshold='75',
-            MetricName='MemoryReservation'
-        )
-        self.template.add_resource(
-            self.cluster_high_memory_reservation_autoscale_alarm)
+
         self.cluster_high_memory_reservation_user_notification_alarm = Alarm(
             'ClusterHighMemoryReservationUserNotifcationAlarm',
             EvaluationPeriods=3,
@@ -423,7 +391,7 @@ for cluster.',
                 Ref(self.notification_sns_arn)
             ],
             AlarmDescription='Alarm if memory reservation is over 75% \
-for cluster for 15 minutes.',
+                for cluster for 15 minutes.',
             Namespace='AWS/ECS',
             Period=300,
             ComparisonOperator='GreaterThanThreshold',
@@ -477,43 +445,50 @@ for cluster for 15 minutes.',
             GroupDescription=Sub("${AWS::StackName}-databases")
         )
         self.template.add_resource(database_security_group)
-        user_data = Base64(Sub('\n'.join([
-            "#!/bin/bash",
-            "yum update -y",
-            "yum install -y aws-cfn-bootstrap",
-            "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate",
-            "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup",
-            "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
-            "systemctl enable amazon-ssm-agent",
-            "systemctl start amazon-ssm-agent",
-            ""])))
-        lc_metadata = cloudformation.Init({
-            "config": cloudformation.InitConfig(
-                files=cloudformation.InitFiles({
-                    "/etc/cfn/cfn-hup.conf": cloudformation.InitFile(
-                        content=Sub(
-                            '\n'.join([
-                                    '[main]',
-                                    'stack=${AWS::StackId}',
-                                    'region=${AWS::Region}',
+        deployment_types = ['OnDemand', 'Spot']
+        for deployment_type in deployment_types:
+            lc_metadata_override = ''
+            if deployment_type == 'Spot':
+                lc_metadata_override = '\n'.join([
+                    'echo ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config',
+                ])
+            user_data = Base64(Sub('\n'.join([
+                "#!/bin/bash",
+                "yum update -y",
+                "yum install -y aws-cfn-bootstrap",
+                "/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate"+deployment_type,
+                "/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup"+deployment_type,
+                "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
+                "systemctl enable amazon-ssm-agent",
+                "systemctl start amazon-ssm-agent",
+                ""])))
+            lc_metadata = cloudformation.Init({
+                "config": cloudformation.InitConfig(
+                    files=cloudformation.InitFiles({
+                        "/etc/cfn/cfn-hup.conf": cloudformation.InitFile(
+                            content=Sub(
+                                '\n'.join([
+                                        '[main]',
+                                        'stack=${AWS::StackId}',
+                                        'region=${AWS::Region}',
+                                        ''
+                                    ])
+                                ),
+                            mode='256',  # TODO: Why 256
+                            owner="root",
+                            group="root"
+                        ),
+                        "/etc/cfn/hooks.d/cfn-auto-reloader.conf": cloudformation.InitFile(
+                            content=Sub(
+                                '\n'.join([
+                                    '[cfn-auto-reloader-hook]',
+                                    'triggers=post.update',
+                                    'path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init',
+                                    'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate'+deployment_type,
                                     ''
                                 ])
                             ),
-                        mode='256',  # TODO: Why 256
-                        owner="root",
-                        group="root"
-                    ),
-                    "/etc/cfn/hooks.d/cfn-auto-reloader.conf": cloudformation.InitFile(
-                        content=Sub(
-                            '\n'.join([
-                                '[cfn-auto-reloader-hook]',
-                                'triggers=post.update',
-                                'path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init',
-                                'action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource LaunchTemplate',
-                                ''
-                            ])
                         ),
-                    ),
                     "/etc/dnsmasq.conf": cloudformation.InitFile(
                         content=Sub(
                             '\n'.join([
@@ -534,116 +509,195 @@ for cluster for 15 minutes.',
                         ),
                     )
                 }),
-                services={
-                    "sysvinit": cloudformation.InitServices({
-                        "cfn-hup": cloudformation.InitService(
-                            enabled=True,
-                            ensureRunning=True,
-                            files=['/etc/cfn/cfn-hup.conf',
-                                   '/etc/cfn/hooks.d/cfn-auto-reloader.conf']
+                    services={
+                        "sysvinit": cloudformation.InitServices({
+                            "cfn-hup": cloudformation.InitService(
+                                enabled=True,
+                                ensureRunning=True,
+                                files=['/etc/cfn/cfn-hup.conf',
+                                    '/etc/cfn/hooks.d/cfn-auto-reloader.conf']
+                            )
+                        })
+                    },
+                    commands={
+                        '01_add_instance_to_cluster': {
+                            'command': Sub(
+                                '\n'.join([
+                                'echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config',
+                                'echo ECS_RESERVED_MEMORY=256 >> /etc/ecs/ecs.config',
+                                'echo ECS_AVAILABLE_LOGGING_DRIVERS=[\"awslogs\",\"fluentd\"]  >> /etc/ecs/ecs.config',
+                                'echo ECS_INSTANCE_ATTRIBUTES=\'{"deployment_type": "'+ deployment_type.lower() + '"}\' >> /etc/ecs/ecs.config',
+                                lc_metadata_override,
+                                 ]).strip()
+                            )
+                        },
+                        '02_set_nameserver': {
+                            'command': "INTERFACE=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -n1); IS_IT_CLASSIC=$(curl --write-out %{http_code} --silent --output /dev/null http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/vpc-id); if [[ $IS_IT_CLASSIC == '404' ]]; then bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 172.16.0.23;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 172.16.0.23' > /etc/resolv.dnsmasq\"; else  bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 169.254.169.253;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 169.254.169.253' > /etc/resolv.dnsmasq\"; fi"
+                        },
+                        '03_install_dnsmasq_package': {
+                            'command': 'yum install -y dnsmasq bind-utils'
+                        },
+                        '04_create_group': {
+                            'command': 'groupadd -r dnsmasq'
+                        },
+                        '05_create_user': {
+                            'command': 'useradd -r -g dnsmasq dnsmasq'
+                        },
+                        '06_add_locahost_nameserver': {
+                            'command': "sed -i '/search ap-south-1.compute.internal/a nameserver 127.0.0.1' /etc/resolv.conf"
+                        },
+                        '07_enable_dnsmasq_service': {
+                            'command': 'pidof systemd && systemctl restart dnsmasq.service || service dnsmasq restart'
+                        },
+                        '08_start_dnsmasq_service': {
+                            'command': 'pidof systemd && systemctl enable  dnsmasq.service || chkconfig dnsmasq on'
+                        },
+                        '09_configure_dhclient': {
+                            'command': 'bash -c "dhclient"'
+                        }
+            })})
+            launch_template_data = LaunchTemplateData(
+                'LaunchTemplateData',
+                UserData=user_data,
+                IamInstanceProfile=IamInstanceProfile(
+                    Arn=GetAtt(instance_profile, 'Arn')
+                ),
+                SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
+                ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
+                KeyName=Ref(self.key_pair),
+                BlockDeviceMappings=[
+                    LaunchTemplateBlockDeviceMapping(
+                        DeviceName="/dev/xvda",
+                        Ebs=EBSBlockDevice(
+                            VolumeType="gp3"
                         )
-                    })
-                },
-                commands={
-                    '01_add_instance_to_cluster': {
-                        'command': Sub(
-                            'echo "ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\nECS_AVAILABLE_LOGGING_DRIVERS=[\"awslogs\",\"fluentd\"]" > /etc/ecs/ecs.config'
-                        )
-                    },
-                    '02_set_nameserver': {
-                        'command': "INTERFACE=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -n1); IS_IT_CLASSIC=$(curl --write-out %{http_code} --silent --output /dev/null http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/vpc-id); if [[ $IS_IT_CLASSIC == '404' ]]; then bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 172.16.0.23;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 172.16.0.23' > /etc/resolv.dnsmasq\"; else  bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 169.254.169.253;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 169.254.169.253' > /etc/resolv.dnsmasq\"; fi"
-                    },
-                    '03_install_dnsmasq_package': {
-                        'command': 'yum install -y dnsmasq bind-utils'
-                    },
-                    '04_create_group': {
-                        'command': 'groupadd -r dnsmasq'
-                    },
-                    '05_create_user': {
-                        'command': 'useradd -r -g dnsmasq dnsmasq'
-                    },
-                    '06_add_locahost_nameserver': {
-                        'command': "sed -i '/search ap-south-1.compute.internal/a nameserver 127.0.0.1' /etc/resolv.conf"
-                    },
-                    '07_enable_dnsmasq_service': {
-                        'command': 'pidof systemd && systemctl restart dnsmasq.service || service dnsmasq restart'
-                    },
-                    '08_start_dnsmasq_service': {
-                        'command': 'pidof systemd && systemctl enable  dnsmasq.service || chkconfig dnsmasq on'
-                    },
-                    '09_configure_dhclient': {
-                        'command': 'bash -c "dhclient"'
-                    }
-                }
-            )
-        })
-        launch_template_data = LaunchTemplateData(
-            'LaunchTemplateData',
-            UserData=user_data,
-            IamInstanceProfile=IamInstanceProfile(
-                Arn=GetAtt(instance_profile, 'Arn')
-            ),
-            SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
-            InstanceType=Ref('InstanceType'),
-            ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
-            KeyName=Ref(self.key_pair),
-            BlockDeviceMappings=[
-                LaunchTemplateBlockDeviceMapping(
-                    DeviceName="/dev/xvda",
-                    Ebs=EBSBlockDevice(
-                        VolumeType="gp3"
                     )
-                )
-            ]
-        )
-        launch_template = LaunchTemplate(
-            "LaunchTemplate",
-            LaunchTemplateData=launch_template_data,
-            Metadata=lc_metadata
-        )
-        self.template.add_resource(launch_template)
-        # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
-        up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
-        # TODO: clean up
-        subnets = list(self.private_subnets)
-        self.auto_scaling_group = AutoScalingGroup(
-            "AutoScalingGroup",
-            UpdatePolicy=up,
-            DesiredCapacity=self.desired_instances,
-            Tags=[
-                {
-                    'PropagateAtLaunch': True,
-                    'Value': Sub('${AWS::StackName} - ECS Host'),
-                    'Key': 'Name'
-                },
-                {
-                    'PropagateAtLaunch': True,
-                    'Key': 'environment',
-                    'Value': self.env
-                },
-                {'PropagateAtLaunch': True, 'Key': 'Team', 'Value': self.team_name}
-            ],
-            MinSize=Ref('MinSize'),
-            MaxSize=Ref('MaxSize'),
-            VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
-            LaunchTemplate=LaunchTemplateSpecification(
-                LaunchTemplateId=Ref(launch_template),
-                Version=GetAtt(launch_template, 'LatestVersionNumber')
-            ),
-            CreationPolicy=CreationPolicy(
-                ResourceSignal=ResourceSignal(Timeout='PT15M')
+                ]
             )
-        )
-        self.template.add_resource(self.auto_scaling_group)
-        self.cluster_scaling_policy = ScalingPolicy(
-            'AutoScalingPolicy',
-            AdjustmentType='ChangeInCapacity',
-            AutoScalingGroupName=Ref(self.auto_scaling_group),
-            Cooldown="300",
-            PolicyType='SimpleScaling',
-            ScalingAdjustment=1
-        )
-        self.template.add_resource(self.cluster_scaling_policy)
+            launch_template = LaunchTemplate(
+                "LaunchTemplate"+deployment_type,
+                LaunchTemplateData=launch_template_data,
+                LaunchTemplateName=self.env + "-LaunchTemplate"+deployment_type,
+                Metadata=lc_metadata
+            )
+            
+            overrides_instances = []
+            instance_types = self.configuration['cluster']['instance_type'].split(",")
+            if deployment_type == 'OnDemand':
+                overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_types[0])))
+            elif deployment_type == 'Spot':
+                for instance_type in instance_types:
+                    overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
+            # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
+            up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
+            # TODO: clean up
+            subnets = list(self.private_subnets)
+            spot_instance_pools = {}
+            if 'allocation_strategy' in self.configuration['cluster'] and self.configuration['cluster']['allocation_strategy'] == 'lowest-price':
+                spot_instance_pools = {
+                    'SpotInstancePools' : self.configuration['cluster']['spot_instance_pools']
+                }
+            self.auto_scaling_group = AutoScalingGroup(
+                "AutoScalingGroup"+deployment_type,
+                UpdatePolicy=up,
+                DesiredCapacity=str(self.desired_instances if self.desired_instances is not None else Ref('OnDemandMinSize') if deployment_type == 'OnDemand' else Ref('SpotMinSize')),
+                Tags=[
+                    {
+                        'PropagateAtLaunch': True,
+                        'Value': Sub('${AWS::StackName} - ECS Host'),
+                        'Key': 'Name'
+                    },
+                    {
+                        'PropagateAtLaunch': True,
+                        'Key': 'environment',
+                        'Value': self.env
+                    },
+                    {'PropagateAtLaunch': True, 'Key': 'Team',
+                        'Value': self.team_name}
+                ],
+                MinSize=Ref('OnDemandMinSize') if deployment_type == 'OnDemand' else Ref('SpotMinSize'),
+                MaxSize=Ref('OnDemandMaxSize') if deployment_type == 'OnDemand' else Ref('SpotMaxSize'),
+                VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
+                NotificationConfigurations=[
+                    NotificationConfigurations(
+                        NotificationTypes=[
+                            "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"],
+                        TopicARN=Ref(self.notification_sns_arn)
+                    )
+                ],
+                MixedInstancesPolicy=MixedInstancesPolicy(
+                    LaunchTemplate=ASGLaunchTemplate(
+                        LaunchTemplateSpecification=LaunchTemplateSpecification(
+                            LaunchTemplateId=Ref(launch_template),
+                            Version=GetAtt(launch_template, 'LatestVersionNumber')
+                        ),
+                        Overrides=overrides_instances
+                    ),
+                    InstancesDistribution=InstancesDistribution(
+                        OnDemandBaseCapacity=0,
+                        OnDemandPercentageAboveBaseCapacity=0 if deployment_type == 'Spot' else 100,
+                        SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster']['allocation_strategy'],
+                        **spot_instance_pools 
+                    )
+                ),
+                CreationPolicy=CreationPolicy(
+                    ResourceSignal=ResourceSignal(Timeout='PT15M')
+                )
+            )
+            self.cluster_scaling_policy = ScalingPolicy(
+                'AutoScalingPolicy'+deployment_type,
+                AdjustmentType='ChangeInCapacity',
+                AutoScalingGroupName=Ref(self.auto_scaling_group),
+                Cooldown="300",
+                PolicyType='SimpleScaling',
+                ScalingAdjustment=1
+            )
+            ec2_hosts_high_cpu_alarm = Alarm(
+                'Ec2HostsHighCPUAlarm'+deployment_type,
+                EvaluationPeriods=1,
+                Dimensions=[
+                    MetricDimension(Name='AutoScalingGroupName',
+                                    Value=Ref(self.auto_scaling_group))
+                ],
+                AlarmActions=[Ref(self.notification_sns_arn)],
+                AlarmDescription='Alarm if CPU too high or metric disappears \
+                    indicating instance is down',
+                Namespace='AWS/EC2',
+                Period=60,
+                ComparisonOperator='GreaterThanThreshold',
+                Statistic='Average',
+                Threshold='60',
+                MetricName='CPUUtilization'
+            )
+            self.cluster_high_memory_reservation_autoscale_alarm = Alarm(
+                'ClusterHighMemoryReservationAlarm'+deployment_type,
+                EvaluationPeriods=1,
+                Dimensions=[
+                    MetricDimension(Name='ClusterName',
+                                    Value=Ref('AWS::StackName'))
+                ],
+                AlarmActions=[
+                    Ref(self.cluster_scaling_policy)
+                ],
+                AlarmDescription='Alarm if memory reservation is over 75% \
+                    for cluster.',
+                Namespace='AWS/ECS',
+                Period=300,
+                ComparisonOperator='GreaterThanThreshold',
+                Statistic='Average',
+                Threshold='75',
+                MetricName='MemoryReservation'
+            )
+            if 'spot_min_instances' in self.configuration['cluster'] and deployment_type == 'Spot' and self.configuration['cluster']['spot_min_instances'] == 0:
+                log_warning("Skipping spot fleet")
+            elif 'min_instances' in self.configuration['cluster'] and deployment_type == 'OnDemand' and self.configuration['cluster']['min_instances'] == 0:
+                log_warning("Skipping on-demand fleet")
+            else:
+                self.template.add_resource(launch_template)
+                self.template.add_resource(self.auto_scaling_group)
+                self.template.add_resource(ec2_hosts_high_cpu_alarm)
+                self.template.add_resource(self.cluster_scaling_policy)
+                self.template.add_resource(self.cluster_high_memory_reservation_autoscale_alarm)
 
     def _add_cluster_parameters(self):
         self.template.add_parameter(Parameter(
@@ -656,16 +710,20 @@ for cluster for 15 minutes.',
             "KeyPair", Description='', Type="AWS::EC2::KeyPair::KeyName", Default="")
         self.template.add_parameter(self.key_pair)
         self.template.add_parameter(Parameter(
-            "MinSize", Description='', Type="String", Default=str(self.configuration['cluster']['min_instances'])))
+            "OnDemandMinSize", Description='', Type="String", Default=str(self.configuration['cluster']['min_instances'])))
         self.template.add_parameter(Parameter(
-            "MaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['max_instances'])))
+            "OnDemandMaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['max_instances'])))
+        self.template.add_parameter(Parameter(
+            "SpotMinSize", Description='', Type="String", Default=str(self.configuration['cluster']['spot_min_instances'])))
+        self.template.add_parameter(Parameter(
+            "SpotMaxSize", Description='', Type="String", Default=str(self.configuration['cluster']['spot_max_instances'])))
         self.notification_sns_arn = Parameter("NotificationSnsArn",
                                               Description='',
                                               Type="String",
                                               Default=self.notifications_arn)
         self.template.add_parameter(self.notification_sns_arn)
         self.template.add_parameter(Parameter(
-            "InstanceType", Description='', Type="String", Default=self.configuration['cluster']['instance_type']))
+            "InstanceTypes", Description='', Type="String", Default=str(self.configuration['cluster']['instance_type'])))
 
     def _add_mappings(self):
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
@@ -684,7 +742,9 @@ for cluster for 15 minutes.',
             'env': self.env,
             'min_instances': str(self.configuration['cluster']['min_instances']),
             'max_instances': str(self.configuration['cluster']['max_instances']),
-            'instance_type': self.configuration['cluster']['instance_type'],
+            'spot_min_instances': str(self.configuration['cluster']['spot_min_instances']),
+            'spot_max_instances': str(self.configuration['cluster']['spot_max_instances']),
+            'instance_types': self.configuration['cluster']['instance_type'],
             'key_name': self.configuration['cluster']['key_name'],
             'cloudlift_version': VERSION
         }
@@ -720,11 +780,18 @@ for cluster for 15 minutes.',
             Description="ID of the 2nd subnet",
             Value=Ref(public_subnets.pop()))
         )
-        self.template.add_output(Output(
-            "AutoScalingGroup",
-            Description="AutoScaling group for ECS container instances",
-            Value=Ref('AutoScalingGroup'))
-        )
+        if self.configuration['cluster']['spot_min_instances'] > 0:
+            self.template.add_output(Output(
+                "AutoScalingGroupSpot",
+                Description="Spot AutoScaling group for ECS container instances",
+                Value=Ref('AutoScalingGroupSpot'))
+            )
+        if self.configuration['cluster']['min_instances'] > 0:
+            self.template.add_output(Output(
+                "AutoScalingGroupOnDemand",
+                Description="On-Demand AutoScaling group for ECS container instances",
+                Value=Ref('AutoScalingGroupOnDemand'))
+            )
         self.template.add_output(Output(
             "SecurityGroupAlb",
             Description="Security group ID for ALB",
@@ -732,16 +799,26 @@ for cluster for 15 minutes.',
         )
         self.template.add_output(Output(
             "MinInstances",
-            Description="Minimum instances in cluster",
+            Description="Minimum on-demand instances in cluster",
             Value=str(self.configuration['cluster']['min_instances']))
         )
         self.template.add_output(Output(
             "MaxInstances",
-            Description="Maximum instances in cluster",
+            Description="Maximum on-demand instances in cluster",
             Value=str(self.configuration['cluster']['max_instances']))
         )
         self.template.add_output(Output(
-            "InstanceType",
+            "SpotMinInstances",
+            Description="Minimum spot instances in cluster",
+            Value=str(self.configuration['cluster']['spot_min_instances']))
+        )
+        self.template.add_output(Output(
+            "SpotMaxInstances",
+            Description="Maximum spot instances in cluster",
+            Value=str(self.configuration['cluster']['spot_max_instances']))
+        )
+        self.template.add_output(Output(
+            "InstanceTypes",
             Description="EC2 instance type",
             Value=str(self.configuration['cluster']['instance_type']))
         )
@@ -762,6 +839,13 @@ for cluster for 15 minutes.',
             Description="EC2Host Security group ID",
             Value=Ref('SecurityGroupEc2Hosts'))
         )
+        if 'ecs_instance_default_lifecycle_type' in self.configuration['cluster']:
+            self.template.add_output(Output(
+                "ECSClusterDefaultInstanceLifecycle",
+                Export=Export("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())),
+                Description="Default instance type for ECS cluster",
+                Value=str(self.configuration['cluster']['ecs_instance_default_lifecycle_type']))
+            )
 
 
     def _add_metadata(self):
@@ -775,9 +859,11 @@ for cluster for 15 minutes.',
                         'Parameters': [
                             'KeyPair',
                             'Environment',
-                            'MinSize',
-                            'MaxSize',
-                            'InstanceType',
+                            'OnDemandMinSize',
+                            'OnDemandMaxSize',
+                            'SpotMinSize',
+                            'SpotMaxSize',
+                            'InstanceTypes',
                             'VPC',
                             'Subnet1',
                             'Subnet2',
@@ -789,16 +875,22 @@ for cluster for 15 minutes.',
                     'Environment': {
                         'default': 'Enter the environment e.g. dev or staging or sandbox or production'
                     },
-                    'InstanceType': {
+                    'InstanceTypes': {
                         'default': 'Type of instance'
                     },
                     'KeyPair': {
                         'default': 'Select the key with which you want to login to the ec2 instances'},
-                    'MaxSize': {
-                        'default': 'Max. no. of instances in cluster'
+                    'SpotMaxSize': {
+                        'default': 'Max. no. of instances in Spot cluster'
                     },
-                    'MinSize': {
-                        'default': 'Min. no. of instances in cluster'
+                    'SpotMinSize': {
+                        'default': 'Min. no. of instances in Spot cluster'
+                    },
+                    'OnDemandMinSize': {
+                        'default': 'Min. no. of instances in On-Demand cluster'
+                    },
+                    'OnDemandMaxSize': {
+                        'default': 'Max. no. of instances in On-Demand cluster'
                     },
                     'NotificationSnsArn': {
                         'default': 'The SNS topic to which notifications has to be triggered'
