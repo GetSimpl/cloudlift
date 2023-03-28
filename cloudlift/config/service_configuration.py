@@ -228,7 +228,10 @@ class ServiceConfiguration(object):
                     "type": "boolean"
                 },
                 "logging": {
-                    "type": "boolean"
+                    "oneOf": [
+                        {"type": "string", "pattern": "^(awslogs|fluentd|null)$"},
+                        {"type": "null"}
+                    ]
                 }
             },
             "required": ["memory_reservation", "command"]

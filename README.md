@@ -32,7 +32,7 @@ pip install cloudlift
 ```
 
 
-### 2. Configure AWS
+### 3. Configure AWS
 
 ```perl
 aws configure
@@ -98,7 +98,85 @@ make changes to the environment.
 
 ### Create a new service
 
-#### 1. Upload configuration to Parameter Store
+### Object Structure
+The configuration object is structured as follows:
+
+```json
+{
+    "notifications_arn": "string",
+    "services": {
+        "Test123": {
+            "command": "string/null",
+            "custom_metrics": {
+                "metrics_port": "string",
+                "metrics_path": "string"
+            },
+            "http_interface": {
+                "container_port": "number",
+                "internal": "boolean",
+                "restrict_access_to": ["string", "string"]
+            },
+            "volume": {
+                "efs_id" : "string",
+                "efs_directory_path" : "string",
+                "container_path" : "string"
+            },
+            "memory_reservation": "number",
+            "logging": "string/null"
+        }
+    }
+}
+```
+### Required Fields
+
+The following fields are required in the configuration object:
+
+- `notifications_arn`: A string representing the Amazon Resource Name (ARN) of the SNS topic to which notifications will be sent.
+
+- `services`: An object representing the services to be configured. The keys of this object are the names of the services, and the values are objects containing configuration information for each service.
+
+
+### Service Configuration
+
+Each service object must contain the following fields:
+
+- `command`: A string or null value representing the command to be run in the Docker container. If this field is null, the command specified in the Dockerfile will be used.
+
+- `memory_reservation`: A number representing the soft memory limit for the container. The hard limit will automatically be set to 1.5 times the soft limit.
+
+In addition, a service object may contain any of the following optional fields:
+
+- `custom_metrics`: An object containing configuration information for exporting custom metrics to a Prometheus server. This field is only used if custom metrics are required.
+
+
+    > **NOTE:** If you use custom metrics, Your ECS container Network mode will be `awsvpc`. 
+
+    > **⚠ WARNING:** If you are adding custom metrics to your existing service, there will be a downtime.
+
+  - `metrics_port`: A string representing the port number on which custom metrics are exported.
+  
+  - `metrics_path`: A string representing the path on which custom metrics are exported.
+
+- `http_interface`: An object containing configuration information for setting up an Application Load Balancer (ALB) for the service. This field is only used if an ALB is required.
+
+  - `container_port`: A number representing the port number on which the service is running inside the container.
+  
+  - `internal`: A boolean value indicating whether the ALB should be internal. If set to false, the ALB will be public.
+  
+  - `restrict_access_to`: An array of strings representing the IP addresses that should be allowed to access the ALB.
+
+- `volume`: An object containing configuration information for mounting an Amazon Elastic File System (EFS) volume to the service. This field is only used if an EFS volume is required.
+
+  - `efs_id`: A string representing the ID of the EFS volume to be mounted.
+  
+  - `efs_directory_path`: A string representing the directory path on the EFS volume to be mounted.
+  
+  - `container_path`: A string representing the mount path inside the container.
+
+- `logging`: A string or null value representing the log driver to be used. Valid options are "fluentd", "awslogs", or null. If this field is null, the default log driver (CloudWatch Logs) will be used.
+
+
+### 1. Upload configuration to Parameter Store
 
 During create_service and deployment `cloudlift` pulls the config from AWS
 Parameter Store to apply it on the task definition. Configurations are stored in
@@ -111,7 +189,7 @@ cloudlift edit_config -e <environment-name>
   _NOTE_: This is *not* required for every deployment. It's required only when
   config needs to be changed.
 
-#### 2. Create service
+### 2. Create service
 
 In the repository for the application, run -
 
@@ -139,38 +217,79 @@ This opens the `VISUAL` editor with default config similar to -
       }
   }
 ```
+### 3. Deploy service
 
-Definitions -
+This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS 
+service task definition. It supports `--build-arg` argument of `docker build` command as well to pass
+custom build time arguments
 
-`services`: Map of all ECS services with configuration for current application
+```sh
+  cloudlift deploy_service -e <environment-name>
+```
 
-`command`: Override command in Dockerfile
+For example, you can pass your SSH key as a build argument to docker build
 
-`custom_metrics`: Configuration for custom metrics if required, do not include this if the service does not write/export custom metrics
+```sh
+  cloudlift deploy_service --build-arg SSH_KEY "\"`cat ~/.ssh/id_rsa`\"" -e <environment-name>
+```
+This example is bit comprehensive to show
+- it can execute shell commands with "`".
+- It's wrapped with double quotes to avoid line-breaks in SSH keys breaking the command.
 
-> **NOTE:** If you use custom metrics, Your ECS container Network mode will be `awsvpc`. 
+### 4. Starting shell on container instance for service
 
-> **⚠ WARNING:** If you are adding custom metrics to your existing service, there will be a downtime.
+You can start a shell on a container instance which is running a task for given
+application using the `start_session` command. One pre-requisite for this is
+installing the session manager plugin for `awscli`. To install session manager
+plugin follow the [guide](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html#install-plugin-macos)
 
-`http_interface`: Configuration for HTTP interface if required, do not include
-this if the services does not require a HTTP interface
+```sh
+  cloudlift start_session -e <environment-name>
+```
 
-`container_port`: Port in which the process is exposed inside container
+MFA code can be passed as parameter `--mfa` or you will be prompted to enter
+the MFA code.
 
-`internal`: Scheme of loadbalancer. If internal, the loadbalancer is accessible
-only within the VPC
 
-`restrict_access_to`: List of CIDR to which HTTP interface is restricted to.
+## Example
 
-`memory_reservation`: Memory size reserved for each task in MBs. This is a soft
-limit, i.e. at least this much memory will be available, and upto whatever
-memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
+### 1. Service configuration:
+```json
+{
+  "notifications_arn": "arn:aws:sns:us-east-1:123456789012:MyTopic",
+  "services": {
+    "Test123": {
+      "command": null,
+      "custom_metrics": {
+        "metrics_port": "8080",
+        "metrics_path": "/metrics"
+      },
+      "http_interface": {
+        "container_port": 3000,
+        "internal": false,
+        "restrict_access_to": ["192.0.2.0/24", "198.51.100.0/24"]
+      },
+      "volume": {
+        "efs_id": "fs-0123456789abcdef",
+        "efs_directory_path": "/mydata",
+        "container_path": "/data"
+      },
+      "memory_reservation": 256,
+      "logging": "fluentd"
+    }
+  }
+}
+```
+In this example, we are configuring a service named Test123. The service has the following configuration:
 
-`volume`: Configuration for EFS volume mount if required, do not include this if the service does not required volume mount
+- `command`: The command to be run in the Docker container is not specified, so the command specified in the Dockerfile will be used.
+- `custom_metrics`: Custom metrics will be exported to a Prometheus server running on port 8080, with the metrics available at the path "/metrics".
+- `http_interface`: An Application Load Balancer (ALB) will be set up for the service on port 3000. The ALB will be public and will allow access only from the IP addresses in the restrict_access_to array.
+- `volume`: An Amazon Elastic File System (EFS) volume with ID fs-0123456789abcdef will be mounted to the service. The volume will be mounted at the directory path "/mydata" on the EFS volume, and at the path "/data" inside the container.
+- `memory_reservation`: The soft memory limit for the container is set to 256 MB, so the hard limit will be automatically set to 384 MB.
+- `logging`: Logs will be sent to a Fluentd log driver.
 
-#### Examples:
-
-1. Service configuration with custom metrics:
+### 2. Service configuration with custom metrics:
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -193,7 +312,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
-2. Service configuration with volume mount:
+### 3. Service configuration with volume mount:
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -217,7 +336,7 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
-3. Service configuration with http interface only:
+### 4. Service configuration with http interface only:
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -236,9 +355,10 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
       }
   }
 ```
-4. Service configuration with http interface without AWS CW logging.
+### 5. Service configuration with http interface without AWS CW logging.
 
-`Note: Do not use `logging: false` in production. Once conatiner deleted all logs will be lost`.
+> **_NOTE:_** Do not use `logging: null` in production. Once container  gets deleted all logs will be lost. Logging configuration should be one of the following: `awslog`, `fluentd`,`null`
+
 ```json
   {
       "notifications_arn": "<SNS Topic ARN>",
@@ -253,44 +373,11 @@ memory is free in running container instance. Minimum: 10 MB, Maximum: 8000 MB
                   ]
               },
               "memory_reservation": 100,
-              "logging": false
+              "logging": null
           }
       }
   }
 ```
-
-#### 3. Deploy service
-
-This command build the image (only if the version is unavailable in ECR), pushes to ECR and updates the ECS 
-service task definition. It supports `--build-arg` argument of `docker build` command as well to pass
-custom build time arguments
-
-```sh
-  cloudlift deploy_service -e <environment-name>
-```
-
-For example, you can pass your SSH key as a build argument to docker build
-
-```sh
-  cloudlift deploy_service --build-arg SSH_KEY "\"`cat ~/.ssh/id_rsa`\"" -e <environment-name>
-```
-This example is bit comprehensive to show
-- it can execute shell commands with "`".
-- It's wrapped with double quotes to avoid line-breaks in SSH keys breaking the command.
-
-### 6. Starting shell on container instance for service
-
-You can start a shell on a container instance which is running a task for given
-application using the `start_session` command. One pre-requisite for this is
-installing the session manager plugin for `awscli`. To install session manager
-plugin follow the [guide](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html#install-plugin-macos)
-
-```sh
-  cloudlift start_session -e <environment-name>
-```
-
-MFA code can be passed as parameter `--mfa` or you will be prompted to enter
-the MFA code.
 
 ## Contributing to cloudlift
 

@@ -253,8 +253,8 @@ service is down',
                     )
                 )
             ]
-        if 'logging' not in config or 'logging' in config and config['logging']:
-            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name)
+        if 'logging' not in config or 'logging' in config and config['logging'] is not None:
+            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name, "awslogs" if 'logging' not in config else config['logging'])
 
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
@@ -530,15 +530,29 @@ service is down',
             self.template.add_resource(svc)
         self._add_service_alarms(svc)
 
-    def _gen_log_config(self, service_name):
-        return LogConfiguration(
-            LogDriver="awslogs",
-            Options={
-                'awslogs-stream-prefix': service_name,
-                'awslogs-group': '-'.join([self.env, 'logs']),
-                'awslogs-region': self.region
-            }
-        )
+    def _gen_log_config(self, service_name, config):
+        if config == 'awslogs':
+            return LogConfiguration(
+                LogDriver="awslogs",
+                Options={
+                    'awslogs-stream-prefix': service_name,
+                    'awslogs-group': '-'.join([self.env, 'logs']),
+                    'awslogs-region': self.region
+                }
+            )
+        elif config == 'fluentd':
+            return LogConfiguration(
+                LogDriver="fluentd",
+                Options={
+                    'fluentd-address': 'unix:///var/run/fluent.sock',
+                    'labels': 'com.amazonaws.ecs.cluster,com.amazonaws.ecs.container-name,com.amazonaws.ecs.task-arn,com.amazonaws.ecs.task-definition-family,com.amazonaws.ecs.task-definition-version',
+                    'fluentd-async': 'true'
+                }
+            )
+        elif config == 'null':
+            return LogConfiguration(
+                LogDriver="none"
+            )
 
     def _add_alb(self, cd, service_name, config, launch_type):
         sg_name = 'SG' + self.env + service_name
