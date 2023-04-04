@@ -266,7 +266,7 @@ service is down',
             )]
         if launch_type == self.LAUNCH_TYPE_EC2:
             container_definition_arguments['MemoryReservation'] = int(config['memory_reservation'])
-            container_definition_arguments['Memory'] = int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100), # Celling the value
+            container_definition_arguments['Memory'] = int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100) # Celling the value
 
         cd = ContainerDefinition(**container_definition_arguments)
 

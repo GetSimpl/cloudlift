@@ -106,7 +106,7 @@ class EnvironmentConfiguration(object):
             \nthe same configuration.\n"
         )
         region = prompt("AWS region for environment", default='ap-south-1')
-        vpc_cidr = ipaddress.IPv4Network(prompt("VPC CIDR", default='10.10.10.10/16'))
+        vpc_cidr = ipaddress.IPv4Network(prompt("VPC CIDR, for example 10.10.0.0/16"))
         nat_eip = prompt("Allocation ID Elastic IP for NAT")
         public_subnet_1_cidr = prompt(
             "Public Subnet 1 CIDR", default=list(vpc_cidr.subnets(new_prefix=22))[0])
