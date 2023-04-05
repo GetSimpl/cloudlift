@@ -525,7 +525,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
                                 '\n'.join([
                                 'echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config',
                                 'echo ECS_RESERVED_MEMORY=256 >> /etc/ecs/ecs.config',
-                                'echo ECS_AVAILABLE_LOGGING_DRIVERS=["awslogs","fluentd"]  >> /etc/ecs/ecs.config',
+                                'echo ECS_AVAILABLE_LOGGING_DRIVERS=\'["awslogs","fluentd"]\' >> /etc/ecs/ecs.config',
                                 'echo ECS_INSTANCE_ATTRIBUTES=\'{"deployment_type": "'+ deployment_type.lower() + '"}\' >> /etc/ecs/ecs.config',
                                 lc_metadata_override,
                                 ]).strip()
