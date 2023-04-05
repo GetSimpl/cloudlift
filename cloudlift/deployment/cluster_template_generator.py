@@ -525,10 +525,10 @@ class ClusterTemplateGenerator(TemplateGenerator):
                                 '\n'.join([
                                 'echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config',
                                 'echo ECS_RESERVED_MEMORY=256 >> /etc/ecs/ecs.config',
-                                'echo ECS_AVAILABLE_LOGGING_DRIVERS=[\"awslogs\",\"fluentd\"]  >> /etc/ecs/ecs.config',
+                                'echo ECS_AVAILABLE_LOGGING_DRIVERS=\'["awslogs","fluentd"]\' >> /etc/ecs/ecs.config',
                                 'echo ECS_INSTANCE_ATTRIBUTES=\'{"deployment_type": "'+ deployment_type.lower() + '"}\' >> /etc/ecs/ecs.config',
                                 lc_metadata_override,
-                                 ]).strip()
+                                ]).strip()
                             )
                         },
                         '02_set_nameserver': {
@@ -600,7 +600,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
             self.auto_scaling_group = AutoScalingGroup(
                 "AutoScalingGroup"+deployment_type,
                 UpdatePolicy=up,
-                DesiredCapacity=str(self.desired_instances if self.desired_instances >= 1  else self.configuration['cluster']['min_instances'] if deployment_type == 'OnDemand' else self.configuration['cluster']['spot_min_instances']),
+                DesiredCapacity=str(self.desired_instances if (self.desired_instances is not None) and self.desired_instances >= 1 else self.configuration['cluster']['min_instances'] if deployment_type == 'OnDemand' else self.configuration['cluster']['spot_min_instances']),
                 Tags=[
                     {
                         'PropagateAtLaunch': True,
