@@ -309,7 +309,7 @@ service is down',
             ContainerDefinitions=[cd],
             ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             TaskRoleArn=Ref(task_role),
-            Tags=Tags(Team=self.team_name, environment=self.env),
+            Tags=Tags(Team=self.team_name, environment=self.env, task_definition_source="cloudformation"),
             **launch_type_td
 
         )

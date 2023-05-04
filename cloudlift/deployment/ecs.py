@@ -38,7 +38,8 @@ class EcsClient(object):
     def describe_task_definition(self, task_definition_arn):
         try:
             return self.boto.describe_task_definition(
-                taskDefinition=task_definition_arn
+                taskDefinition=task_definition_arn,
+                include=['TAGS']
             )
         except ClientError:
             raise UnknownTaskDefinitionError(
@@ -59,7 +60,7 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
-                                 requires_compatibilities=[], network_mode='bridge'):
+                                 requires_compatibilities=[], network_mode='bridge', tags=[]):
         fargate_td = {}
         if 'FARGATE' in requires_compatibilities:
             fargate_td = {
@@ -74,6 +75,7 @@ class EcsClient(object):
             executionRoleArn=execution_role_arn,
             taskRoleArn=role_arn or u'',
             networkMode=network_mode,
+            tags=tags,
             **fargate_td
         )
 
@@ -223,6 +225,10 @@ class EcsTaskDefinition(dict):
     @property
     def family_revision(self):
         return '%s:%d' % (self.get(u'family'), self.get(u'revision'))
+    
+    @property
+    def tags(self):
+        return self.get(u'tags')
 
     @property
     def diff(self):
@@ -407,7 +413,8 @@ class EcsAction(object):
             task_definition_arn=service.task_definition
         )
         task_definition = EcsTaskDefinition(
-            task_definition=task_definition_payload[u'taskDefinition']
+            task_definition=task_definition_payload[u'taskDefinition'],
+            tags=task_definition_payload[u'tags']
         )
         return task_definition
 
@@ -429,6 +436,14 @@ class EcsAction(object):
                 'memory' : task_definition.memory or u'',
 
             }
+            
+        new_tags = []
+        for tag in task_definition.tags:
+            if tag['key'] == 'task_definition_source':
+                new_tags.append({'key': tag['key'], 'value': 'boto3'})
+            else:
+                new_tags.append(tag)
+        
         response = self._client.register_task_definition(
             family=task_definition.family,
             containers=task_definition.containers,
@@ -436,10 +451,18 @@ class EcsAction(object):
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn if task_definition.execution_role_arn else boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             network_mode=task_definition.network_mode or u'bridge',
+            tags=new_tags,
             **fargate_td
         )
+        # deregister old task definition only if it was created manually (not by cloudformation)
+        if task_definition.tags:
+            for tag in task_definition.tags:
+                if tag['key'] == 'task_definition_source':
+                    task_definition_source = tag['value']
+                    if task_definition_source != 'cloudformation':
+                        self._client.deregister_task_definition(task_definition.arn)
+                    break
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
-        self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
 
     def update_service(self, service):
