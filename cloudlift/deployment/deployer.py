@@ -77,6 +77,8 @@ def read_config(file_content):
         line = line.strip()
         if not line:
             continue
+        elif line[0] == '#' or len(line) == 0: # line is a comment or is empty
+            continue
         key, value = line.split('=', 1)
         config[key] = value
     return config
