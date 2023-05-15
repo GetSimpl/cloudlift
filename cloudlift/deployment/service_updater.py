@@ -41,14 +41,11 @@ class ServiceUpdater(object):
         log_warning("Deploying to {self.region}".format(**locals()))
         self.init_stack_info()
         if component is not None:
-            found = False
-            for service_name in self.ecs_service_names:
-                if component in service_name:
-                    self.ecs_service_names = [service_name]
-                    found = True
-                    break
+            found = [str for str in self.ecs_service_names if any(sub in str for sub in component)]
             if not found:
                 raise UnrecoverableException("Component {component} not found in service {self.name}".format(**locals()))
+            elif len(found) != 0 and len(found) != len(component):
+                log_warning("Few Component {found} found in service {self.name}".format(**locals()))
         if not os.path.exists(self.env_sample_file):
             raise UnrecoverableException('env.sample not found. Exiting.')
         ecr_client = EcrClient(self.name, self.region, self.build_args)
