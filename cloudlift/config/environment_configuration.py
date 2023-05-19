@@ -122,7 +122,7 @@ class EnvironmentConfiguration(object):
             od_cluster_max_instances = prompt("Max instances in On-Demand cluster", default=5)
             spot_cluster_min_instances = 0
             spot_cluster_max_instances = 0
-            ecs_cluster_default_instance_type = "ondeamnd"
+            ecs_cluster_default_instance_type = "ondemand"
             cluster_instance_types = prompt("Instance types", default='t2.micro')
         elif cluster_types == 2:
             spot_cluster_min_instances = prompt("Min instances in Spot cluster", default=1)
