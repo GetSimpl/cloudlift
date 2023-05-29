@@ -16,7 +16,7 @@ from cloudlift.config.logging import log, log_bold, log_err
 from cloudlift.deployment.progress import get_stack_events, print_new_events
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
-
+from cloudlift.config.pre_flight import service_update_preflight_checks
 
 class ServiceCreator(object):
     '''
@@ -108,7 +108,9 @@ class ServiceCreator(object):
         '''
 
         log_bold("Starting to update service")
-        self.service_update_preflight_checks()
+        current_version = ServiceInformationFetcher(
+            self.name, self.environment).get_current_version(skip_master_reset=True)
+        service_update_preflight_checks(current_version=current_version, service_name=self.name, environment=self.environment, ecr_client=self.ecrClient)
         self.service_configuration.edit_config()
         try:
             template_generator = ServiceTemplateGenerator(
@@ -168,13 +170,3 @@ cluster using `create_environment` command.")
             log_err("Finished with status: %s" % (final_status))
         else:
             log_bold("Finished with status: %s" % (final_status))
-
-    def service_update_preflight_checks(self):
-        # If the current deployment is considered dirty, make sure that an image tagged as 'master' is uploaded to ECR otherwise on service update, the service will try to use an image tagged as 'master' which does not exist
-        current_version = ServiceInformationFetcher(
-            self.name, self.environment).get_current_version(skip_master_reset=True)
-        if current_version == 'dirty':
-            repo_name = self.name + '-repo'
-            res = self.ecrClient.batch_get_image(repositoryName=repo_name, imageIds=[{'imageTag': 'master'}])
-            if res['images'] == []:
-                raise UnrecoverableException("Current deployment is dirty. Please push an image tagged as 'master' to ECR.")
