@@ -153,6 +153,7 @@ class EnvironmentConfiguration(object):
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
+        ecs_draining_enabled = prompt("Enabled ECS instance draining Yes/No",  default="Yes")
         environment_configuration = {self.environment: {
             "region": region,
             "vpc": {
@@ -186,6 +187,7 @@ class EnvironmentConfiguration(object):
                 "spot_max_instances": spot_cluster_max_instances,
                 "instance_type": cluster_instance_types,
                 "key_name": key_name,
+                "ecs_draining_enabled": ecs_draining_enabled.lower(),
                 "ecs_instance_default_lifecycle_type": ecs_cluster_default_instance_type.lower()
             },
             "environment": {
@@ -295,6 +297,7 @@ class EnvironmentConfiguration(object):
                                 "key_name": {"type": "string"},
                                 "allocation_strategy": {"type": "string"},
                                 "spot_instance_pools": {"type": "integer"},
+                                "ecs_draining_enabled": {"type": "string"},
                                 "ecs_instance_default_lifecycle_type": {"type": "string"}
                             },
                             "required": [
@@ -432,3 +435,5 @@ class EnvironmentConfiguration(object):
             else:
                 raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
+
+    # def _add_scaling_hook(self, sns_role_arn, sns_topic_arn):

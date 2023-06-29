@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 from cloudlift.config import highlight_production, highlight_user_account_details
 from cloudlift.config.pre_flight import check_stack_exists
 from cloudlift.deployment.configs import deduce_name
+from cloudlift.config.environment_configuration import EnvironmentConfiguration
 from cloudlift.deployment import EnvironmentCreator, editor
 from cloudlift.config.logging import log_err
 from cloudlift.deployment.service_creator import ServiceCreator
@@ -172,6 +173,13 @@ service task")
 def start_session(name, environment, mfa, component):
     SessionCreator(name, environment).start_session(mfa, component)
 
+
+@cli.command(help="Add ECS service draining Hook")
+@_require_environment
+@click.option('--iam_role', help='IAM role arn for SNS execution')
+@click.option('--sns_topic', help='nested service name')
+def add_draining_hook(environment, sns_role_arn, sns_topic_arn):
+    EnvironmentConfiguration(environment)._add_scaling_hook(sns_role_arn, sns_topic_arn)
 
 if __name__ == '__main__':
     cli()
