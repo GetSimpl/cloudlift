@@ -230,13 +230,14 @@ service is down',
         for key in self.environment_stack["Outputs"]:
             if key["OutputKey"] == 'ECSClusterDefaultInstanceLifecycle':
                 spot_deployment = False if ImportValue("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())) == 'ondemand' else True
-                placement_constraint = {
-                    "PlacementConstraints": [PlacementConstraint(
-                        Type='memberOf',
-                        Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
-                    )],
-                }
-        if 'spot_deployment' in config:
+                if 'fargate' not in config:
+                    placement_constraint = {
+                        "PlacementConstraints": [PlacementConstraint(
+                            Type='memberOf',
+                            Expression='attribute:deployment_type == spot' if spot_deployment else 'attribute:deployment_type == ondemand'
+                        )],
+                    }
+        if 'spot_deployment' in config and not 'fargate' in config:
             spot_deployment = config["spot_deployment"]
             placement_constraint = {
                 "PlacementConstraints" : [PlacementConstraint(
