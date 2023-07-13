@@ -1,3 +1,6 @@
+"""
+Patch TODO: Add static values to Spot and OnDemand AGS for minimum instances
+"""
 import json
 import re
 
@@ -445,8 +448,12 @@ class ClusterTemplateGenerator(TemplateGenerator):
             GroupDescription=Sub("${AWS::StackName}-databases")
         )
         self.template.add_resource(database_security_group)
-        deployment_types = ['OnDemand', 'Spot']
+        instance_types = self.configuration['cluster']['instance_type'].split(",")
+        deployment_types = ['OnDemand', 'Spot', 'LegacyOnDemand']
         for deployment_type in deployment_types:
+            if deployment_type == 'LegacyOnDemand':
+                # resetting deployment_type to empty string to avoid a lot of code changes to update naming. Later we will just compare deployment_type=='' to check for LegacyOnDemand
+                deployment_type = ''
             lc_metadata_override = ''
             if deployment_type == 'Spot':
                 lc_metadata_override = '\n'.join([
@@ -574,19 +581,49 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     )
                 ]
             )
+            if deployment_type == '':
+                # added InstanceType
+                launch_template_data = LaunchTemplateData(
+                    'LaunchTemplateData',
+                    UserData=user_data,
+                    IamInstanceProfile=IamInstanceProfile(
+                        Arn=GetAtt(instance_profile, 'Arn')
+                    ),
+                    SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
+                    ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
+                    KeyName=Ref(self.key_pair),
+                    InstanceType=instance_types[0],
+                    BlockDeviceMappings=[
+                        LaunchTemplateBlockDeviceMapping(
+                            DeviceName="/dev/xvda",
+                            Ebs=EBSBlockDevice(
+                                VolumeType="gp3"
+                            )
+                        )
+                    ]
+                )
+            
             launch_template = LaunchTemplate(
                 "LaunchTemplate"+deployment_type,
                 LaunchTemplateData=launch_template_data,
                 LaunchTemplateName=self.env + "-LaunchTemplate"+deployment_type,
                 Metadata=lc_metadata
             )
+
+            if deployment_type == '':
+                # removed LaunchTemplateName
+                launch_template = LaunchTemplate(
+                    "LaunchTemplate",
+                    LaunchTemplateData=launch_template_data,
+                    Metadata=lc_metadata
+                )
+
             
             overrides_instances = []
-            instance_types = self.configuration['cluster']['instance_type'].split(",")
             if deployment_type == 'OnDemand':
                 overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_types[0])))
             elif deployment_type == 'Spot':
-                for instance_type in instance_types:
+                for instance_type in set(instance_types):
                     overrides_instances.append(LaunchTemplateOverrides(InstanceType=str(instance_type)))
             # , PauseTime='PT15M', WaitOnResourceSignals=True, MaxBatchSize=1, MinInstancesInService=1)
             up = AutoScalingRollingUpdate('AutoScalingRollingUpdate')
@@ -597,52 +634,91 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 spot_instance_pools = {
                     'SpotInstancePools' : self.configuration['cluster']['spot_instance_pools']
                 }
-            self.auto_scaling_group = AutoScalingGroup(
-                "AutoScalingGroup"+deployment_type,
-                UpdatePolicy=up,
-                DesiredCapacity=str(self.desired_instances if (self.desired_instances is not None) and self.desired_instances >= 1 else self.configuration['cluster']['min_instances'] if deployment_type == 'OnDemand' else self.configuration['cluster']['spot_min_instances']),
-                Tags=[
-                    {
-                        'PropagateAtLaunch': True,
-                        'Value': Sub('${AWS::StackName} - ECS Host'),
-                        'Key': 'Name'
-                    },
-                    {
-                        'PropagateAtLaunch': True,
-                        'Key': 'environment',
-                        'Value': self.env
-                    },
-                    {'PropagateAtLaunch': True, 'Key': 'Team',
-                        'Value': self.team_name}
-                ],
-                MinSize=Ref('OnDemandMinSize') if deployment_type == 'OnDemand' else Ref('SpotMinSize'),
-                MaxSize=Ref('OnDemandMaxSize') if deployment_type == 'OnDemand' else Ref('SpotMaxSize'),
-                VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
-                NotificationConfigurations=[
-                    NotificationConfigurations(
-                        NotificationTypes=[
-                            "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"],
-                        TopicARN=Ref(self.notification_sns_arn)
+            if deployment_type == '':
+                # removed MixedInstancesPolicy, instead added LaunchTemplate directly
+                self.auto_scaling_group = AutoScalingGroup(
+                        "AutoScalingGroup"+deployment_type,
+                        UpdatePolicy=up,
+                        DesiredCapacity=str(self.desired_instances if (self.desired_instances is not None) and self.desired_instances >= 1 else self.configuration['cluster']['min_instances'] if deployment_type == 'OnDemand' else self.configuration['cluster']['spot_min_instances']),
+                        Tags=[
+                            {
+                                'PropagateAtLaunch': True,
+                                'Value': Sub('${AWS::StackName} - ECS Host'),
+                                'Key': 'Name'
+                            },
+                            {
+                                'PropagateAtLaunch': True,
+                                'Key': 'environment',
+                                'Value': self.env
+                            },
+                            {'PropagateAtLaunch': True, 'Key': 'Team',
+                                'Value': self.team_name}
+                        ],
+                        MinSize=Ref('OnDemandMinSize') if (deployment_type == 'OnDemand' or deployment_type == '') else Ref('SpotMinSize'),
+                        MaxSize=Ref('OnDemandMaxSize') if (deployment_type == 'OnDemand' or deployment_type == '') else Ref('SpotMaxSize'),
+                        VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
+                        LaunchTemplate=LaunchTemplateSpecification(
+                                LaunchTemplateId=Ref(launch_template),
+                                Version=GetAtt(launch_template, 'LatestVersionNumber')
+                            ),
+                        NotificationConfigurations=[
+                            NotificationConfigurations(
+                                NotificationTypes=[
+                                    "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"],
+                                TopicARN=Ref(self.notification_sns_arn)
+                            )
+                        ],
+                        CreationPolicy=CreationPolicy(
+                            ResourceSignal=ResourceSignal(Timeout='PT15M')
+                        )
                     )
-                ],
-                MixedInstancesPolicy=MixedInstancesPolicy(
-                    LaunchTemplate=ASGLaunchTemplate(
-                        LaunchTemplateSpecification=LaunchTemplateSpecification(
-                            LaunchTemplateId=Ref(launch_template),
-                            Version=GetAtt(launch_template, 'LatestVersionNumber')
+            else:
+                self.auto_scaling_group = AutoScalingGroup(
+                    "AutoScalingGroup"+deployment_type,
+                    UpdatePolicy=up,
+                    DesiredCapacity=str(self.desired_instances if (self.desired_instances is not None) and self.desired_instances >= 1 else self.configuration['cluster']['min_instances'] if deployment_type == 'OnDemand' else self.configuration['cluster']['spot_min_instances']),
+                    Tags=[
+                        {
+                            'PropagateAtLaunch': True,
+                            'Value': Sub('${AWS::StackName} - ECS Host'),
+                            'Key': 'Name'
+                        },
+                        {
+                            'PropagateAtLaunch': True,
+                            'Key': 'environment',
+                            'Value': self.env
+                        },
+                        {'PropagateAtLaunch': True, 'Key': 'Team',
+                            'Value': self.team_name}
+                    ],
+                    MinSize=Ref('OnDemandMinSize') if (deployment_type == 'OnDemand' or deployment_type == '') else Ref('SpotMinSize'),
+                    MaxSize=Ref('OnDemandMaxSize') if (deployment_type == 'OnDemand' or deployment_type == '') else Ref('SpotMaxSize'),
+                    VPCZoneIdentifier=[Ref(subnets.pop()), Ref(subnets.pop())],
+                    NotificationConfigurations=[
+                        NotificationConfigurations(
+                            NotificationTypes=[
+                                "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"],
+                            TopicARN=Ref(self.notification_sns_arn)
+                        )
+                    ],
+                    MixedInstancesPolicy=MixedInstancesPolicy(
+                        LaunchTemplate=ASGLaunchTemplate(
+                            LaunchTemplateSpecification=LaunchTemplateSpecification(
+                                LaunchTemplateId=Ref(launch_template),
+                                Version=GetAtt(launch_template, 'LatestVersionNumber')
+                            ),
+                            Overrides=overrides_instances
                         ),
-                        Overrides=overrides_instances
+                        InstancesDistribution=InstancesDistribution(
+                            OnDemandBaseCapacity=0,
+                            OnDemandPercentageAboveBaseCapacity=0 if deployment_type == 'Spot' else 100,
+                            SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster']['allocation_strategy'],
+                            **spot_instance_pools 
+                        )
                     ),
-                    InstancesDistribution=InstancesDistribution(
-                        OnDemandBaseCapacity=0,
-                        OnDemandPercentageAboveBaseCapacity=0 if deployment_type == 'Spot' else 100,
-                        SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster']['allocation_strategy'],
-                        **spot_instance_pools 
+                    CreationPolicy=CreationPolicy(
+                        ResourceSignal=ResourceSignal(Timeout='PT15M')
                     )
-                ),
-                CreationPolicy=CreationPolicy(
-                    ResourceSignal=ResourceSignal(Timeout='PT15M')
-                )
             )
             self.cluster_scaling_policy = ScalingPolicy(
                 'AutoScalingPolicy'+deployment_type,
