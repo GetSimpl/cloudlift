@@ -18,7 +18,8 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              DeploymentConfiguration, Secret, MountPoint,
                              LoadBalancer, LogConfiguration, Volume, EFSVolumeConfiguration,
                              NetworkConfiguration, PlacementStrategy,
-                             PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint)
+                             PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint, 
+                             MountPoint, ContainerDependency, DockerVolumeConfiguration, Environment)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -268,7 +269,7 @@ service is down',
             container_definition_arguments['MemoryReservation'] = int(config['memory_reservation'])
             container_definition_arguments['Memory'] = int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100) # Celling the value
 
-        cd = ContainerDefinition(**container_definition_arguments)
+        cd = ContainerDefinition(**self._fluentbit_container_def_args_override(config, container_definition_arguments))
 
         task_role = self.template.add_resource(Role(
             service_name + "Role",
@@ -302,16 +303,19 @@ service is down',
                     RootDirectory=config['volume']['efs_directory_path']
                 )
             )]
+        if 'env' in config and isinstance(config.get('env'), dict):
+            launch_type_td['Environment'] = [Environment(Name=k, Value=v) for (k, v) in config.get('env').items()]
 
+        sidecar_container_defs = self._sidecar_container_defs(config, service_name)
+        fluentbit_task_definition_override = self._fluentbit_task_def_args_override(config, launch_type_td)
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
-            ContainerDefinitions=[cd],
+            ContainerDefinitions=[cd] + sidecar_container_defs,
             ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             TaskRoleArn=Ref(task_role),
             Tags=Tags(Team=self.team_name, environment=self.env),
-            **launch_type_td
-
+            **fluentbit_task_definition_override
         )
         if 'custom_metrics' in config:
             sd = SD(
@@ -959,6 +963,62 @@ building this service",
             return self.desired_counts[service_name]
         else:
             return 0
+    def _fluentbit_container_def_args_override(self, configuration, container_def_args):
+        # check if logging driver is fluentd
+        if configuration.get('logging') == 'fluentd':
+            container_def_args['MountPoints'] = container_def_args.get('MountPoints', []) + [MountPoint(ContainerPath='/var/run', SourceVolume='fluentbit-socket-volume')]
+            container_def_args['DependsOn'] = container_def_args.get('DependsOn', []) + [ContainerDependency(ContainerName='fluentbit-sidecar', Condition='START')]
+        return container_def_args
+
+    def _fluentbit_task_def_args_override(self, configuration, task_def_args):
+        if configuration.get('logging') == 'fluentd':
+            task_def_args['Volumes'] = task_def_args.get('Volumes', []) + [Volume(Name='fluentbit-socket-volume', DockerVolumeConfiguration=DockerVolumeConfiguration(Scope='task', Driver='local'))]
+        return task_def_args
+
+    def _sidecar_container_defs(self, configuration, service_name):
+        container_definitions = []
+        if configuration.get('sidecars') and isinstance(configuration['sidecars'], list):
+            for index, sidecar in enumerate(configuration['sidecars']):
+                container_name = sidecar.get('name', f"sidecar_{index + 1}")
+                if not container_name.endswith('-sidecar'):
+                    container_name = container_name + '-sidecar'
+                image_uri = sidecar.get('image_uri')
+                memory_reservation = int(sidecar.get('memory_reservation', 50))
+                essential = sidecar.get('essential', True)
+                
+                mount_points = []
+                if sidecar.get('mount_points') and isinstance(sidecar['mount_points'], list):
+                    for mount_point in sidecar['mount_points']:
+                        container_path = mount_point.get('container_path')
+                        source_volume = mount_point.get('source_volume')
+                        if container_path and source_volume:
+                            mount_points.append(MountPoint(ContainerPath=container_path, SourceVolume=source_volume))
+                
+                container_def_args = {}
+                command = sidecar.get('command')
+                if command is not None:
+                    container_def_args['Command'] = [command]
+                    
+                env = sidecar.get('env')
+                if env is not None and isinstance(env, dict):
+                    container_def_args['Environment'] = []
+                    for key, value in env.items():
+                        container_def_args['Environment'].append(Environment(Name=key, Value=value))
+                logging = sidecar.get('logging')
+                if logging is not None:
+                    container_def_args['LogConfiguration'] = self._gen_log_config(service_name, "awslogs" if 'logging' not in configuration else configuration['logging'])
+
+                container_definition = ContainerDefinition(
+                    Name=container_name,
+                    Image=image_uri,
+                    MemoryReservation=memory_reservation,
+                    Essential=essential,
+                    MountPoints=mount_points,
+                    **container_def_args
+                    # LogConfiguration=LogConfiguration(LogDriver="awslogs"),
+                )
+                container_definitions.append(container_definition)
+        return container_definitions
 
     @property
     def ecr_image_uri(self):

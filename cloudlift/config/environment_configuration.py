@@ -191,6 +191,12 @@ class EnvironmentConfiguration(object):
             "environment": {
                 "notifications_arn": notifications_arn,
                 "ssl_certificate_arn": ssl_certificate_arn
+            },
+            "fluentbit_config": {
+                "image_uri": "amazon/aws-for-fluent-bit:stable",
+                "env": {
+                    "kinesis_role_arn": ""
+                }
             }
         }, 'cloudlift_version': VERSION}
         if cluster_types != 1:
@@ -410,8 +416,19 @@ class EnvironmentConfiguration(object):
                                 "nat-gateway",
                                 "subnets"
                             ]
+                        },
+                        "fluentbit_config": {
+                            "type": "object",
+                            "properties": {
+                                "image_uri": {
+                                    "type": "string"
+                                },
+                                "env": {
+                                    "type": "object",
+                                }
+                            },
+                            "required": ["image_uri"]
                         }
-
                     },
                     "required": [
                         "cluster",

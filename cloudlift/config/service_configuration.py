@@ -8,7 +8,7 @@ from time import sleep
 
 import dictdiffer
 from botocore.exceptions import ClientError
-from click import confirm, edit
+from click import confirm, edit, prompt
 from cloudlift.exceptions import UnrecoverableException
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
@@ -20,7 +20,7 @@ from cloudlift.config.logging import log_bold, log_err, log_warning, log
 from cloudlift.version import VERSION
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 from cloudlift.config.pre_flight import check_sns_topic_exists
-
+from cloudlift.config.environment_configuration import EnvironmentConfiguration
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -33,6 +33,7 @@ class ServiceConfiguration(object):
         self.service_name = service_name
         self.environment = environment
         self.new_service = False
+        # self.with_fluentbit_sidecar=with_fluentbit_sidecar
         # TODO: Use the below two lines when all parameter store actions
         # require MFA
         #
@@ -126,6 +127,13 @@ class ServiceConfiguration(object):
             Set configuration in DynamoDB
         '''
         config['cloudlift_version'] = VERSION
+
+        # inject fluentbit sidecars if needed
+        if config.get('services'):
+            for service_name, service_configuration in config.get('services').items():
+                config['services'][service_name] = self._inject_fluentbit_sidecar(service_configuration, service_name)
+
+
         self._validate_changes(config)
         check_sns_topic_exists(config['notifications_arn'], self.environment)
         try:
@@ -191,12 +199,29 @@ class ServiceConfiguration(object):
                     }
                 },
                 "volume": {
-                    "type": "object",
-                    "properties": {
-                        "efs_id" : {"type": "string"},
-                        "efs_directory_path" : {"type": "string"},
-                        "container_path" : {"type": "string"}
-                    }
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "efs_id": {"type": "string"},
+                                "efs_directory_path": {"type": "string"},
+                                "container_path": {"type": "string"}
+                            }
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "docker_volume_configuration": {
+                                    "type": "object",
+                                    "properties": {
+                                        "scope": {"type": "string"},
+                                        "driver": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    ]
                 },
                 "memory_reservation": {
                     "type": "number",
@@ -232,6 +257,59 @@ class ServiceConfiguration(object):
                         {"type": "string", "pattern": "^(awslogs|fluentd|null)$"},
                         {"type": "null"}
                     ]
+                },
+                "depends_on": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {    
+                            "container_name": {"type": "string"},
+                            "condition": {"type": "string", "enum": ["START", "COMPLETE", "SUCCESS", "HEALTHY"]}
+                            }
+                    }
+                },
+                "sidecars": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "image_uri": {"type": "string"},
+                            "command": {
+                                "oneOf": [
+                                    {"type": "string"},
+                                    {"type": "null"}
+                                ]
+                            },
+                            "logging": {
+                                "oneOf": [
+                                    {"type": "string", "pattern": "^(awslogs|fluentd|null)$"},
+                                    {"type": "null"}
+                                ]
+                            },
+                            "memory_reservation": {
+                                "type": "number",
+                                "minimum": 10,
+                                "maximum": 30000
+                            },
+                            "mount_points": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "container_path": {"type": "string"},
+                                        "source_volume": {"type": "string"}
+                                    },
+                                    "required": ["container_path", "source_volume"]
+                                }
+                            },
+                            "env": {
+                                "type": "object"
+                            },
+                            "essential": {"type": "boolean"},
+                        },
+                        "required": ["name", "image_uri", "memory_reservation", "essential"]
+                    }
                 }
             },
             "required": ["memory_reservation", "command"]
@@ -283,3 +361,75 @@ class ServiceConfiguration(object):
                 }
             }
         }
+    
+    def _inject_fluentbit_sidecar(self, service_configuration, service_name):
+        '''
+        Inject fluentbit sidecar in service configuration
+        '''
+        try:
+            logging_driver = service_configuration.get('logging')
+            if logging_driver is None or logging_driver != 'fluentd':
+                return service_configuration
+            if any(sidecar.get('name') == 'fluentbit-sidecar' for sidecar in service_configuration.get('sidecars', [])):
+                return service_configuration
+            
+            log_bold('Logging driver found: fluentd')
+            
+            sidecars = service_configuration.get('sidecars', [])
+
+            environment_configuration = EnvironmentConfiguration(self.environment).get_config()
+            default_fluentbit_config = environment_configuration.get(self.environment).get('fluentbit_config', {})
+            
+            if default_fluentbit_config == {}:
+                log_warning('Default fluentbit configuration not found in environment configuration. To avoid entering fluentbit image URI manually repeatedly, add it to environment configuration.')
+            
+            fluentbit_image_uri = default_fluentbit_config.get('image_uri')
+            if fluentbit_image_uri:
+                log_bold('Using fluentbit image URI from environment configuration: ' + fluentbit_image_uri)
+            else:
+                fluentbit_image_uri = prompt('Enter fluentbit image URI', confirmation_prompt=True, type=str)
+
+            # TODO service configuration has to be modified to support multiple volumes, for now volumes will be handled while creating service template in service_template_generator.py
+            # Check if volume is not configured for fluentbit socket
+            # if not service_configuration.get('volume') or service_configuration['volume'].get('name') != 'fluentbit-socket-volume':
+            #     service_configuration['volume'] = service_configuration.get('volume', []) + [{
+            #         'name': 'fluentbit-socket-volume',
+            #         'docker_volume_configuration': {
+            #             'scope': 'task',
+            #             'driver': 'local'
+            #         }
+            #     }]
+
+            if not service_configuration.get('depends_on') or not any(depends_on.get('container_name') == 'fluentbit-sidecar' for depends_on in service_configuration['depends_on']):
+                service_configuration['depends_on'] = service_configuration.get('depends_on', []) + [{
+                    'container_name': 'fluentbit-sidecar',
+                    'condition': 'START'
+                }]
+
+            # Check if no sidecar is present with name fluentbit-sidecar
+            if not any(sidecar.get('name') == 'fluentbit-sidecar' for sidecar in sidecars):
+                env_vars = default_fluentbit_config.get('env', {})
+
+                # check if "delivery_stream" is in environment configuration, else add it
+                if not env_vars.get('delivery_stream'):
+                    env_vars['delivery_stream'] = self.environment + "-" + service_name
+
+                sidecars.append({
+                    'name': 'fluentbit-sidecar',
+                    'memory_reservation': 50,
+                    'mount_points': [
+                        {
+                            'container_path': '/var/run',
+                            'source_volume': 'fluentbit-socket-volume'
+                        },
+                    ],
+                    'essential': True,
+                    'image_uri': fluentbit_image_uri,
+                    'env': env_vars
+                })
+
+            service_configuration['sidecars'] = sidecars
+            return service_configuration
+
+        except Exception as e:
+            raise UnrecoverableException(f'Error while injecting fluentbit sidecar: {e}')
