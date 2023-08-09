@@ -33,7 +33,6 @@ class ServiceConfiguration(object):
         self.service_name = service_name
         self.environment = environment
         self.new_service = False
-        # self.with_fluentbit_sidecar=with_fluentbit_sidecar
         # TODO: Use the below two lines when all parameter store actions
         # require MFA
         #
@@ -131,7 +130,7 @@ class ServiceConfiguration(object):
         # inject fluentbit sidecars if needed
         if config.get('services'):
             for service_name, service_configuration in config.get('services').items():
-                config['services'][service_name] = self._inject_fluentbit_sidecar(service_configuration, service_name)
+                config['services'][service_name] = self._inject_fluentbit_sidecar(service_configuration)
 
 
         self._validate_changes(config)
@@ -199,29 +198,12 @@ class ServiceConfiguration(object):
                     }
                 },
                 "volume": {
-                    "oneOf": [
-                        {
-                            "type": "object",
-                            "properties": {
-                                "efs_id": {"type": "string"},
-                                "efs_directory_path": {"type": "string"},
-                                "container_path": {"type": "string"}
-                            }
-                        },
-                        {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string"},
-                                "docker_volume_configuration": {
-                                    "type": "object",
-                                    "properties": {
-                                        "scope": {"type": "string"},
-                                        "driver": {"type": "string"}
-                                    }
-                                }
-                            }
-                        }
-                    ]
+                    "type": "object",
+                    "properties": {
+                    "efs_id": {"type": "string"},
+                    "efs_directory_path": {"type": "string"},
+                    "container_path": {"type": "string"}
+                    }
                 },
                 "memory_reservation": {
                     "type": "number",
@@ -254,7 +236,7 @@ class ServiceConfiguration(object):
                 },
                 "logging": {
                     "oneOf": [
-                        {"type": "string", "pattern": "^(awslogs|fluentd|null)$"},
+                        {"type": "string", "pattern": "^(awslogs|awsfirelens|null)$"},
                         {"type": "null"}
                     ]
                 },
@@ -273,7 +255,11 @@ class ServiceConfiguration(object):
                     "items": {
                         "type": "object",
                         "properties": {
-                            "name": {"type": "string"},
+                            "name": {
+                                "type": "string",
+                                # convention: sidecar name ends with -sidecar
+                                "pattern": ".*-sidecar$"
+                                },
                             "image_uri": {"type": "string"},
                             "command": {
                                 "oneOf": [
@@ -283,7 +269,7 @@ class ServiceConfiguration(object):
                             },
                             "logging": {
                                 "oneOf": [
-                                    {"type": "string", "pattern": "^(awslogs|fluentd|null)$"},
+                                    {"type": "string", "pattern": "^(awslogs|awsfirelens|null)$"},
                                     {"type": "null"}
                                 ]
                             },
@@ -335,6 +321,10 @@ class ServiceConfiguration(object):
             "required": ["cloudlift_version", "services", "notifications_arn"]
         }
         try:
+            for _, service_configuration in configuration.get('services').items():
+                for sidecar in service_configuration.get('sidecars', []):
+                    if sidecar.get('name') == 'fluentbit-firelens-sidecar' and sidecar.get('log_driver') == 'awsfirelens':
+                        raise UnrecoverableException("Logging set to awsfirelens, but fluentbit firelens sidecar container is missing or has incorrect log driver.")
             validate(configuration, schema)
         except ValidationError as validation_error:
             if validation_error.relative_path:
@@ -362,18 +352,18 @@ class ServiceConfiguration(object):
             }
         }
     
-    def _inject_fluentbit_sidecar(self, service_configuration, service_name):
+    def _inject_fluentbit_sidecar(self, service_configuration):
         '''
         Inject fluentbit sidecar in service configuration
         '''
         try:
             logging_driver = service_configuration.get('logging')
-            if logging_driver is None or logging_driver != 'fluentd':
+            if logging_driver is None or logging_driver != 'awsfirelens':
                 return service_configuration
-            if any(sidecar.get('name') == 'fluentbit-sidecar' for sidecar in service_configuration.get('sidecars', [])):
+            if any(sidecar.get('name') == 'fluentbit-firelens-sidecar' for sidecar in service_configuration.get('sidecars', [])):
                 return service_configuration
             
-            log_bold('Logging driver found: fluentd')
+            log_bold('Logging driver found: awsfirelens')
             
             sidecars = service_configuration.get('sidecars', [])
 
@@ -389,40 +379,22 @@ class ServiceConfiguration(object):
             else:
                 fluentbit_image_uri = prompt('Enter fluentbit image URI', confirmation_prompt=True, type=str)
 
-            # TODO service configuration has to be modified to support multiple volumes, for now volumes will be handled while creating service template in service_template_generator.py
-            # Check if volume is not configured for fluentbit socket
-            # if not service_configuration.get('volume') or service_configuration['volume'].get('name') != 'fluentbit-socket-volume':
-            #     service_configuration['volume'] = service_configuration.get('volume', []) + [{
-            #         'name': 'fluentbit-socket-volume',
-            #         'docker_volume_configuration': {
-            #             'scope': 'task',
-            #             'driver': 'local'
-            #         }
-            #     }]
-
-            if not service_configuration.get('depends_on') or not any(depends_on.get('container_name') == 'fluentbit-sidecar' for depends_on in service_configuration['depends_on']):
+            if not service_configuration.get('depends_on') or not any(depends_on.get('container_name') == 'fluentbit-firelens-sidecar' for depends_on in service_configuration['depends_on']):
                 service_configuration['depends_on'] = service_configuration.get('depends_on', []) + [{
-                    'container_name': 'fluentbit-sidecar',
+                    'container_name': 'fluentbit-firelens-sidecar',
                     'condition': 'START'
                 }]
 
-            # Check if no sidecar is present with name fluentbit-sidecar
-            if not any(sidecar.get('name') == 'fluentbit-sidecar' for sidecar in sidecars):
+            # Check if no sidecar is present with name fluentbit-firelens-sidecar
+            if not any(sidecar.get('name') == 'fluentbit-firelens-sidecar' for sidecar in sidecars):
                 env_vars = default_fluentbit_config.get('env', {})
 
-                # check if "delivery_stream" is in environment configuration, else add it
                 if not env_vars.get('delivery_stream'):
-                    env_vars['delivery_stream'] = self.environment + "-" + service_name
+                    env_vars['delivery_stream'] = self.environment + "-" + self.service_name
 
                 sidecars.append({
-                    'name': 'fluentbit-sidecar',
+                    'name': 'fluentbit-firelens-sidecar',
                     'memory_reservation': 50,
-                    'mount_points': [
-                        {
-                            'container_path': '/var/run',
-                            'source_volume': 'fluentbit-socket-volume'
-                        },
-                    ],
                     'essential': True,
                     'image_uri': fluentbit_image_uri,
                     'env': env_vars

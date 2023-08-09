@@ -9,6 +9,7 @@ from cloudlift.config import get_client_for
 
 from awacs.aws import PolicyDocument, Statement, Allow, Principal
 from awacs.sts import AssumeRole
+from awacs.firehose import PutRecordBatch
 from cfn_flip import to_yaml
 from stringcase import pascalcase
 from troposphere import GetAtt, Output, Parameter, Ref, Sub, ImportValue, Tags
@@ -19,7 +20,8 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              LoadBalancer, LogConfiguration, Volume, EFSVolumeConfiguration,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint, 
-                             MountPoint, ContainerDependency, DockerVolumeConfiguration, Environment)
+                             MountPoint, ContainerDependency, Environment,
+                             FirelensConfiguration)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
@@ -269,7 +271,7 @@ service is down',
             container_definition_arguments['MemoryReservation'] = int(config['memory_reservation'])
             container_definition_arguments['Memory'] = int(config['memory_reservation']) + -(-(int(config['memory_reservation']) * 50 )//100) # Celling the value
 
-        cd = ContainerDefinition(**self._fluentbit_container_def_args_override(config, container_definition_arguments))
+        cd = ContainerDefinition(**self._firelens_container_def_args_override(config, container_definition_arguments))
 
         task_role = self.template.add_resource(Role(
             service_name + "Role",
@@ -279,6 +281,11 @@ service is down',
                         Effect=Allow,
                         Action=[AssumeRole],
                         Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
+                    ),
+                    Statement(
+                        Effect=Allow,
+                        Action=[PutRecordBatch],
+                        Resource=["*"]
                     )
                 ]
             )
@@ -307,7 +314,6 @@ service is down',
             launch_type_td['Environment'] = [Environment(Name=k, Value=v) for (k, v) in config.get('env').items()]
 
         sidecar_container_defs = self._sidecar_container_defs(config, service_name)
-        fluentbit_task_definition_override = self._fluentbit_task_def_args_override(config, launch_type_td)
         td = TaskDefinition(
             service_name + "TaskDefinition",
             Family=service_name + "Family",
@@ -315,7 +321,7 @@ service is down',
             ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             TaskRoleArn=Ref(task_role),
             Tags=Tags(Team=self.team_name, environment=self.env),
-            **fluentbit_task_definition_override
+            **launch_type_td
         )
         if 'custom_metrics' in config:
             sd = SD(
@@ -552,6 +558,10 @@ service is down',
                     'labels': 'com.amazonaws.ecs.cluster,com.amazonaws.ecs.container-name,com.amazonaws.ecs.task-arn,com.amazonaws.ecs.task-definition-family,com.amazonaws.ecs.task-definition-version',
                     'fluentd-async': 'true'
                 }
+            )
+        elif config == 'awsfirelens':
+            return LogConfiguration(
+                LogDriver="awsfirelens"
             )
         elif config == 'null':
             return LogConfiguration(
@@ -963,17 +973,10 @@ building this service",
             return self.desired_counts[service_name]
         else:
             return 0
-    def _fluentbit_container_def_args_override(self, configuration, container_def_args):
-        # check if logging driver is fluentd
-        if configuration.get('logging') == 'fluentd':
-            container_def_args['MountPoints'] = container_def_args.get('MountPoints', []) + [MountPoint(ContainerPath='/var/run', SourceVolume='fluentbit-socket-volume')]
-            container_def_args['DependsOn'] = container_def_args.get('DependsOn', []) + [ContainerDependency(ContainerName='fluentbit-sidecar', Condition='START')]
+    def _firelens_container_def_args_override(self, configuration, container_def_args):
+        if configuration.get('logging') == 'awsfirelens':
+            container_def_args['DependsOn'] = container_def_args.get('DependsOn', []) + [ContainerDependency(ContainerName='fluentbit-firelens-sidecar', Condition='START')]
         return container_def_args
-
-    def _fluentbit_task_def_args_override(self, configuration, task_def_args):
-        if configuration.get('logging') == 'fluentd':
-            task_def_args['Volumes'] = task_def_args.get('Volumes', []) + [Volume(Name='fluentbit-socket-volume', DockerVolumeConfiguration=DockerVolumeConfiguration(Scope='task', Driver='local'))]
-        return task_def_args
 
     def _sidecar_container_defs(self, configuration, service_name):
         container_definitions = []
@@ -1014,11 +1017,16 @@ building this service",
                     MemoryReservation=memory_reservation,
                     Essential=essential,
                     MountPoints=mount_points,
-                    **container_def_args
+                    **self._sidecar_firelens_overrides(configuration, container_def_args)
                     # LogConfiguration=LogConfiguration(LogDriver="awslogs"),
                 )
                 container_definitions.append(container_definition)
         return container_definitions
+    
+    def _sidecar_firelens_overrides(self, configuration, container_def_args):
+        if configuration.get('logging') == 'awsfirelens':
+            container_def_args['FirelensConfiguration'] = FirelensConfiguration(Type='fluentbit')
+        return container_def_args
 
     @property
     def ecr_image_uri(self):
