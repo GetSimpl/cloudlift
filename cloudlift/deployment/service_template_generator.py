@@ -1,6 +1,7 @@
 import json
 import re
 import uuid
+import hashlib
 
 import boto3
 from botocore.exceptions import ClientError
@@ -21,13 +22,13 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              NetworkConfiguration, PlacementStrategy,
                              PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint, 
                              MountPoint, ContainerDependency, Environment,
-                             FirelensConfiguration)
+                             FirelensConfiguration, HealthCheck)
 from troposphere.elasticloadbalancingv2 import Action, Certificate, Listener
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
                                                 TargetGroupAttribute)
-from troposphere.iam import Role
+from troposphere.iam import Role, Policy
 from troposphere.servicediscovery import Service as SD
 from troposphere.servicediscovery import DnsConfig, DnsRecord
 from troposphere.events import Rule, Target
@@ -257,7 +258,7 @@ service is down',
                 )
             ]
         if 'logging' not in config or 'logging' in config and config['logging'] is not None:
-            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name, "awslogs" if 'logging' not in config else config['logging'])
+            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name, "awsfirelens" if 'logging' not in config else config['logging'])
 
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
@@ -281,14 +282,22 @@ service is down',
                         Effect=Allow,
                         Action=[AssumeRole],
                         Principal=Principal("Service", ["ecs-tasks.amazonaws.com"])
-                    ),
-                    Statement(
-                        Effect=Allow,
-                        Action=[PutRecordBatch],
-                        Resource=["*"]
                     )
                 ]
-            )
+            ),
+            Policies=[
+                Policy(
+                    PolicyName=service_name + "-Firelens-" + hashlib.sha1(service_name.encode()).hexdigest()[0:5],
+                    PolicyDocument=PolicyDocument(
+                        Statement=[
+                            Statement(
+                                Effect=Allow,
+                                Action=[PutRecordBatch, AssumeRole],
+                                Resource=["*"]
+                            )
+                        ]
+                    )
+                )]
         ))
 
         launch_type_td = {}
@@ -563,10 +572,9 @@ service is down',
             return LogConfiguration(
                 LogDriver="awsfirelens"
             )
-        elif config == 'null':
-            return LogConfiguration(
-                LogDriver="none"
-            )
+        return LogConfiguration(
+            LogDriver="none"
+        )
 
     def _add_alb(self, cd, service_name, config, launch_type):
         sg_name = 'SG' + self.env + service_name
@@ -1009,8 +1017,20 @@ building this service",
                         container_def_args['Environment'].append(Environment(Name=key, Value=value))
                 logging = sidecar.get('logging')
                 if logging is not None:
-                    container_def_args['LogConfiguration'] = self._gen_log_config(service_name, "awslogs" if 'logging' not in configuration else configuration['logging'])
+                    container_def_args['LogConfiguration'] = self._gen_log_config(service_name + f"-{container_name}", "awslogs" if 'logging' not in sidecar else logging)
+                health_check = sidecar.get('health_check')
+                if health_check is not None and health_check.get('command') is not None:
+                    health_check_args = {}
+                    health_check_args['Command'] = health_check['command']
+                    
+                    if health_check.get('interval') is not None:
+                        health_check_args['Interval'] = int(health_check['interval'])
+                    if health_check.get('retries') is not None:
+                        health_check_args['Retries'] = int(health_check['retries'])
+                    if health_check.get('timeout') is not None:
+                        health_check_args['Timeout'] = int(health_check['timeout'])
 
+                    container_def_args['HealthCheck'] = HealthCheck(**health_check_args)
                 container_definition = ContainerDefinition(
                     Name=container_name,
                     Image=image_uri,
@@ -1018,7 +1038,6 @@ building this service",
                     Essential=essential,
                     MountPoints=mount_points,
                     **self._sidecar_firelens_overrides(configuration, container_def_args)
-                    # LogConfiguration=LogConfiguration(LogDriver="awslogs"),
                 )
                 container_definitions.append(container_definition)
         return container_definitions

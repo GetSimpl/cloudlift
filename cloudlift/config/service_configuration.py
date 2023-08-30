@@ -42,6 +42,7 @@ class ServiceConfiguration(object):
         self.dynamodb_resource = get_resource_for('dynamodb',environment)
         self.table = DynamodbConfiguration(SERVICE_CONFIGURATION_TABLE, [
             ('service_name', self.service_name), ('environment', self.environment)])._get_table()
+        self.masked_config_keys = {}
 
     def edit_config(self):
         '''
@@ -51,7 +52,7 @@ class ServiceConfiguration(object):
         try:
             from cloudlift.version import VERSION
             current_configuration = self.get_config(VERSION)
-
+            current_configuration, _ = self._mask_config_keys(current_configuration, ["depends_on", "sidecars"])
             updated_configuration = edit(
                 json.dumps(
                     current_configuration,
@@ -78,6 +79,7 @@ class ServiceConfiguration(object):
                 else:
                     print_json_changes(differences)
                     if confirm('Do you want update the config?'):
+                        updated_configuration = self._restore_hidden_config_keys(updated_configuration)
                         self.set_config(updated_configuration)
                     else:
                         log_warning("Changes aborted.")
@@ -130,7 +132,7 @@ class ServiceConfiguration(object):
         # inject fluentbit sidecars if needed
         if config.get('services'):
             for service_name, service_configuration in config.get('services').items():
-                config['services'][service_name] = self._inject_fluentbit_sidecar(service_configuration)
+                config['services'][service_name] = self._unmask_config_keys(service_configuration)
 
 
         self._validate_changes(config)
@@ -293,6 +295,20 @@ class ServiceConfiguration(object):
                                 "type": "object"
                             },
                             "essential": {"type": "boolean"},
+                            "health_check": {
+                                "type": "object",
+                                "properties": {
+                                    "command": {
+                                        "type": "array",
+                                        "items": {"type": "string"}
+                                        },
+                                    "interval": {"type": "number"},
+                                    "timeout": {"type": "number"},
+                                    "retries": {"type": "number"},
+                                    "start_period": {"type": "number"}
+                                },
+                                "required": ["command"]
+                            }
                         },
                         "required": ["name", "image_uri", "memory_reservation", "essential"]
                     }
@@ -351,15 +367,47 @@ class ServiceConfiguration(object):
                 }
             }
         }
+    def _mask_config_keys(self, configuration, keys_to_mask):
+        for service_name, service_data in configuration["services"].items():
+            if service_name not in self.masked_config_keys:
+                self.masked_config_keys[service_name] = {}
+            for key in keys_to_mask:
+                if key in service_data:
+                    self.masked_config_keys[service_name][key] = service_data.pop(key)
+        return configuration, self.masked_config_keys
+
+    def _restore_hidden_config_keys(self, configuration):
+        for service_name, masked_keys in self.masked_config_keys.items():
+            if service_name in configuration["services"]:
+                service_data = configuration["services"][service_name]
+                for key, value in masked_keys.items():
+                    service_data[key] = value
+        return configuration
     
-    def _inject_fluentbit_sidecar(self, service_configuration):
+    def _unmask_config_keys(self, service_configuration):
         '''
         Inject fluentbit sidecar in service configuration
         '''
         try:
             logging_driver = service_configuration.get('logging')
             if logging_driver is None or logging_driver != 'awsfirelens':
+                # if logging is not set to awsfirelens, remove the fluentbit sidecar container configuration if present
+                sidecars = service_configuration.get('sidecars', [])
+                sidecars = [sidecar for sidecar in sidecars if sidecar.get('name') != 'fluentbit-firelens-sidecar']
+                if len(sidecars) == 0:
+                    del service_configuration['sidecars']
+                else:
+                    service_configuration['sidecars'] = sidecars
+                
+                if service_configuration.get('depends_on'):
+                    depends_on = service_configuration.get('depends_on')
+                    depends_on = [depend_on for depend_on in depends_on if depend_on.get('container_name') != 'fluentbit-firelens-sidecar']
+                    if len(depends_on) == 0:
+                        del service_configuration['depends_on']
+                    else: 
+                        service_configuration['depends_on'] = depends_on
                 return service_configuration
+            
             if any(sidecar.get('name') == 'fluentbit-firelens-sidecar' for sidecar in service_configuration.get('sidecars', [])):
                 return service_configuration
             
@@ -397,7 +445,14 @@ class ServiceConfiguration(object):
                     'memory_reservation': 50,
                     'essential': True,
                     'image_uri': fluentbit_image_uri,
-                    'env': env_vars
+                    'env': env_vars,
+                    'logging': 'awslogs',
+                    'health_check': {
+                        'command': ['CMD-SHELL', 'curl -f -s http://localhost:2020/api/v1/health || exit 1'],
+                        'interval': 5,
+                        'timeout': 2,
+                        'retries': 3,
+                    },
                 })
 
             service_configuration['sidecars'] = sidecars
