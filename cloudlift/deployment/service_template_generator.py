@@ -42,7 +42,7 @@ from cloudlift.deployment.ecs import DeployAction, EcsClient
 from cloudlift.config.logging import log, log_bold
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
-
+from cloudlift.constants import FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
 
 class ServiceTemplateGenerator(TemplateGenerator):
     PLACEMENT_STRATEGIES = [
@@ -983,7 +983,7 @@ building this service",
             return 0
     def _firelens_container_def_args_override(self, configuration, container_def_args):
         if configuration.get('logging') == 'awsfirelens':
-            container_def_args['DependsOn'] = container_def_args.get('DependsOn', []) + [ContainerDependency(ContainerName='fluentbit-firelens-sidecar', Condition='START')]
+            container_def_args['DependsOn'] = container_def_args.get('DependsOn', []) + [ContainerDependency(ContainerName=FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME, Condition='START')]
         return container_def_args
 
     def _sidecar_container_defs(self, configuration, service_name):

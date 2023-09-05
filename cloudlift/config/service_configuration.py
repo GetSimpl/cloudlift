@@ -21,6 +21,7 @@ from cloudlift.version import VERSION
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 from cloudlift.config.pre_flight import check_sns_topic_exists
 from cloudlift.config.environment_configuration import EnvironmentConfiguration
+from cloudlift.constants import FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -339,7 +340,7 @@ class ServiceConfiguration(object):
         try:
             for _, service_configuration in configuration.get('services').items():
                 for sidecar in service_configuration.get('sidecars', []):
-                    if sidecar.get('name') == 'fluentbit-firelens-sidecar' and sidecar.get('log_driver') == 'awsfirelens':
+                    if sidecar.get('name') == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME and sidecar.get('log_driver') == 'awsfirelens':
                         raise UnrecoverableException("Logging set to awsfirelens, but fluentbit firelens sidecar container is missing or has incorrect log driver.")
             validate(configuration, schema)
         except ValidationError as validation_error:
@@ -393,7 +394,7 @@ class ServiceConfiguration(object):
             if logging_driver is None or logging_driver != 'awsfirelens':
                 # if logging is not set to awsfirelens, remove the fluentbit sidecar container configuration if present
                 sidecars = service_configuration.get('sidecars', [])
-                sidecars = [sidecar for sidecar in sidecars if sidecar.get('name') != 'fluentbit-firelens-sidecar']
+                sidecars = [sidecar for sidecar in sidecars if sidecar.get('name') != FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME]
                 if len(sidecars) == 0:
                     del service_configuration['sidecars']
                 else:
@@ -401,14 +402,14 @@ class ServiceConfiguration(object):
                 
                 if service_configuration.get('depends_on'):
                     depends_on = service_configuration.get('depends_on')
-                    depends_on = [depend_on for depend_on in depends_on if depend_on.get('container_name') != 'fluentbit-firelens-sidecar']
+                    depends_on = [depend_on for depend_on in depends_on if depend_on.get('container_name') != FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME]
                     if len(depends_on) == 0:
                         del service_configuration['depends_on']
                     else: 
                         service_configuration['depends_on'] = depends_on
                 return service_configuration
             
-            if any(sidecar.get('name') == 'fluentbit-firelens-sidecar' for sidecar in service_configuration.get('sidecars', [])):
+            if any(sidecar.get('name') == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME for sidecar in service_configuration.get('sidecars', [])):
                 return service_configuration
             
             log_bold('Logging driver found: awsfirelens')
@@ -427,21 +428,21 @@ class ServiceConfiguration(object):
             else:
                 fluentbit_image_uri = prompt('Enter fluentbit image URI', confirmation_prompt=True, type=str)
 
-            if not service_configuration.get('depends_on') or not any(depends_on.get('container_name') == 'fluentbit-firelens-sidecar' for depends_on in service_configuration['depends_on']):
+            if not service_configuration.get('depends_on') or not any(depends_on.get('container_name') == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME for depends_on in service_configuration['depends_on']):
                 service_configuration['depends_on'] = service_configuration.get('depends_on', []) + [{
-                    'container_name': 'fluentbit-firelens-sidecar',
+                    'container_name': FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME,
                     'condition': 'START'
                 }]
 
-            # Check if no sidecar is present with name fluentbit-firelens-sidecar
-            if not any(sidecar.get('name') == 'fluentbit-firelens-sidecar' for sidecar in sidecars):
+            # Check if no sidecar is present with name FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
+            if not any(sidecar.get('name') == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME for sidecar in sidecars):
                 env_vars = default_fluentbit_config.get('env', {})
 
                 if not env_vars.get('delivery_stream'):
                     env_vars['delivery_stream'] = self.environment + "-" + self.service_name
 
                 sidecars.append({
-                    'name': 'fluentbit-firelens-sidecar',
+                    'name': FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME,
                     'memory_reservation': 50,
                     'essential': True,
                     'image_uri': fluentbit_image_uri,
