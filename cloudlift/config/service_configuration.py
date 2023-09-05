@@ -79,7 +79,7 @@ class ServiceConfiguration(object):
                 else:
                     print_json_changes(differences)
                     if confirm('Do you want update the config?'):
-                        updated_configuration = self._restore_hidden_config_keys(updated_configuration)
+                        updated_configuration = self._unmask_config_keys(updated_configuration)
                         self.set_config(updated_configuration)
                     else:
                         log_warning("Changes aborted.")
@@ -132,7 +132,7 @@ class ServiceConfiguration(object):
         # inject fluentbit sidecars if needed
         if config.get('services'):
             for service_name, service_configuration in config.get('services').items():
-                config['services'][service_name] = self._unmask_config_keys(service_configuration)
+                config['services'][service_name] = self._inject_fluentbit_sidecar(service_configuration)
 
 
         self._validate_changes(config)
@@ -376,7 +376,7 @@ class ServiceConfiguration(object):
                     self.masked_config_keys[service_name][key] = service_data.pop(key)
         return configuration, self.masked_config_keys
 
-    def _restore_hidden_config_keys(self, configuration):
+    def _unmask_config_keys(self, configuration):
         for service_name, masked_keys in self.masked_config_keys.items():
             if service_name in configuration["services"]:
                 service_data = configuration["services"][service_name]
@@ -384,7 +384,7 @@ class ServiceConfiguration(object):
                     service_data[key] = value
         return configuration
     
-    def _unmask_config_keys(self, service_configuration):
+    def _inject_fluentbit_sidecar(self, service_configuration):
         '''
         Inject fluentbit sidecar in service configuration
         '''
