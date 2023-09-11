@@ -319,8 +319,6 @@ service is down',
                     RootDirectory=config['volume']['efs_directory_path']
                 )
             )]
-        if 'env' in config and isinstance(config.get('env'), dict):
-            launch_type_td['Environment'] = [Environment(Name=k, Value=v) for (k, v) in config.get('env').items()]
 
         sidecar_container_defs = self._sidecar_container_defs(config, service_name)
         td = TaskDefinition(
