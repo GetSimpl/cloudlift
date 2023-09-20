@@ -364,7 +364,8 @@ class ServiceConfiguration(object):
                     },
                     u'memory_reservation': 250,
                     u'command': None,
-                    u'spot_deployment': False
+                    u'spot_deployment': False,
+                    u'logging': 'awsfirelens'
                 }
             }
         }
@@ -392,13 +393,15 @@ class ServiceConfiguration(object):
         try:
             logging_driver = service_configuration.get('logging')
             if logging_driver is None or logging_driver != 'awsfirelens':
-                # if logging is not set to awsfirelens, remove the fluentbit sidecar container configuration if present
-                sidecars = service_configuration.get('sidecars', [])
-                sidecars = [sidecar for sidecar in sidecars if sidecar.get('name') != FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME]
-                if len(sidecars) == 0:
-                    del service_configuration['sidecars']
-                else:
-                    service_configuration['sidecars'] = sidecars
+                if service_configuration.get('sidecars'):
+                    # if logging is not set to awsfirelens, remove the fluentbit sidecar container configuration if present
+                    sidecars = service_configuration.get('sidecars')
+                    other_sidecars = [sidecar for sidecar in sidecars if sidecar.get('name') != FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME]
+                    # remove the key 'sidecars' if it's an empty list
+                    if len(other_sidecars) == 0:
+                        del service_configuration['sidecars']
+                    else:
+                        service_configuration['sidecars'] = other_sidecars
                 
                 if service_configuration.get('depends_on'):
                     depends_on = service_configuration.get('depends_on')
