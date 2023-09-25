@@ -150,6 +150,7 @@ class EnvironmentConfiguration(object):
             spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
             if spot_allocation_strategy == 'lowest-price':
                 spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
+        cluster_ami_id_ssm = prompt("SSM parameter path of Custom AMI ID", default='None')
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
@@ -186,6 +187,7 @@ class EnvironmentConfiguration(object):
                 "spot_max_instances": spot_cluster_max_instances,
                 "instance_type": cluster_instance_types,
                 "key_name": key_name,
+                "ami_id": cluster_ami_id_ssm,
                 "ecs_instance_default_lifecycle_type": ecs_cluster_default_instance_type.lower()
             },
             "environment": {
