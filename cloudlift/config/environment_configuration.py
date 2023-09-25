@@ -58,7 +58,7 @@ class EnvironmentConfiguration(object):
             # print(f"Previous cloudlift version in environment config is {previous_cloudlift_version}")
             if previous_cloudlift_version and LooseVersion(cloudlift_version) < LooseVersion(previous_cloudlift_version):
                 raise UnrecoverableException(f'Cloudlift Version {previous_cloudlift_version} was used to '
-                                             f'create this service. You are using version {cloudlift_version}, '
+                                             f'create this environment. You are using version {cloudlift_version}, '
                                              f'which is older and can cause corruption. Please upgrade to at least '
                                              f'version {previous_cloudlift_version} to proceed.\n\nUpgrade to the '
                                              f'latest version (Recommended):\n'
