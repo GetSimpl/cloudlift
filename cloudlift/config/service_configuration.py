@@ -3,24 +3,21 @@ This module abstracts implementation of storing, editing and
 retrieving service configuration.
 '''
 
-import json
-from time import sleep
-
 import dictdiffer
 from botocore.exceptions import ClientError
-from click import confirm, edit
+from click import confirm
 from cloudlift.exceptions import UnrecoverableException
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from stringcase import pascalcase
 
-from cloudlift.config import DecimalEncoder, print_json_changes, get_resource_for
+from cloudlift.config import  print_json_changes, get_resource_for
 # import config.mfa as mfa
-from cloudlift.config.logging import log_bold, log_err, log_warning, log
+from cloudlift.config.logging import log_bold, log_err, log_warning
 from cloudlift.version import VERSION
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 from cloudlift.config.pre_flight import check_sns_topic_exists
-
+from cloudlift.config.utils import ConfigUtils
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
 
@@ -42,6 +39,7 @@ class ServiceConfiguration(object):
         self.dynamodb_resource = get_resource_for('dynamodb',environment)
         self.table = DynamodbConfiguration(SERVICE_CONFIGURATION_TABLE, [
             ('service_name', self.service_name), ('environment', self.environment)])._get_table()
+        self.config_utils = ConfigUtils(changes_validation_function=self._validate_changes)
 
     def edit_config(self):
         '''
@@ -52,14 +50,7 @@ class ServiceConfiguration(object):
             from cloudlift.version import VERSION
             current_configuration = self.get_config(VERSION)
 
-            updated_configuration = edit(
-                json.dumps(
-                    current_configuration,
-                    indent=4,
-                    sort_keys=True,
-                    cls=DecimalEncoder
-                )
-            )
+            updated_configuration = self.config_utils.fault_tolerant_edit_config(current_configuration=current_configuration, inject_version=True)
 
             if updated_configuration is None:
                 if self.new_service:
@@ -68,7 +59,6 @@ class ServiceConfiguration(object):
                 else:
                     log_warning("No changes made.")
             else:
-                updated_configuration = json.loads(updated_configuration)
                 differences = list(dictdiffer.diff(
                     current_configuration,
                     updated_configuration
@@ -77,7 +67,7 @@ class ServiceConfiguration(object):
                     log_warning("No changes made.")
                 else:
                     print_json_changes(differences)
-                    if confirm('Do you want update the config?'):
+                    if confirm('Do you want to update the config?'):
                         self.set_config(updated_configuration)
                     else:
                         log_warning("Changes aborted.")
@@ -259,6 +249,7 @@ class ServiceConfiguration(object):
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
+            log_err("Schema validation failed!")
             if validation_error.relative_path:
                 raise UnrecoverableException(validation_error.message + " in " +
                         str(".".join(list(validation_error.relative_path))))
