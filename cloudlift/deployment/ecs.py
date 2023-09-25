@@ -68,6 +68,10 @@ class EcsClient(object):
                 'cpu': cpu,
                 'memory': memory,
             }
+            
+        if not any(tag['key'] == 'task_definition_source' for tag in tags):
+            tags.append({'key': 'task_definition_source', 'value': 'boto3'})
+
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
@@ -436,9 +440,12 @@ class EcsAction(object):
                 'memory' : task_definition.memory or u'',
 
             }
-            
         new_tags = []
-        for tag in task_definition.tags:
+        tags = task_definition.get('tags', [])
+        if not tags:
+            new_tags.append({'key': 'task_definition_source', 'value': 'boto3'})
+
+        for tag in tags:
             if tag['key'] == 'task_definition_source':
                 new_tags.append({'key': tag['key'], 'value': 'boto3'})
             else:
