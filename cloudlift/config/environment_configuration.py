@@ -18,6 +18,7 @@ from cloudlift.config import DecimalEncoder, print_json_changes
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 from cloudlift.config.pre_flight import check_sns_topic_exists, check_aws_instance_type
 from cloudlift.config.utils import ConfigUtils
+from cloudlift.constants import logging_json_schema
 # import config.mfa as mfa
 from cloudlift.config.logging import log_bold, log_err, log_warning
 
@@ -194,11 +195,14 @@ class EnvironmentConfiguration(object):
                 "notifications_arn": notifications_arn,
                 "ssl_certificate_arn": ssl_certificate_arn
             },
-            "fluentbit_config": {
+            "service_defaults": {
+                "logging": "awslogs",
+                "fluentbit_config": {
                 "image_uri": "amazon/aws-for-fluent-bit:stable",
                 "env": {
                     "kinesis_role_arn": ""
-                }
+                    }
+                },
             }
         }, 'cloudlift_version': VERSION}
         if cluster_types != 1:
@@ -410,17 +414,23 @@ class EnvironmentConfiguration(object):
                                 "subnets"
                             ]
                         },
-                        "fluentbit_config": {
+                        "service_defaults": {
                             "type": "object",
                             "properties": {
-                                "image_uri": {
-                                    "type": "string"
-                                },
-                                "env": {
+                                "logging": logging_json_schema,
+                                "fluentbit_config": {
                                     "type": "object",
-                                }
-                            },
-                            "required": ["image_uri"]
+                                    "properties": {
+                                        "image_uri": {
+                                            "type": "string"
+                                        },
+                                        "env": {
+                                            "type": "object",
+                                        }
+                                    },
+                                    "required": ["image_uri"]
+                                },
+                            }
                         }
                     },
                     "required": [

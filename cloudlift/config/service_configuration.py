@@ -44,6 +44,7 @@ class ServiceConfiguration(object):
 
         self.masked_config_keys = {}
         self.config_utils = ConfigUtils(changes_validation_function=self._validate_changes)
+        self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
 
     def edit_config(self):
         '''
@@ -230,12 +231,7 @@ class ServiceConfiguration(object):
                 "spot_deployment": {
                     "type": "boolean"
                 },
-                "logging": {
-                    "oneOf": [
-                        {"type": "string", "pattern": "^(awslogs|awsfirelens|null)$"},
-                        {"type": "null"}
-                    ]
-                },
+                "logging": logging_json_schema,
                 "depends_on": {
                     "type": "array",
                     "items": {
@@ -263,27 +259,11 @@ class ServiceConfiguration(object):
                                     {"type": "null"}
                                 ]
                             },
-                            "logging": {
-                                "oneOf": [
-                                    {"type": "string", "pattern": "^(awslogs|awsfirelens|null)$"},
-                                    {"type": "null"}
-                                ]
-                            },
+                            "logging": logging_json_schema,
                             "memory_reservation": {
                                 "type": "number",
                                 "minimum": 10,
                                 "maximum": 30000
-                            },
-                            "mount_points": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "container_path": {"type": "string"},
-                                        "source_volume": {"type": "string"}
-                                    },
-                                    "required": ["container_path", "source_volume"]
-                                }
                             },
                             "env": {
                                 "type": "object"
@@ -334,7 +314,7 @@ class ServiceConfiguration(object):
             for _, service_configuration in configuration.get('services').items():
                 for sidecar in service_configuration.get('sidecars', []):
                     if sidecar.get('name') == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME and sidecar.get('log_driver') == 'awsfirelens':
-                        raise UnrecoverableException("Logging set to awsfirelens, but fluentbit firelens sidecar container is missing or has incorrect log driver.")
+                        raise UnrecoverableException("Set logging to 'awslogs' or 'null' for fluentbit firelens sidecar when using 'awsfirelens' for main container logging.")
             validate(configuration, schema)
         except ValidationError as validation_error:
             log_err("Schema validation failed!")
@@ -358,8 +338,7 @@ class ServiceConfiguration(object):
                     },
                     u'memory_reservation': 250,
                     u'command': None,
-                    u'spot_deployment': False,
-                    u'logging': 'awsfirelens'
+                    u'spot_deployment': False
                 }
             }
         }
@@ -385,7 +364,13 @@ class ServiceConfiguration(object):
         Inject fluentbit sidecar in service configuration
         '''
         try:
-            logging_driver = service_configuration.get('logging')
+            service_defaults = self.environment_configuration.get('service_defaults', {})
+            logging_driver = service_configuration.get('logging') or service_defaults.get('logging')
+
+            # If 'logging' is explicitly set to None in service_configuration, override with None
+            if 'logging' in service_configuration and service_configuration.get('logging') is None:
+                logging_driver = None
+
             if logging_driver is None or logging_driver != 'awsfirelens':
                 if service_configuration.get('sidecars'):
                     # if logging is not set to awsfirelens, remove the fluentbit sidecar container configuration if present
@@ -413,8 +398,7 @@ class ServiceConfiguration(object):
             
             sidecars = service_configuration.get('sidecars', [])
 
-            environment_configuration = EnvironmentConfiguration(self.environment).get_config()
-            default_fluentbit_config = environment_configuration.get(self.environment).get('fluentbit_config', {})
+            default_fluentbit_config = service_defaults.get('fluentbit_config', {})
             
             if default_fluentbit_config == {}:
                 log_warning('Default fluentbit configuration not found in environment configuration. To avoid entering fluentbit image URI manually repeatedly, add it to environment configuration.')
@@ -435,8 +419,10 @@ class ServiceConfiguration(object):
             if not any(sidecar.get('name') == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME for sidecar in sidecars):
                 env_vars = default_fluentbit_config.get('env', {})
 
-                if not env_vars.get('delivery_stream'):
-                    env_vars['delivery_stream'] = self.environment + "-" + self.service_name
+                env_vars.setdefault('delivery_stream', f"{self.environment}-{self.service_name}")
+                env_vars.setdefault('CL_ENVIRONMENT', self.environment)
+                env_vars.setdefault('CL_SERVICE', self.service_name)
+
 
                 sidecars.append({
                     'name': FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME,

@@ -1,7 +1,6 @@
 import json
 import re
 import uuid
-import hashlib
 
 import boto3
 from botocore.exceptions import ClientError
@@ -43,6 +42,7 @@ from cloudlift.config.logging import log, log_bold
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.constants import FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
+from cloudlift.config.environment_configuration import EnvironmentConfiguration
 
 class ServiceTemplateGenerator(TemplateGenerator):
     PLACEMENT_STRATEGIES = [
@@ -70,7 +70,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.environment = service_configuration.environment
         self.client = get_client_for('s3', self.environment)
         self.team_name = (self.notifications_arn.split(':')[-1])
-
+        self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
         self.configuration = service_configuration.get_config(VERSION)
@@ -258,8 +258,18 @@ service is down',
                     )
                 )
             ]
+
+        if 'logging' not in config:
+            service_defaults = self.environment_configuration.get('service_defaults')
+            default_logging = service_defaults.get('logging')
+            if default_logging:
+                # Side Effect
+                # This assignment ensures 'config' has the default logging key for future operations
+                config['logging'] = default_logging 
+
         if 'logging' not in config or 'logging' in config and config['logging'] is not None:
-            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name, "awsfirelens" if 'logging' not in config else config['logging'])
+            log_type = "awslogs" if 'logging' not in config else config['logging']
+            container_definition_arguments['LogConfiguration'] = self._gen_log_config(service_name, log_type)
 
         if config['command'] is not None:
             container_definition_arguments['Command'] = [config['command']]
@@ -275,6 +285,25 @@ service is down',
 
         cd = ContainerDefinition(**self._firelens_container_def_args_override(config, container_definition_arguments))
 
+        task_role_args = {}
+        if config.get("logging") == "awsfirelens":
+            service_defaults = self.environment_configuration.get('service_defaults', {})
+            assume_role_resource = service_defaults.get('env', {}).get('kinesis_role_arn')
+            task_role_args["Policies"] = [
+                Policy(
+                    PolicyName=service_name + "-Firelens",
+                    PolicyDocument=PolicyDocument(
+                        Statement=[
+                            Statement(
+                                Effect=Allow,
+                                Action=[AssumeRole],
+                                Resource=[assume_role_resource or "*"],
+                            )
+                        ]
+                    ),
+                )
+            ]
+
         task_role = self.template.add_resource(Role(
             service_name + "Role",
             AssumeRolePolicyDocument=PolicyDocument(
@@ -286,19 +315,7 @@ service is down',
                     )
                 ]
             ),
-            Policies=[
-                Policy(
-                    PolicyName=service_name + "-Firelens-" + hashlib.sha1(service_name.encode()).hexdigest()[0:5],
-                    PolicyDocument=PolicyDocument(
-                        Statement=[
-                            Statement(
-                                Effect=Allow,
-                                Action=[PutRecordBatch, AssumeRole],
-                                Resource=["*"]
-                            )
-                        ]
-                    )
-                )]
+            **task_role_args
         ))
 
         launch_type_td = {}
@@ -980,9 +997,26 @@ building this service",
             return self.desired_counts[service_name]
         else:
             return 0
+        
     def _firelens_container_def_args_override(self, configuration, container_def_args):
-        if configuration.get('logging') == 'awsfirelens':
-            container_def_args['DependsOn'] = container_def_args.get('DependsOn', []) + [ContainerDependency(ContainerName=FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME, Condition='START')]
+        logging_type = configuration.get("logging")
+        firelens_dependency = ContainerDependency(
+            ContainerName=FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME, Condition="START"
+        )
+
+        if logging_type == "awsfirelens":
+            dependencies = container_def_args.get("DependsOn", [])
+
+            is_firelens_dependency_present = any(
+                isinstance(dep, ContainerDependency)
+                and dep.ContainerName == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
+                for dep in dependencies
+            )
+
+            if not is_firelens_dependency_present:
+                dependencies.append(firelens_dependency)
+                container_def_args["DependsOn"] = dependencies
+
         return container_def_args
 
     def _sidecar_container_defs(self, configuration, service_name):
@@ -996,13 +1030,6 @@ building this service",
                 memory_reservation = int(sidecar.get('memory_reservation', 50))
                 essential = sidecar.get('essential', True)
                 
-                mount_points = []
-                if sidecar.get('mount_points') and isinstance(sidecar['mount_points'], list):
-                    for mount_point in sidecar['mount_points']:
-                        container_path = mount_point.get('container_path')
-                        source_volume = mount_point.get('source_volume')
-                        if container_path and source_volume:
-                            mount_points.append(MountPoint(ContainerPath=container_path, SourceVolume=source_volume))
                 
                 container_def_args = {}
                 command = sidecar.get('command')
@@ -1016,7 +1043,10 @@ building this service",
                         container_def_args['Environment'].append(Environment(Name=key, Value=value))
                 logging = sidecar.get('logging')
                 if logging is not None:
-                    container_def_args['LogConfiguration'] = self._gen_log_config(service_name + f"-{container_name}", "awslogs" if 'logging' not in sidecar else logging)
+                    log_stream_prefix = service_name + f"-{container_name}"
+                    log_type = "awslogs" if 'logging' not in sidecar else logging
+                    container_def_args['LogConfiguration'] = self._gen_log_config(log_stream_prefix, log_type)
+
                 health_check = sidecar.get('health_check')
                 if health_check is not None and health_check.get('command') is not None:
                     health_check_args = {}
@@ -1035,7 +1065,6 @@ building this service",
                     Image=image_uri,
                     MemoryReservation=memory_reservation,
                     Essential=essential,
-                    MountPoints=mount_points,
                     **self._sidecar_firelens_overrides(configuration, container_def_args)
                 )
                 container_definitions.append(container_definition)
