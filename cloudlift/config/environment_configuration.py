@@ -3,13 +3,12 @@ This module handles global cloudlift configuration that is custom to
 the organization using cloudlift
 """
 import ipaddress
-import json
 from distutils.version import LooseVersion
 
 import boto3
 import dictdiffer
 from botocore.exceptions import ClientError
-from click import confirm, edit, prompt
+from click import confirm, prompt
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
@@ -18,7 +17,7 @@ from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config import DecimalEncoder, print_json_changes
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 from cloudlift.config.pre_flight import check_sns_topic_exists, check_aws_instance_type
-
+from cloudlift.config.utils import ConfigUtils
 # import config.mfa as mfa
 from cloudlift.config.logging import log_bold, log_err, log_warning
 
@@ -37,6 +36,7 @@ class EnvironmentConfiguration(object):
         self.dynamodb = session.resource('dynamodb')
         self.table = DynamodbConfiguration(ENVIRONMENT_CONFIGURATION_TABLE, [
                        ('environment', self.environment)])._get_table()
+        self.config_utils = ConfigUtils(changes_validation_function=self._validate_changes)
 
     def get_config(self, cloudlift_version=VERSION):
         '''
@@ -150,6 +150,7 @@ class EnvironmentConfiguration(object):
             spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
             if spot_allocation_strategy == 'lowest-price':
                 spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
+        cluster_ami_id_ssm = prompt("SSM parameter path of Custom AMI ID", default='None')
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
@@ -186,6 +187,7 @@ class EnvironmentConfiguration(object):
                 "spot_max_instances": spot_cluster_max_instances,
                 "instance_type": cluster_instance_types,
                 "key_name": key_name,
+                "ami_id": cluster_ami_id_ssm,
                 "ecs_instance_default_lifecycle_type": ecs_cluster_default_instance_type.lower()
             },
             "environment": {
@@ -213,35 +215,26 @@ class EnvironmentConfiguration(object):
         try:
             current_configuration = self.get_config()
             previous_cloudlift_version = current_configuration.pop('cloudlift_version', None)
-            updated_configuration = edit(
-                json.dumps(
-                    current_configuration,
-                    indent=4,
-                    sort_keys=True,
-                    cls=DecimalEncoder
-                )
-            )
-
+            updated_configuration = self.config_utils.fault_tolerant_edit_config(current_configuration=current_configuration)
             if updated_configuration is None:
                 log_warning("No changes made.")
-            else:
-                updated_configuration = json.loads(updated_configuration)
-                differences = list(dictdiffer.diff(
+                return
+            differences = list(dictdiffer.diff(
                     current_configuration,
                     updated_configuration
                 ))
-                if not differences:
+            if not differences:
                     log_warning("No changes made.")
                     updated_configuration['cloudlift_version']=VERSION
                     self._set_config(updated_configuration)
                     # self.update_cloudlift_version()
+            else:
+                print_json_changes(differences)
+                if confirm('Do you want to update the config?'):
+                    self._set_config(updated_configuration)
+                    # self.update_cloudlift_version()
                 else:
-                    print_json_changes(differences)
-                    if confirm('Do you want update the config?'):
-                        self._set_config(updated_configuration)
-                        # self.update_cloudlift_version()
-                    else:
-                        log_warning("Changes aborted.")
+                    log_warning("Changes aborted.")
         except ClientError:
             raise UnrecoverableException("Unable to fetch environment configuration from DynamoDB.")
 
@@ -443,6 +436,7 @@ class EnvironmentConfiguration(object):
         try:
             validate(configuration, schema)
         except ValidationError as validation_error:
+            log_err("Schema validation failed!")
             error_path = str(".".join(list(validation_error.relative_path)))
             if error_path:
                 raise UnrecoverableException(validation_error.message + " in " + error_path)
