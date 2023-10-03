@@ -18,6 +18,7 @@ from cloudlift.config import DecimalEncoder, print_json_changes
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 from cloudlift.config.pre_flight import check_sns_topic_exists, check_aws_instance_type
 from cloudlift.config.utils import ConfigUtils
+from cloudlift.constants import logging_json_schema
 # import config.mfa as mfa
 from cloudlift.config.logging import log_bold, log_err, log_warning
 
@@ -58,7 +59,7 @@ class EnvironmentConfiguration(object):
             # print(f"Previous cloudlift version in environment config is {previous_cloudlift_version}")
             if previous_cloudlift_version and LooseVersion(cloudlift_version) < LooseVersion(previous_cloudlift_version):
                 raise UnrecoverableException(f'Cloudlift Version {previous_cloudlift_version} was used to '
-                                             f'create this service. You are using version {cloudlift_version}, '
+                                             f'create this environment. You are using version {cloudlift_version}, '
                                              f'which is older and can cause corruption. Please upgrade to at least '
                                              f'version {previous_cloudlift_version} to proceed.\n\nUpgrade to the '
                                              f'latest version (Recommended):\n'
@@ -193,6 +194,15 @@ class EnvironmentConfiguration(object):
             "environment": {
                 "notifications_arn": notifications_arn,
                 "ssl_certificate_arn": ssl_certificate_arn
+            },
+            "service_defaults": {
+                "logging": "awslogs",
+                "fluentbit_config": {
+                "image_uri": "amazon/aws-for-fluent-bit:stable",
+                "env": {
+                    "kinesis_role_arn": ""
+                    }
+                },
             }
         }, 'cloudlift_version': VERSION}
         if cluster_types != 1:
@@ -403,8 +413,25 @@ class EnvironmentConfiguration(object):
                                 "nat-gateway",
                                 "subnets"
                             ]
+                        },
+                        "service_defaults": {
+                            "type": "object",
+                            "properties": {
+                                "logging": logging_json_schema,
+                                "fluentbit_config": {
+                                    "type": "object",
+                                    "properties": {
+                                        "image_uri": {
+                                            "type": "string"
+                                        },
+                                        "env": {
+                                            "type": "object",
+                                        }
+                                    },
+                                    "required": ["image_uri"]
+                                },
+                            }
                         }
-
                     },
                     "required": [
                         "cluster",
