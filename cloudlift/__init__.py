@@ -10,6 +10,7 @@ from cloudlift.deployment.configs import deduce_name
 from cloudlift.deployment import EnvironmentCreator, editor
 from cloudlift.config.logging import log_err
 from cloudlift.deployment.service_creator import ServiceCreator
+from cloudlift.deployment.service_deletion import ServiceDeletion
 from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
 from cloudlift.deployment.service_updater import ServiceUpdater
 from cloudlift.deployment.task_definition_creator import TaskDefinitionCreator
@@ -171,6 +172,14 @@ service task")
 @click.option('--component', help='nested service name')
 def start_session(name, environment, mfa, component):
     SessionCreator(name, environment).start_session(mfa, component)
+
+
+@cli.command(help="Delete a service. This will delete all nested \
+ECS services")
+@_require_environment
+@_require_name
+def delete_service(name, environment):
+    ServiceDeletion(name, environment).delete_stack()
 
 
 if __name__ == '__main__':
