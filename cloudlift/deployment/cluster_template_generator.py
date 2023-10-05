@@ -727,9 +727,9 @@ class ClusterTemplateGenerator(TemplateGenerator):
 
     def _add_mappings(self):
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
-        ami_id_ssm = self.configuration['cluster']['ami_id']
+        ami_id_ssm = self.configuration.get('cluster', {}).get('ami_id', None)
         ssm_client = get_client_for('ssm', self.env)
-        if ami_id_ssm == 'None':
+        if ami_id_ssm == None:
             ami_response = ssm_client.get_parameter(
                 Name='/aws/service/ecs/optimized-ami/amazon-linux-2/recommended')
         else:
