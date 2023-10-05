@@ -18,7 +18,7 @@ from cloudlift.version import VERSION
 from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 from cloudlift.config.pre_flight import check_sns_topic_exists
 from cloudlift.config.environment_configuration import EnvironmentConfiguration
-from cloudlift.constants import FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
+from cloudlift.constants import FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME, logging_json_schema
 from cloudlift.config.utils import ConfigUtils
 
 SERVICE_CONFIGURATION_TABLE = 'service_configurations'
