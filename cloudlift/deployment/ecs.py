@@ -321,13 +321,13 @@ class EcsTaskDefinition(dict):
             old_environment
         )
         self._diff.append(diff)
-        container[u'secrets'] = [
-            {
-                "name": e,
-                "valueFrom": merged_environment[e]
-            } for e in merged_environment
-        ]
         if not container.get('name', '').endswith('-sidecar'):
+            container[u'secrets'] = [
+                {
+                    "name": e,
+                    "valueFrom": merged_environment[e]
+                } for e in merged_environment
+            ]
             if container[u'environment'] is not None:
                 container[u'environment'] = []
 
