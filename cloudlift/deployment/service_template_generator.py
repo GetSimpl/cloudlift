@@ -260,7 +260,7 @@ service is down',
             ]
 
         if 'logging' not in config:
-            service_defaults = self.environment_configuration.get('service_defaults')
+            service_defaults = self.environment_configuration.get('service_defaults', {})
             default_logging = service_defaults.get('logging')
             if default_logging:
                 # Side Effect
