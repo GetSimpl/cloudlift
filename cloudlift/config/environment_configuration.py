@@ -152,6 +152,8 @@ class EnvironmentConfiguration(object):
             if spot_allocation_strategy == 'lowest-price':
                 spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
         cluster_ami_id_ssm = prompt("SSM parameter path of Custom AMI ID", default='None')
+        if cluster_ami_id_ssm == 'None':
+            cluster_ami_id_ssm = None
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
