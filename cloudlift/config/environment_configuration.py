@@ -151,7 +151,7 @@ class EnvironmentConfiguration(object):
             spot_allocation_strategy = prompt("Spot Allocation Strategy capacity-optimized/lowest-price/price-capacity-optimized", default='capacity-optimized')
             if spot_allocation_strategy == 'lowest-price':
                 spot_instance_pools = prompt("Number of Spot Instance Pools", default=2)
-        cluster_ami_id_ssm = prompt("SSM parameter path of Custom AMI ID", default='None')
+        cluster_ami_id_ssm = prompt("SSM parameter path of Custom AMI ID (Optional)", default='None')
         key_name = prompt("SSH key name")
         notifications_arn = prompt("Notification SNS ARN")
         ssl_certificate_arn = prompt("SSL certificate ARN")
