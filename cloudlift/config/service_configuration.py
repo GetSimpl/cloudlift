@@ -59,11 +59,9 @@ class ServiceConfiguration(object):
             updated_configuration = self.config_utils.fault_tolerant_edit_config(current_configuration=current_configuration, inject_version=True)
 
             if updated_configuration is None:
+                self.set_config(current_configuration)
                 if self.new_service:
-                    self.set_config(current_configuration)
                     log_warning("Using default configuration.")
-                else:
-                    log_warning("No changes made.")
             else:
                 differences = list(dictdiffer.diff(
                     current_configuration,
@@ -426,7 +424,7 @@ class ServiceConfiguration(object):
 
                 sidecars.append({
                     'name': FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME,
-                    'memory_reservation': 50,
+                    'memory_reservation': 100,
                     'essential': True,
                     'image_uri': fluentbit_image_uri,
                     'env': env_vars,
