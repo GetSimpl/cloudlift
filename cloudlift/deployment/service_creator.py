@@ -15,7 +15,8 @@ from cloudlift.deployment.changesets import create_change_set
 from cloudlift.config.logging import log, log_bold, log_err
 from cloudlift.deployment.progress import get_stack_events, print_new_events
 from cloudlift.deployment.service_template_generator import ServiceTemplateGenerator
-
+from cloudlift.deployment.service_information_fetcher import ServiceInformationFetcher
+from cloudlift.config.pre_flight import service_update_preflight_checks
 
 class ServiceCreator(object):
     '''
@@ -29,6 +30,7 @@ class ServiceCreator(object):
         self.stack_name = get_service_stack_name(environment, name)
         self.client = get_client_for('cloudformation', self.environment)
         self.s3client = get_client_for('s3', self.environment)
+        self.ecrClient = get_client_for('ecr', self.environment)
         self.bucket_name = 'cloudlift-service-template'
         self.environment_stack = self._get_environment_stack()
         self.existing_events = get_stack_events(self.client, self.stack_name)
@@ -106,6 +108,9 @@ class ServiceCreator(object):
         '''
 
         log_bold("Starting to update service")
+        current_version = ServiceInformationFetcher(
+            self.name, self.environment).get_current_version(skip_master_reset=True)
+        service_update_preflight_checks(current_version=current_version, service_name=self.name, environment=self.environment, ecr_client=self.ecrClient)
         self.service_configuration.edit_config()
         try:
             template_generator = ServiceTemplateGenerator(

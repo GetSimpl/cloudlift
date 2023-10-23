@@ -47,3 +47,11 @@ def check_aws_instance_type(instance_type):
         else:
             return False, i
     return True, ""
+
+def service_update_preflight_checks(current_version, service_name, environment, ecr_client):
+    # If the current deployment is considered dirty, make sure that an image tagged as 'master' is uploaded to ECR otherwise on service update, the service will try to use an image tagged as 'master' which does not exist
+    if current_version == 'dirty':
+        repo_name = service_name + '-repo'
+        res = ecr_client.batch_get_image(repositoryName=repo_name, imageIds=[{'imageTag': 'master'}])
+        if res['images'] == []:
+            raise UnrecoverableException("Current deployment is dirty. Please push an image tagged as 'master' to ECR.")
