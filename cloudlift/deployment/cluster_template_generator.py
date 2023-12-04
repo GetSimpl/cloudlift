@@ -12,7 +12,8 @@ from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
                              SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress,
-                             LaunchTemplateData, LaunchTemplate, IamInstanceProfile, LaunchTemplateBlockDeviceMapping, EBSBlockDevice)
+                             LaunchTemplateData, LaunchTemplate, IamInstanceProfile, LaunchTemplateBlockDeviceMapping,
+                             EBSBlockDevice, MetadataOptions)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
 from troposphere.iam import InstanceProfile, Role
@@ -565,6 +566,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
                 ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
                 KeyName=Ref(self.key_pair),
+                MetadataOptions=MetadataOptions(HttpTokens="required"),
                 BlockDeviceMappings=[
                     LaunchTemplateBlockDeviceMapping(
                         DeviceName="/dev/xvda",
