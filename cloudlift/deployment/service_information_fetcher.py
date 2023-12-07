@@ -163,7 +163,12 @@ fetched.")
             task_definition = self.ecs_client.describe_task_definition(
                 taskDefinition=task_definition_arns
             )
-            image = task_definition['taskDefinition']['containerDefinitions'][0]['image']
+            # get the container definitions other than sidecars
+            main_container_definitions = []
+            for container_definition in task_definition['taskDefinition']['containerDefinitions']:
+                if not container_definition['name'].endswith('-sidecar'):
+                    main_container_definitions.append(container_definition)
+            image = main_container_definitions[0]['image']
             commit_sha = image.split('-repo:')[1]
             return commit_sha
         except Exception:

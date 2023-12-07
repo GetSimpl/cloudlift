@@ -252,6 +252,8 @@ class EcsTaskDefinition(dict):
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
         for container in self.containers:
+            if container.get('name').endswith('-sidecar'):
+                continue
             if container[u'name'] in images:
                 new_image = images[container[u'name']]
                 diff = EcsTaskDefinitionDiff(
@@ -319,14 +321,15 @@ class EcsTaskDefinition(dict):
             old_environment
         )
         self._diff.append(diff)
-        container[u'secrets'] = [
-            {
-                "name": e,
-                "valueFrom": merged_environment[e]
-            } for e in merged_environment
-        ]
-        if container[u'environment'] is not None:
-            container[u'environment'] = []
+        if not container.get('name', '').endswith('-sidecar'):
+            container[u'secrets'] = [
+                {
+                    "name": e,
+                    "valueFrom": merged_environment[e]
+                } for e in merged_environment
+            ]
+            if container[u'environment'] is not None:
+                container[u'environment'] = []
 
     def validate_container_options(self, **container_options):
         for container_name in container_options:

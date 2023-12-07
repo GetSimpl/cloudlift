@@ -803,9 +803,16 @@ class ClusterTemplateGenerator(TemplateGenerator):
 
     def _add_mappings(self):
         # Pick from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/al2ami.html
+        ami_id_ssm = self.configuration.get('cluster', {}).get('ami_id', None)
+        if ami_id_ssm == 'None':
+            ami_id_ssm = None
         ssm_client = get_client_for('ssm', self.env)
-        ami_response = ssm_client.get_parameter(
-            Name='/aws/service/ecs/optimized-ami/amazon-linux-2/recommended')
+        if ami_id_ssm == None:
+            ami_response = ssm_client.get_parameter(
+                Name='/aws/service/ecs/optimized-ami/amazon-linux-2/recommended')
+        else:
+            ami_response = ssm_client.get_parameter(
+                Name= str(ami_id_ssm))
         ami_id = json.loads(ami_response['Parameter']['Value'])['image_id']
         region = get_region_for_environment(self.env)
         self.template.add_mapping('AWSRegionToAMI', {
