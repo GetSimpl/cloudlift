@@ -98,19 +98,19 @@ class EcrClient:
         version to be " + self.version + " based on current status")
 
     def _build_image(self, image_name):
-        log_bold("Building docker image " + image_name)
+        log_bold("Building podman image " + image_name)
         command = self._build_command(image_name)
         subprocess.check_call(command, shell=True)
         log_bold("Built " + image_name)
 
     def _build_command(self, image_name):
         if self.build_args is None:
-            return f'docker build -t {image_name} {self.working_dir}'
+            return f'podman build -t {image_name} {self.working_dir}'
         else:
             build_args_command_fragment = []
             for k, v in self.build_args.items():
                 build_args_command_fragment.append(" --build-arg " + "=".join((k, v)))
-            return f'docker build -t {image_name}{"".join(build_args_command_fragment)} {self.working_dir}'
+            return f'podman build -t {image_name}{"".join(build_args_command_fragment)} {self.working_dir}'
 
     def _login_to_ecr(self):
         log_intent("Attempting login...")
@@ -118,10 +118,10 @@ class EcrClient:
         user, auth_token = base64.b64decode(
             auth_token_res['authorizationData'][0]['authorizationToken']
         ).decode("utf-8").split(':')
-        ecr_url = auth_token_res['authorizationData'][0]['proxyEndpoint']
-        subprocess.check_call(["docker", "login", "-u", user,
+        ecr_url = auth_token_res['authorizationData'][0]['proxyEndpoint'].removeprefix("https://")
+        subprocess.check_call(["podman", "login", "-u", user,
                                "-p", auth_token, ecr_url])
-        log_intent('Docker login to ECR succeeded.')
+        log_intent('podman login to ECR succeeded.')
 
     def _find_commit_sha(self, version=None):
         log_intent("Finding commit SHA")
@@ -138,12 +138,12 @@ branch or commit SHA")
 
     def _push_image(self, local_name, ecr_name):
         try:
-            subprocess.check_call(["docker", "tag", local_name, ecr_name])
+            subprocess.check_call(["podman", "tag", local_name, ecr_name])
         except:
             raise UnrecoverableException("Local image was not found.")
         self._login_to_ecr()
-        subprocess.check_call(["docker", "push", ecr_name])
-        subprocess.check_call(["docker", "rmi", ecr_name])
+        subprocess.check_call(["podman", "push", ecr_name])
+        subprocess.check_call(["podman", "rmi", ecr_name])
         log_intent('Pushed the image (' + local_name + ') to ECR sucessfully.')
 
     def _add_image_tag(self, existing_tag, new_tag):
