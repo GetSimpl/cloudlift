@@ -114,7 +114,7 @@ def edit_config(name, environment):
 @click.option('--version', default=None,
               help='local image version tag')
 @click.option('--image_uri', default=None,
-              help='image uri')
+              help='full ecr image uri of the image to be deployed')
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
