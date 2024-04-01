@@ -21,13 +21,12 @@ def _complete_image_url(ecr_client: EcrClient):
 
 
 class TaskDefinitionCreator:
-    def __init__(self, name, environment, version, image_uri, build_args, region='ap-south-1'):
+    def __init__(self, name, environment, version, build_args, region='ap-south-1'):
         self.name = name
         self.environment = environment
         self.build_args = build_args
         self.region = region
         self.version = version
-        self.image_uri = image_uri
         self.client = get_client_for('iam', self.environment)
         self.resource = get_resource_for('iam', self.environment)
         self.env_sample_file = './env.sample'
