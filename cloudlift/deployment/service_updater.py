@@ -49,7 +49,6 @@ class ServiceUpdater(object):
                    self.environment + " | version: " + str(ecr_client.version))
         log_bold("Checking image in ECR")
         ecr_client.build_and_upload_image()
-        log_bold("Initiating deployment\n")
         image_url = ecr_client.ecr_image_uri
         image_url += (':' + ecr_client.version)
         return ecr_client.version, image_url
@@ -61,7 +60,8 @@ class ServiceUpdater(object):
             raise UnrecoverableException('env.sample not found. Exiting.')
         
         image_version, image_url = self._get_image()
-
+        
+        log_bold("Initiating deployment\n")
         jobs = []
         for index, service_name in enumerate(self.ecs_service_names):
             log_bold("Starting to deploy " + service_name)
