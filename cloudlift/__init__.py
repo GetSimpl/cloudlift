@@ -113,13 +113,11 @@ def edit_config(name, environment):
 @_require_name
 @click.option('--version', default=None,
               help='local image version tag')
-@click.option('--image_uri', default=None,
-              help='full ecr image uri of the image to be deployed')
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def deploy_service(name, environment, version, image_uri, build_arg):
-    ServiceUpdater(name, environment, None, version, image_uri, dict(build_arg)).run()
+def deploy_service(name, environment, version, build_arg):
+    ServiceUpdater(name, environment, None, version, dict(build_arg)).run()
 
 
 @cli.command()
