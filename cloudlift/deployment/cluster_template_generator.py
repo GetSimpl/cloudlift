@@ -71,6 +71,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
         self.ondemand_max_instances = str(click.prompt('(New OnDemand ASG) Maximum number of on-demand instances', default=config_on_demand_max_instances, type=int))
         self.ondemand_desired_instances = str(click.prompt('(New OnDemand ASG) Desired number of on-demand instances', default=self.desired_instances, type=int))
 
+        self.legacy_ami_id = str(click.prompt('AMI ID for legacy ASG', type=str))
+
     def generate_cluster(self):
         self.__validate_parameters()
         self._setup_network(
@@ -605,7 +607,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     ),
                     SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
                     InstanceType=instance_types[0],
-                    ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
+                    ImageId=self.legacy_ami_id,
                     KeyName=Ref(self.key_pair),
                     BlockDeviceMappings=[
                         LaunchTemplateBlockDeviceMapping(
