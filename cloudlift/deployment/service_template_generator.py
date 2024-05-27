@@ -346,7 +346,7 @@ service is down',
             ContainerDefinitions=[cd] + sidecar_container_defs,
             ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             TaskRoleArn=Ref(task_role),
-            Tags=Tags(Team=self.team_name, environment=self.env),
+            Tags=Tags(Team=self.team_name, environment=self.env, ServiceName=service_name),
             **launch_type_td
         )
         if 'custom_metrics' in config:
@@ -401,7 +401,7 @@ service is down',
                         }],
                         VpcId=Ref(self.vpc),
                         GroupDescription=pascalcase("FargateService" + self.env + service_name),
-                        Tags=Tags(Team=self.team_name, environment=self.env)
+                        Tags=Tags(Team=self.team_name, environment=self.env, ServiceName=service_name)
                     )
                     self.template.add_resource(service_security_group)
 
@@ -453,7 +453,9 @@ service is down',
                 DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env),
+                Tags=Tags(Team=self.team_name, environment=self.env, ServiceName=service_name),
+                PropagateTags='SERVICE',
+                EnableECSManagedTags=True,
                 **placement_constraint
             )
             self.template.add_output(
@@ -503,7 +505,7 @@ service is down',
                         SecurityGroupIngress=[],
                         VpcId=Ref(self.vpc),
                         GroupDescription=pascalcase("FargateService" + self.env + service_name),
-                        Tags=Tags(Team=self.team_name, environment=self.env)
+                        Tags=Tags(Team=self.team_name, environment=self.env,ServiceName=service_name)
                     )
                     self.template.add_resource(service_security_group)
                     launch_type_svc = {
@@ -553,7 +555,7 @@ service is down',
                 DeploymentConfiguration=deployment_configuration,
                 LaunchType=launch_type,
                 **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env),
+                Tags=Tags(Team=self.team_name, environment=self.env, ServiceName=service_name),
                 **placement_constraint
             )
             self.template.add_output(
@@ -603,7 +605,7 @@ service is down',
             ),
             VpcId=Ref(self.vpc),
             GroupDescription=Sub(service_name + "-alb-sg"),
-            Tags=Tags(Team=self.team_name, environment=self.env)
+            Tags=Tags(Team=self.team_name, environment=self.env, ServiceName=service_name)
         )
         self.template.add_resource(svc_alb_sg)
         alb_name = service_name + pascalcase(self.env)
@@ -630,7 +632,8 @@ service is down',
                 Tags=[
                     {'Value': alb_name, 'Key': 'Name'},
                     {"Key": "Team", "Value": self.team_name},
-                    {'Key': 'environment', 'Value': self.env}
+                    {'Key': 'environment', 'Value': self.env},
+                    {'Key': 'ServiceName', 'Value': service_name}
                 ],
                 Scheme=scheme
             )
@@ -652,7 +655,8 @@ service is down',
                 Tags=[
                     {'Value': alb_name, 'Key': 'Name'},
                     {"Key": "Team", "Value": self.team_name},
-                    {'Key': 'environment', 'Value': self.env}
+                    {'Key': 'environment', 'Value': self.env},
+                    {'Key': 'ServiceName', 'Value': service_name}
                 ]
             )
 
@@ -687,7 +691,8 @@ service is down',
             **target_group_config,
             Tags=[
                 {"Key": "Team", "Value": self.team_name},
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'ServiceName', 'Value': service_name}
             ]
         )
 
