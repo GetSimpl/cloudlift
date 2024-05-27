@@ -1,5 +1,6 @@
 import json
 import re
+import textwrap
 
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
@@ -12,7 +13,8 @@ from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
                              SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress,
-                             LaunchTemplateData, LaunchTemplate, IamInstanceProfile, LaunchTemplateBlockDeviceMapping, EBSBlockDevice)
+                             LaunchTemplateData, LaunchTemplate, IamInstanceProfile, LaunchTemplateBlockDeviceMapping,
+                             EBSBlockDevice, MetadataOptions)
 from troposphere.ecs import Cluster
 from troposphere.elasticache import SubnetGroup as ElastiCacheSubnetGroup
 from troposphere.iam import InstanceProfile, Role
@@ -493,15 +495,15 @@ class ClusterTemplateGenerator(TemplateGenerator):
                         content=Sub(
                             '\n'.join([
                                 '# Server Configuration',
-                                'listen-address=127.0.0.1',
+                                'listen-address=::1,127.0.0.1',
                                 'port=53',
                                 'bind-interfaces',
+                                'interface=lo',
                                 'user=dnsmasq',
                                 'group=dnsmasq',
                                 'pid-file=/var/run/dnsmasq.pid',
-                                '# Name resolution options',
                                 'resolv-file=/etc/resolv.dnsmasq',
-                                'cache-size=500',
+                                'cache-size=1000',
                                 'neg-ttl=60',
                                 'domain-needed',
                                 'bogus-priv',
@@ -532,29 +534,48 @@ class ClusterTemplateGenerator(TemplateGenerator):
                             )
                         },
                         '02_set_nameserver': {
-                            'command': "INTERFACE=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -n1); IS_IT_CLASSIC=$(curl --write-out %{http_code} --silent --output /dev/null http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/vpc-id); if [[ $IS_IT_CLASSIC == '404' ]]; then bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 172.16.0.23;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 172.16.0.23' > /etc/resolv.dnsmasq\"; else  bash -c \"echo 'supersede domain-name-servers 127.0.0.1, 169.254.169.253;' >> /etc/dhcp/dhclient.conf && echo 'nameserver 169.254.169.253' > /etc/resolv.dnsmasq\"; fi"
+                            'command': 'echo "nameserver 169.254.169.253" > /etc/resolv.dnsmasq'
                         },
                         '03_install_dnsmasq_package': {
                             'command': 'yum install -y dnsmasq bind-utils'
                         },
                         '04_create_group': {
-                            'command': 'groupadd -r dnsmasq'
+                            'command': 'groupadd -r -f dnsmasq'
                         },
                         '05_create_user': {
-                            'command': 'useradd -r -g dnsmasq dnsmasq'
+                            'command': 'id -u dnsmasq &>/dev/null && (id -nG dnsmasq | grep -qw dnsmasq || usermod -a -G dnsmasq dnsmasq) || useradd -r -g dnsmasq dnsmasq'
                         },
-                        '06_add_locahost_nameserver': {
-                            'command': "sed -i '/search ap-south-1.compute.internal/a nameserver 127.0.0.1' /etc/resolv.conf"
+                        '06_disable_systemd_resolved_stub_resolver': {
+                            'command': textwrap.dedent("""
+                                        mkdir -pv /etc/systemd/resolved.conf.d
+
+                                        cat <<'EOF' | tee /etc/systemd/resolved.conf.d/00-override.conf
+                                        [Resolve]
+                                        DNSStubListener=no
+                                        MulticastDNS=no
+                                        LLMNR=no
+
+                                        EOF
+
+                                        systemctl daemon-reload
+                                        systemctl restart systemd-resolved""")
                         },
-                        '07_enable_dnsmasq_service': {
+                        '07_add_localhost_nameserver': {
+                            'command': textwrap.dedent(f"""
+                                        unlink /etc/resolv.conf
+                                        cat <<'EOF' | tee /etc/resolv.conf
+                                        nameserver 127.0.0.1
+                                        search {self.region}.compute.internal
+
+                                        EOF
+                                        """)
+                        },
+                        '08_enable_dnsmasq_service': {
+                            'command': 'pidof systemd && systemctl enable dnsmasq.service || chkconfig dnsmasq on'
+                        },
+                        '09_start_dnsmasq_service': {
                             'command': 'pidof systemd && systemctl restart dnsmasq.service || service dnsmasq restart'
                         },
-                        '08_start_dnsmasq_service': {
-                            'command': 'pidof systemd && systemctl enable  dnsmasq.service || chkconfig dnsmasq on'
-                        },
-                        '09_configure_dhclient': {
-                            'command': 'bash -c "dhclient"'
-                        }
             })})
             launch_template_data = LaunchTemplateData(
                 'LaunchTemplateData',
@@ -565,6 +586,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 SecurityGroupIds=[GetAtt(self.sg_hosts, 'GroupId')],
                 ImageId=FindInMap("AWSRegionToAMI", Ref("AWS::Region"), "AMI"),
                 KeyName=Ref(self.key_pair),
+                MetadataOptions=MetadataOptions(HttpTokens="required"),
                 BlockDeviceMappings=[
                     LaunchTemplateBlockDeviceMapping(
                         DeviceName="/dev/xvda",
@@ -733,7 +755,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
         ssm_client = get_client_for('ssm', self.env)
         if ami_id_ssm == None:
             ami_response = ssm_client.get_parameter(
-                Name='/aws/service/ecs/optimized-ami/amazon-linux-2/recommended')
+                Name='/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended')
         else:
             ami_response = ssm_client.get_parameter(
                 Name= str(ami_id_ssm))
