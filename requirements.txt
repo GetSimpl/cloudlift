@@ -1,5 +1,5 @@
-boto3==1.24.2
-awscli==1.25.2
+boto3==1.34.111  
+awscli==1.32.111  
 certifi==2017.7.27.1
 cfn-flip==1.0.3
 chardet==3.0.4
@@ -19,6 +19,6 @@ requests>=2.20.0
 six==1.10.0
 stringcase==1.0.6
 terminaltables==3.1.0
-troposphere==4.0.0
-awacs==2.0.1
-botocore==1.27.2
+troposphere==4.5.2
+awacs==2.4.0
+botocore==1.34.111  
