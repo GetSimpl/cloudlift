@@ -234,7 +234,8 @@ service is down',
         if 'fargate' not in config:
             for key in self.environment_stack["Outputs"]:
                 if key["OutputKey"] == 'ECSClusterDefaultInstanceLifecycle':
-                    spot_deployment = False if ImportValue("{self.env}ECSClusterDefaultInstanceLifecycle".format(**locals())) == 'ondemand' else True
+                    instance_lifecycle = key["OutputValue"]
+                    spot_deployment = instance_lifecycle == 'spot'
                     placement_constraint = {
                         "PlacementConstraints": [PlacementConstraint(
                             Type='memberOf',

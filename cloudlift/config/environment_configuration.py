@@ -302,7 +302,10 @@ class EnvironmentConfiguration(object):
                                 "key_name": {"type": "string"},
                                 "allocation_strategy": {"type": "string"},
                                 "spot_instance_pools": {"type": "integer"},
-                                "ecs_instance_default_lifecycle_type": {"type": "string"}
+                                "ecs_instance_default_lifecycle_type":  {
+                                    "type": "string",
+                                    "pattern": "^(spot|ondemand)$"
+                                }
                             },
                             "required": [
                                 "min_instances",
