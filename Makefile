@@ -24,4 +24,7 @@ install-test-package:
 package-upload: package
 	python3 -m twine upload dist/*
     
+build:
+	./build.sh
 
+.PHONY: clean test-template test-integration package package-test-upload install-test-package package-upload build

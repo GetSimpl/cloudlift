@@ -18,6 +18,24 @@ in AWS.
 
 ## Installing cloudlift
 
+### Using Script
+
+```sh
+curl -LO https://raw.githubusercontent.com/tasnimzotder/cloudlift/master/install-bin.sh
+chmod +x install-bin.sh
+sudo ./install-bin.sh
+```
+
+Note: This will download the `install-bin.sh` script to the current directory and run it. Run `install-bin.sh --help` for more options.
+
+Currently supported platforms using the above script are -
+
+- `linux-x86_64`
+- `macos-arm64`
+
+The support for alpine linux and windows using the script will be added soon.
+
+
 ### 1. Pre-requisites
 
 - pip
