@@ -43,9 +43,9 @@ class ServiceInformationFetcher(object):
             self.ecs_service_names = []
             log_warning("Could not determine services.")
 
-    def get_current_version(self):
+    def get_current_version(self, skip_master_reset=False):
         commit_sha = self._fetch_current_task_definition_tag()
-        if commit_sha is None or commit_sha == 'dirty':
+        if commit_sha is None or commit_sha == 'dirty' and not skip_master_reset:
             log_warning("Currently deployed tag could not be found or is dirty,\
 resetting to master")
             commit_sha = "master"
