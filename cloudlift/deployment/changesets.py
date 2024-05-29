@@ -60,7 +60,12 @@ def create_change_set(client, service_template_body, template_source, stack_name
     else:
         log_bold("Changeset created.. Following are the changes")
         _print_changes(change_set)
-        if click.confirm('Do you want to execute the changeset?'):
+        confirmation = click.prompt(
+            "Do you want to execute the changeset? (yes/no)",
+            default="no",
+            confirmation_prompt=True,
+        )
+        if confirmation == "yes":
             return change_set
         log_bold("Deleting changeset...")
         client.delete_change_set(
