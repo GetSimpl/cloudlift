@@ -23,7 +23,7 @@ DEPLOYMENT_COLORS = ['blue', 'magenta', 'white', 'cyan']
 
 
 class ServiceUpdater(object):
-    def __init__(self, name, environment, env_sample_file, version=None,
+    def __init__(self, name, environment, env_sample_file, version=None, image_uri=None,
                  build_args=None, working_dir='.'):
         self.name = name
         self.environment = environment
@@ -32,37 +32,47 @@ class ServiceUpdater(object):
         else:
             self.env_sample_file = './env.sample'
         self.version = version
+        self.image_uri = image_uri
         self.ecr_client = boto3.session.Session(region_name=self.region).client('ecr')
         self.cluster_name = get_cluster_name(environment)
         self.working_dir = working_dir
         self.build_args = build_args
+    
+    def _get_image(self):
+        if self.image_uri:
+           version = None
+           return version, self.image_uri 
 
-    def run(self):
-        log_warning("Deploying to {self.region}".format(**locals()))
-        self.init_stack_info()
-        if not os.path.exists(self.env_sample_file):
-            raise UnrecoverableException('env.sample not found. Exiting.')
         ecr_client = EcrClient(self.name, self.region, self.build_args)
         ecr_client.set_version(self.version)
         log_intent("name: " + self.name + " | environment: " +
                    self.environment + " | version: " + str(ecr_client.version))
         log_bold("Checking image in ECR")
         ecr_client.build_and_upload_image()
-        log_bold("Initiating deployment\n")
+        image_url = ecr_client.ecr_image_uri
+        image_url += (':' + ecr_client.version)
+        return ecr_client.version, image_url
 
+    def run(self):
+        log_warning("Deploying to {self.region}".format(**locals()))
+        self.init_stack_info()
+        if not os.path.exists(self.env_sample_file):
+            raise UnrecoverableException('env.sample not found. Exiting.')
+        
+        image_version, image_url = self._get_image()
+        
+        log_bold("Initiating deployment\n")
         jobs = []
         for index, service_name in enumerate(self.ecs_service_names):
             log_bold("Starting to deploy " + service_name)
             color = DEPLOYMENT_COLORS[index % 3]
-            image_url = ecr_client.ecr_image_uri
-            image_url += (':' + ecr_client.version)
             process = multiprocessing.Process(
                 target=deployer.deploy_new_version,
                 args=(
                     self.region,
                     self.cluster_name,
                     service_name,
-                    ecr_client.version,
+                    image_version,
                     self.name,
                     self.env_sample_file,
                     self.environment,

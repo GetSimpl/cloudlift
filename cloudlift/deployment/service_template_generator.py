@@ -6,7 +6,7 @@ import boto3
 from botocore.exceptions import ClientError
 from cloudlift.exceptions import UnrecoverableException
 from cloudlift.config import get_client_for
-
+from cloudlift.config import get_resource_for
 from awacs.aws import PolicyDocument, Statement, Allow, Principal
 from awacs.sts import AssumeRole
 from awacs.firehose import PutRecordBatch
@@ -69,6 +69,7 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.bucket_name = 'cloudlift-service-template'
         self.environment = service_configuration.environment
         self.client = get_client_for('s3', self.environment)
+        self.iamresource = get_resource_for('iam', self.environment)
         self.team_name = (self.notifications_arn.split(':')[-1])
         self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
     def _derive_configuration(self, service_configuration):
@@ -344,7 +345,7 @@ service is down',
             service_name + "TaskDefinition",
             Family=service_name + "Family",
             ContainerDefinitions=[cd] + sidecar_container_defs,
-            ExecutionRoleArn=boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
+            ExecutionRoleArn=self.iamresource.Role('ecsTaskExecutionRole').arn,
             TaskRoleArn=Ref(task_role),
             Tags=Tags(Team=self.team_name, environment=self.env),
             **launch_type_td
