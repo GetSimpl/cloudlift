@@ -1,6 +1,7 @@
 import json
 import re
 import uuid
+import re
 
 import boto3
 from botocore.exceptions import ClientError
@@ -71,9 +72,46 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.client = get_client_for('s3', self.environment)
         self.team_name = (self.notifications_arn.split(':')[-1])
         self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
+
+        self.alb_internal: Parameter = None
+        self.alb_internet_facing: Parameter = None
+        self.alb_listeners: list = []
+
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
         self.configuration = service_configuration.get_config(VERSION)
+
+    def _fetch_alb_listeners(self):
+        # alb listeners
+        for listener in list(
+            filter(
+                lambda x: re.match(r'Listener.*1Arn', x['OutputKey']),
+                self.environment_stack['Outputs']
+            )
+        ):
+            self.alb_listeners.append({
+                "Key": listener['OutputKey'],
+                "Value": listener['OutputValue']
+            })
+    
+    def _update_cluster_listener_rules(self, alb_scheme: str):
+        client = boto3.client('elbv2')
+
+        listener_arn = None
+        internet_facing_listener_arn = None
+
+        for listener in self.alb_listeners:
+            # TODO: fix it
+            if alb_scheme.lower() == "internal":
+                if listener.get("Key") == "ListenerHTTPInternal1Arn":
+                    listener_arn = listener.get("Value")
+            else:
+                if listener.get("Key") == "ListenerHTTPSInternetFacing1Arn":
+                    listener_arn = listener.get("Value")
+        
+        # list all the priorities in the listener
+        priorities: list[int] = []
+
 
     def generate_service(self):
         self._add_service_parameters()
@@ -959,6 +997,34 @@ building this service",
                 self.environment_stack['Outputs']
             )
         )[0]['OutputValue']
+
+        # internal ALB
+        self.alb_internal = Parameter(
+            "AlbInternal",
+            Description='Internal ALB in the cluster environment',
+            Type="AWS::ElasticLoadBalancingV2::LoadBalancer::Id",
+            Default=list(
+                filter(
+                    lambda x: x['OutputKey'] == "ALBInternal1Arn",
+                    self.environment_stack['Outputs']
+                )
+            )[0]['OutputValue']
+        )
+        self.template.add_parameter(self.alb_internal)
+
+        # internet facing ALB
+        self.alb_internet_facing = Parameter(
+            "AlbInternetFacing",
+            Description='Internet facing ALB in the cluster environment',
+            Type="AWS::ElasticLoadBalancingV2::LoadBalancer::Id",
+            Default=list(
+                filter(
+                    lambda x: x['OutputKey'] == "ALBInternetFacing1Arn",
+                    self.environment_stack['Outputs']
+                )
+            )[0]['OutputValue']
+        )
+        self.template.add_parameter(self.alb_internet_facing)
 
     def _fetch_current_desired_count(self):
         stack_name = get_service_stack_name(self.env, self.application_name)

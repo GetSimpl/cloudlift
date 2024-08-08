@@ -336,7 +336,9 @@ class ServiceConfiguration(object):
                     },
                     u'memory_reservation': 250,
                     u'command': None,
-                    u'spot_deployment': False
+                    u'spot_deployment': False,
+                    u'use_cluster_alb': True,
+                    u'hostname': f'{self.service_name}.{self.environment}.getsimpl.com',
                 }
             }
         }
