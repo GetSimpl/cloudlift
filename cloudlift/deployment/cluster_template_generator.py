@@ -32,6 +32,7 @@ from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.version import VERSION
 from cloudlift.config.logging import log_warning, log_err
+from cloudlift.exceptions import UnrecoverableException
 
 
 class ClusterTemplateGenerator(TemplateGenerator):
@@ -350,6 +351,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
     
     def _generate_pascalcase_name(self, name: str, max_length: int = 32) -> str:
         # capitalize the first letter of alb_scheme
+        # TODO: find out the requirements for the replace operations below:
         name = name.replace('internal', 'Internal')
         name = name.replace('internet-facing', 'InternetFacing')
 
@@ -357,8 +359,9 @@ class ClusterTemplateGenerator(TemplateGenerator):
 
         if len(pascalcase_name) > max_length:
             # throw error
-            log_err(f"Name {name} is too long. Max length is {max_length}, got pascalcase length of {len(pascalcase_name)}")
-            sys.exit(1)
+            # log_err(f"Name {name} is too long. Max length is {max_length}, got pascalcase length of {len(pascalcase_name)}")
+            # sys.exit(1)
+            raise UnrecoverableException(f"Name {name} is too long. Max length is {max_length}, got pascalcase length of {len(pascalcase_name)}")
 
         return pascalcase_name
 

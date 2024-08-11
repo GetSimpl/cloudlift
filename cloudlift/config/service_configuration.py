@@ -177,12 +177,20 @@ class ServiceConfiguration(object):
                         "health_check_path": {
                             "type": "string",
                             "pattern": "^\/.*$"
+                        },
+                        "use_cluster_alb": {
+                            "type": "boolean"
+                        },
+                        "alb_hostname": {
+                            "type": "string"
                         }
                     },
                     "required": [
                         "internal",
                         "restrict_access_to",
-                        "container_port"
+                        "container_port",
+                        "use_cluster_alb",
+                        "alb_hostname"
                     ]
                 },
                 "custom_metrics": {
@@ -332,13 +340,13 @@ class ServiceConfiguration(object):
                         u'internal': False,
                         u'restrict_access_to': [u'0.0.0.0/0'],
                         u'container_port': 80,
-                        u'health_check_path': u'/elb-check'
+                        u'health_check_path': u'/elb-check',
+                        u'use_cluster_alb': True,
+                        u'alb_hostname': f'{self.service_name}.{self.environment}.getsimpl.com',
                     },
                     u'memory_reservation': 250,
                     u'command': None,
-                    u'spot_deployment': False,
-                    u'use_cluster_alb': True,
-                    u'hostname': f'{self.service_name}.{self.environment}.getsimpl.com',
+                    u'spot_deployment': False
                 }
             }
         }
