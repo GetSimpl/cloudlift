@@ -71,6 +71,8 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.client = get_client_for('s3', self.environment)
         self.team_name = (self.notifications_arn.split(':')[-1])
         self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
+        self.service_defaults = self.environment_configuration.get('service_defaults', {})
+
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
         self.configuration = service_configuration.get_config(VERSION)
@@ -261,8 +263,7 @@ service is down',
             ]
 
         if 'logging' not in config:
-            service_defaults = self.environment_configuration.get('service_defaults', {})
-            default_logging = service_defaults.get('logging')
+            default_logging = self.service_defaults.get('logging')
             if default_logging:
                 # Side Effect
                 # This assignment ensures 'config' has the default logging key for future operations
@@ -564,7 +565,12 @@ service is down',
                 )
             )
             self.template.add_resource(svc)
-        self._add_service_alarms(svc)
+
+        default_disable_service_alarms = self.service_defaults.get('disable_service_alarms', False)
+        is_alarms_disabled = config.get('disable_service_alarms', default_disable_service_alarms)
+
+        if not is_alarms_disabled:
+            self._add_service_alarms(svc)
 
     def _gen_log_config(self, service_name, config):
         if config == 'awslogs':
@@ -710,7 +716,12 @@ service is down',
             alb,
             config['http_interface']['internal']
         )
-        self._add_alb_alarms(service_name, alb)
+
+        default_disable_service_alarms = self.service_defaults.get('disable_service_alarms', False)
+        is_alarms_disabled = config.get('disable_service_alarms', default_disable_service_alarms)
+        if not is_alarms_disabled:
+            self._add_alb_alarms(service_name, alb)
+
         return alb, lb, service_listener, svc_alb_sg
 
     def _add_service_listener(self, service_name, target_group_action,
