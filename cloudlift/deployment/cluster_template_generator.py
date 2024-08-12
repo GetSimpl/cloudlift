@@ -804,10 +804,7 @@ class ClusterTemplateGenerator(TemplateGenerator):
                         content=Sub(
                             '\n'.join([
                                 '# Server Configuration',
-                                'listen-address=::1,127.0.0.1',
                                 'port=53',
-                                'bind-interfaces',
-                                'interface=lo',
                                 'user=dnsmasq',
                                 'group=dnsmasq',
                                 'pid-file=/var/run/dnsmasq.pid',
@@ -871,11 +868,17 @@ class ClusterTemplateGenerator(TemplateGenerator):
                         },
                         '07_add_localhost_nameserver': {
                             'command': textwrap.dedent(f"""
+                                        TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+                                        PRIMARY_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+                                                       
                                         unlink /etc/resolv.conf
-                                        cat <<'EOF' | tee /etc/resolv.conf
+                                                       
+                                        cat <<EOF | tee /etc/resolv.conf
                                         nameserver 127.0.0.1
+                                        nameserver $PRIMARY_IP
+                                        nameserver 169.254.169.253
+                                        nameserver 8.8.8.8
                                         search {self.region}.compute.internal
-
                                         EOF
                                         """)
                         },

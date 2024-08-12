@@ -238,6 +238,9 @@ class ServiceConfiguration(object):
                     "type": "boolean"
                 },
                 "logging": logging_json_schema,
+                "disable_service_alarms": {
+                    "type": "boolean"
+                },
                 "depends_on": {
                     "type": "array",
                     "items": {
@@ -333,20 +336,20 @@ class ServiceConfiguration(object):
 
     def _default_service_configuration(self):
         return {
-            u'notifications_arn': None,
-            u'services': {
+            'notifications_arn': None,
+            'services': {
                 pascalcase(self.service_name): {
-                    u'http_interface': {
-                        u'internal': False,
-                        u'restrict_access_to': [u'0.0.0.0/0'],
-                        u'container_port': 80,
-                        u'health_check_path': u'/elb-check',
-                        u'use_cluster_alb': True,
-                        u'alb_hostname': f'{self.service_name}.{self.environment}.getsimpl.com',
+                    'http_interface': {
+                        'internal': False,
+                        'restrict_access_to': ['0.0.0.0/0'],
+                        'container_port': 80,
+                        'health_check_path': '/elb-check',
+                        'use_cluster_alb': True,
+                        'alb_hostname': f'{self.service_name}.{self.environment}.getsimpl.com',
                     },
-                    u'memory_reservation': 250,
-                    u'command': None,
-                    u'spot_deployment': False
+                    'memory_reservation': 250,
+                    'command': None,
+                    'spot_deployment': False
                 }
             }
         }
