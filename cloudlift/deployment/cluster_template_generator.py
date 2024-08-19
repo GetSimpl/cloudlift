@@ -1,7 +1,6 @@
 import json
 import re
 import textwrap
-import sys
 
 from cfn_flip import to_yaml
 from stringcase import camelcase, pascalcase
@@ -13,7 +12,7 @@ from troposphere.autoscaling import LaunchTemplate as ASGLaunchTemplate
 from troposphere.cloudwatch import Alarm, MetricDimension
 from troposphere.ec2 import (VPC, InternetGateway, NatGateway, Route,
                              RouteTable, SecurityGroup, Subnet,
-                             SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress, SecurityGroupEgress,
+                             SubnetRouteTableAssociation, VPCGatewayAttachment,SecurityGroupIngress,
                              LaunchTemplateData, LaunchTemplate, IamInstanceProfile, LaunchTemplateBlockDeviceMapping,
                              EBSBlockDevice, MetadataOptions)
 from troposphere.ecs import Cluster
@@ -31,17 +30,17 @@ from cloudlift.config import DecimalEncoder
 from cloudlift.config import get_client_for, get_region_for_environment
 from cloudlift.deployment.template_generator import TemplateGenerator
 from cloudlift.version import VERSION
-from cloudlift.config.logging import log_warning, log_err
+from cloudlift.config.logging import log_warning
 from cloudlift.exceptions import UnrecoverableException
-
+from cloudlift.utils import generate_pascalcase_name
 
 class ClusterTemplateGenerator(TemplateGenerator):
     """
         This class generates CloudFormation template for a environment cluster
     """
 
-    INTERNAL_SCHEME = 'internal'
-    INTERNET_FACING_SCHEME = 'internet-facing'
+    INTERNAL_ALB_SCHEME = 'internal'
+    PUBLIC_ALB_SCHEME = 'public'
 
     def __init__(self, environment, environment_configuration, desired_instances=None):
         super(ClusterTemplateGenerator, self).__init__(environment)
@@ -74,296 +73,10 @@ class ClusterTemplateGenerator(TemplateGenerator):
         self._add_mappings()
         self._add_metadata()
         self._add_cluster()
+        self._add_cluster_albs()
 
         return to_yaml(json.dumps(self.template.to_dict(), cls=DecimalEncoder))
-    
-    def _add_albs(self):
-        alb_configs = [
-            {
-                'count': 1,
-                'scheme': self.INTERNAL_SCHEME,
-            },
-            {
-                'count': 1,
-                'scheme': self.INTERNET_FACING_SCHEME,
-            }
-        ]
 
-        for alb_config in alb_configs:
-            count = alb_config['count']
-
-            for index in range(count):
-                # index should start at 1 to avoid naming conflicts
-                index += 1
-
-                # alb
-                alb_scheme = alb_config['scheme']
-                alb = self._create_alb(alb_scheme, index)
-                self.albs.append(alb)
-
-                # alb listener
-                listeners = self._create_alb_listeners(alb, alb_scheme, index)
-                for listener in listeners:
-                    self.alb_listeners.append(listener)
-
-    def _create_alb(self, alb_scheme: str, index: int) -> ALBLoadBalancer:
-        # NOTE: index is working as a counter to avoid naming conflicts; by default there will be only one ALB for each scheme, so index will be 1
-
-        alb_name = self._generate_pascalcase_name(f"{alb_scheme}Alb{index}{self.env}")
-        alb_subnets: list = None
-
-        if alb_scheme == self.INTERNAL_SCHEME:
-            alb_subnets = [Ref(subnet) for subnet in self.private_subnets]
-        else:
-            alb_subnets = [Ref(subnet) for subnet in self.public_subnets]
-
-        svc_alb_sg = None
-
-        if alb_scheme == self.INTERNAL_SCHEME:
-            svc_alb_sg = self._create_internal_alb_security_group(alb_name, alb_scheme, index)
-        else:
-            svc_alb_sg = self._create_internat_facing_alb_security_group(alb_name, alb_scheme, index)
-        
-        alb_security_groups = [
-            Ref(svc_alb_sg)
-        ]
-
-        # tags for the ALB
-        tags = [
-            { "Key": "Name","Value": alb_name },
-            { "Key": "environment", "Value": self.env },
-            { "Key": "Team", "Value": self.team_name }
-        ]
-
-        alb = ALBLoadBalancer(
-            title=alb_name,
-            Name=alb_name,
-            Scheme=alb_scheme,
-            Subnets=alb_subnets,
-            SecurityGroups=alb_security_groups,
-            Tags=tags,
-        )
-        alb.validate()
-        self.template.add_resource(alb)
-        
-        output_title = self._generate_pascalcase_name(f"ALB{alb_scheme}{index}Arn")
-        self.template.add_output(Output(
-            title=output_title,
-            Description=f"ARN of the {alb_name} ALB",
-            Value=Ref(alb)
-        ))
-
-        return alb
-    
-    def _create_internal_alb_security_group(self, alb_name: str, alb_scheme: str, index: int) -> SecurityGroup:
-        sg_name = self._generate_pascalcase_name(f"Sg{alb_name}")
-
-        # TODO: update the security group rules to handle correct ingress and egress rules; like use only vpc cidr block for ingress
-        svc_alb_sg = SecurityGroup(
-            title=re.sub(r'\W+', '', sg_name),
-            GroupName=sg_name,
-            GroupDescription=f"Security group for {alb_name} ALB in {self.env} environment",
-            VpcId=Ref(self.vpc),
-            Tags=Tags(
-                {'category': 'cluster'},
-                {'environment': self.env},
-                {'Team': self.team_name},
-                {'Name': sg_name}
-            ),
-            SecurityGroupIngress=[ # NOTE: update this to use the correct ports
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': '80',
-                    'ToPort': '80',
-                    'CidrIp': '0.0.0.0/0'
-                },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': '443',
-                    'ToPort': '443',
-                    'CidrIp': '0.0.0.0/0'
-                },
-                {
-                    'IpProtocol': 'icmp', # NOTE: for testing purposes
-                    'FromPort': '-1',
-                    'ToPort': '-1',
-                    'CidrIp': '0.0.0.0/0'
-                }
-            ],
-            SecurityGroupEgress=[
-                {
-                    'IpProtocol': '-1',
-                    'CidrIp': '0.0.0.0/0'
-                }
-            ]
-        )
-        svc_alb_sg.validate()
-        
-        self.template.add_resource(svc_alb_sg)
-
-        output_title = self._generate_pascalcase_name(f"SG{alb_scheme}{index}Id")
-        self.template.add_output(Output(
-            title=output_title,
-            Description=f"ID of the {sg_name} security group",
-            Value=Ref(svc_alb_sg)
-        ))
-
-        return svc_alb_sg
-    
-    def _create_internat_facing_alb_security_group(self, alb_name: str, alb_scheme: str, index: int) -> SecurityGroup:
-        sg_name = self._generate_pascalcase_name(f"Sg{alb_name}")
-
-        svc_alb_sg = SecurityGroup(
-            title=re.sub(r'\W+', '', sg_name),
-            GroupName=sg_name,
-            GroupDescription=f"Security group for {alb_name} ALB in {self.env} environment",
-            VpcId=Ref(self.vpc),
-            Tags=Tags(
-                {'category': 'cluster'},
-                {'environment': self.env},
-                {'Team': self.team_name},
-                {'Name': sg_name}
-            ),
-            SecurityGroupIngress=[ # NOTE: update this to use the correct ports
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': '80',
-                    'ToPort': '80',
-                    'CidrIp': '0.0.0.0/0'
-                },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': '443',
-                    'ToPort': '443',
-                    'CidrIp': '0.0.0.0/0'
-                },
-                {
-                    'IpProtocol': 'icmp', # NOTE: for testing purposes
-                    'FromPort': '-1',
-                    'ToPort': '-1',
-                    'CidrIp': '0.0.0.0/0'
-                }
-            ],
-            SecurityGroupEgress=[
-                {
-                    'IpProtocol': '-1',
-                    'CidrIp': '0.0.0.0/0'
-                }
-            ]
-        )
-        svc_alb_sg.validate()
-        
-        self.template.add_resource(svc_alb_sg)
-
-        output_title = self._generate_pascalcase_name(f"SG{alb_scheme}{index}Id")   
-        self.template.add_output(Output(
-            title=output_title,
-            Description=f"ID of the {sg_name} security group",
-            Value=Ref(svc_alb_sg)
-        ))
-
-        return svc_alb_sg
-
-    def _create_alb_listeners(self, alb, alb_scheme, index) -> list[ALBListener]:
-        base_title = self._generate_pascalcase_name(f"Listener{alb_scheme}{index}{self.env}")
-
-        # http listener
-        http_listener: ALBListener = None
-        if alb_scheme == self.INTERNAL_SCHEME:
-            # fixed response listener
-            http_listener = ALBListener(
-                title=f"Http{base_title}",
-                LoadBalancerArn=Ref(alb),
-                Port=80,
-                Protocol='HTTP',
-                DefaultActions=[
-                    self._create_fixed_response_action()
-                ]
-            )
-        else:
-            # redirect listener
-            http_listener = ALBListener(
-                title=f"Http{base_title}",
-                LoadBalancerArn=Ref(alb),
-                Port=80,
-                Protocol='HTTP',
-                DefaultActions=[
-                    self._create_redirect_action()
-                ]
-            )
-
-        http_listener.validate()
-
-        # https listener with ssl certificate
-        https_listener = ALBListener(
-            title=f"Https{base_title}",
-            LoadBalancerArn=Ref(alb),
-            Port=443,
-            Protocol='HTTPS',
-            DefaultActions=[
-                self._create_fixed_response_action()
-            ],
-            SslPolicy="ELBSecurityPolicy-FS-1-2-Res-2019-08", # NOTE: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html#describe-ssl-policies
-            Certificates=[
-                Certificate(
-                    CertificateArn=self.ssl_certificate_arn
-                )
-            ]
-        )
-        https_listener.validate()
-
-        self.template.add_resource(http_listener)
-        self.template.add_resource(https_listener)
-
-        for k, listener in enumerate([http_listener, https_listener]):
-            listenerType = 'HTTP' if k == 0 else 'HTTPS' # NOTE: be careful with this when changing the order of listeners; the first one is considered as HTTP and the second one is considered as HTTPS based listener
-
-            output_title = self._generate_pascalcase_name(f"Listener{listenerType}{alb_scheme}{index}Arn")
-            self.template.add_output(Output(
-                title=output_title,
-                Description=f"ARN of the {listener.title} listener",
-                Value=Ref(listener)
-            ))
-
-        return [http_listener, https_listener]
-    
-    def _create_fixed_response_action(self) -> Action:
-        action = Action(
-            Type="fixed-response",
-            FixedResponseConfig=FixedResponseConfig(
-                ContentType="text/plain",
-                StatusCode="404",
-                MessageBody=f"Host not found."
-            )
-        )
-        return action
-
-    def _create_redirect_action(self) -> Action:
-        action = Action(
-            Type="redirect",
-            RedirectConfig = RedirectConfig(
-                StatusCode="HTTP_301",
-                Protocol="HTTPS",
-                Port="443"
-            )
-        )
-        return action
-    
-    def _generate_pascalcase_name(self, name: str, max_length: int = 32) -> str:
-        # capitalize the first letter of alb_scheme
-        # TODO: find out the requirements for the replace operations below:
-        name = name.replace('internal', 'Internal')
-        name = name.replace('internet-facing', 'InternetFacing')
-
-        pascalcase_name = pascalcase(name)
-
-        if len(pascalcase_name) > max_length:
-            # throw error
-            # log_err(f"Name {name} is too long. Max length is {max_length}, got pascalcase length of {len(pascalcase_name)}")
-            # sys.exit(1)
-            raise UnrecoverableException(f"Name {name} is too long. Max length is {max_length}, got pascalcase length of {len(pascalcase_name)}")
-
-        return pascalcase_name
 
     def _setup_cloudmap(self):
         self.cloudmap = PrivateDnsNamespace(
@@ -638,7 +351,6 @@ class ClusterTemplateGenerator(TemplateGenerator):
         self.template.add_resource(cluster)
         self._add_ec2_auto_scaling()
         self._add_cluster_alarms(cluster)
-        self._add_albs()
         return cluster
 
     def _add_cluster_alarms(self, cluster):
@@ -702,15 +414,6 @@ class ClusterTemplateGenerator(TemplateGenerator):
         )
         self.template.add_resource(
             self.cluster_high_memory_reservation_user_notification_alarm)
-        
-    def _get_desired_capacity(self, deployment_type):
-        if self.desired_instances is not None and self.desired_instances >= 1:
-            return str(self.desired_instances)
-        else:
-            if deployment_type == 'OnDemand':
-                return str(self.configuration['cluster']['min_instances'])
-            else:
-                return str(self.configuration['cluster']['spot_min_instances'])
 
     def _add_ec2_auto_scaling(self):
         instance_profile = self._add_instance_profile()
@@ -784,7 +487,6 @@ class ClusterTemplateGenerator(TemplateGenerator):
                                         ''
                                     ])
                                 ),
-                            # in the official docs the mode is 000400
                             mode='256',  # TODO: Why 256
                             owner="root",
                             group="root"
@@ -1032,6 +734,15 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 self.template.add_resource(ec2_hosts_high_cpu_alarm)
                 self.template.add_resource(self.cluster_scaling_policy)
                 self.template.add_resource(self.cluster_high_memory_reservation_autoscale_alarm)
+        
+    def _get_desired_capacity(self, deployment_type):
+        if self.desired_instances is not None and self.desired_instances >= 1:
+            return str(self.desired_instances)
+        else:
+            if deployment_type == 'OnDemand':
+                return str(self.configuration['cluster']['min_instances'])
+            else:
+                return str(self.configuration['cluster']['spot_min_instances'])
 
     def _add_cluster_parameters(self):
         self.template.add_parameter(Parameter(
@@ -1248,3 +959,228 @@ class ClusterTemplateGenerator(TemplateGenerator):
                 }
             }
         })
+    def _add_cluster_albs(self):
+        alb_configs = [
+            {
+                'count': 1,
+                'scheme': self.INTERNAL_ALB_SCHEME,
+            },
+            {
+                'count': 1,
+                'scheme': self.PUBLIC_ALB_SCHEME,
+            }
+        ]
+
+        for alb_config in alb_configs:
+            count = alb_config['count']
+
+            for index in range(count):
+                # 1-based indices
+                # The purpose of maintaining an index on the ALB name is to allow for future extensions.
+                # This enables addition of more ALBs with the same scheme without needing to change
+                # the name of the existing ALB.
+                index += 1
+                alb_scheme = alb_config['scheme']
+                alb = self._create_alb(alb_scheme, index)
+                self.albs.append(alb)
+
+                # alb listener
+                listeners = self._create_alb_listeners(alb, alb_scheme, index)
+                for listener in listeners:
+                    self.alb_listeners.append(listener)
+
+    def _create_alb(self, alb_scheme: str, index: int) -> ALBLoadBalancer:
+        alb_name = generate_pascalcase_name(f"{alb_scheme}_ALB_{index}_{self.env}")
+        alb_subnets: list[Subnet] = []
+
+        if alb_scheme == self.INTERNAL_ALB_SCHEME:
+            alb_subnets = [Ref(subnet) for subnet in self.private_subnets]
+        else:
+            alb_subnets = [Ref(subnet) for subnet in self.public_subnets]
+
+        alb_sg = self._create_security_group(alb_name, alb_scheme, index)
+        
+        alb_security_groups = [
+            Ref(alb_sg)
+        ]
+        # tags for the ALB
+        tags = [
+            { "Key": "Name","Value": alb_name },
+            { "Key": "environment", "Value": self.env },
+            { "Key": "Team", "Value": self.team_name }
+        ]
+
+        alb = ALBLoadBalancer(
+            title=alb_name,
+            Name=alb_name,
+            Type="application",
+            Scheme="internal" if alb_scheme == self.INTERNAL_ALB_SCHEME else "internet-facing",
+            Subnets=alb_subnets,
+            SecurityGroups=alb_security_groups,
+            Tags=tags,
+        )
+        self.template.add_resource(alb)
+        
+        output_title = generate_pascalcase_name(f"{alb_scheme}_ALB_{index}_ARN")
+        self.template.add_output(Output(
+            title=output_title,
+            Description=f"ARN of the {alb_name} ALB",
+            Value=Ref(alb)
+        ))
+
+        return alb
+    
+    def _create_security_group(self, alb_name: str, alb_scheme: str, index: int) -> SecurityGroup:
+        sg_name = generate_pascalcase_name(f"SG_{alb_name}")
+        security_group = SecurityGroup(
+            title=sg_name,
+            GroupName=sg_name,
+            GroupDescription=f"Security group for {alb_name} ALB in {self.env} environment",
+            VpcId=Ref(self.vpc),
+            Tags=Tags(
+                {'category': 'cluster'},
+                {'environment': self.env},
+                {'Team': self.team_name},
+                {'Name': sg_name}
+            ),
+            SecurityGroupIngress=[
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': '80',
+                    'ToPort': '80',
+                    'CidrIp': '0.0.0.0/0'
+                },
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': '443',
+                    'ToPort': '443',
+                    'CidrIp': '0.0.0.0/0'
+                }
+            ],
+            SecurityGroupEgress=[
+                {
+                    'IpProtocol': '-1',
+                    'CidrIp': '0.0.0.0/0'
+                }
+            ]
+        )
+
+        self.template.add_resource(security_group)
+        output_title = generate_pascalcase_name(f"SG_{alb_scheme}_{index}_ID")
+
+        # create an ingress rule for the EC2Hosts SG to allow traffic from ALB to EC2
+        sg_host_ingress = SecurityGroupIngress(
+            title=generate_pascalcase_name(f"{alb_name}_To_EC2Hosts_Ingress", 64),
+            Description=f"Allow traffic from {alb_name} ALB to EC2Hosts Security Group",
+            SourceSecurityGroupId=Ref(security_group),
+            IpProtocol="-1",
+            GroupId=Ref(self.sg_hosts),
+            FromPort="-1",
+            ToPort="-1"
+        )
+        self.template.add_resource(sg_host_ingress)
+
+        self.template.add_output(Output(
+            title=output_title,
+            Description=f"ID of the {sg_name} security group",
+            Value=Ref(security_group)
+        ))
+
+        return security_group
+
+    def _create_alb_listeners(self, alb, alb_scheme, index) -> list[ALBListener]:
+        base_title = generate_pascalcase_name(f"Listener_{alb_scheme}_{index}_{self.env}")
+        http_listener: ALBListener = None
+        # Internal application load balancers do not have a default action on the HTTP listener
+        # to redirect to the HTTPS listener. They allow traffic on both HTTP and HTTPS,
+        # whereas internet-facing/public application load balancers redirect HTTP traffic to HTTPS.
+        if alb_scheme == self.INTERNAL_ALB_SCHEME:
+            # fixed response listener
+            http_listener = ALBListener(
+                title=f"Http{base_title}",
+                LoadBalancerArn=Ref(alb),
+                Port=80,
+                Protocol='HTTP',
+                DefaultActions=[
+                    self._create_fixed_response_action()
+                ]
+            )
+        else:
+            # redirect listener
+            http_listener = ALBListener(
+                title=f"Http{base_title}",
+                LoadBalancerArn=Ref(alb),
+                Port=80,
+                Protocol='HTTP',
+                DefaultActions=[
+                    self._create_redirect_action()
+                ]
+            )
+
+        # https listener with ssl certificate
+        https_listener = ALBListener(
+            title=f"Https{base_title}",
+            LoadBalancerArn=Ref(alb),
+            Port=443,
+            Protocol='HTTPS',
+            DefaultActions=[
+                self._create_fixed_response_action()
+            ],
+            # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html#describe-ssl-policies
+            SslPolicy="ELBSecurityPolicy-FS-1-2-Res-2019-08",
+            Certificates=[
+                Certificate(
+                    CertificateArn=self.ssl_certificate_arn
+                )
+            ]
+        )
+
+        self.template.add_resource(http_listener)
+        self.template.add_resource(https_listener)
+
+        # add alb listener outputs
+        for listener in [http_listener, https_listener]:
+            listener_type = "HTTP" if listener.Port == 80 else "HTTPS"
+            output_title = generate_pascalcase_name(
+                f"Listener_{listener_type}_{alb_scheme}_{index}_ARN"
+            )
+            self.template.add_output(
+                Output(
+                    title=output_title,
+                    Description=f"ARN of the {listener.title} listener",
+                    Value=Ref(listener),
+                )
+            )
+
+        return [http_listener, https_listener]
+
+    def _create_fixed_response_action(self) -> Action:
+        action = Action(
+            Type="fixed-response",
+            FixedResponseConfig=FixedResponseConfig(
+                ContentType="text/plain",
+                StatusCode="404",
+                MessageBody="No matching host found"
+            )
+        )
+        return action
+
+    def _create_redirect_action(self) -> Action:
+        action = Action(
+            Type="redirect",
+            RedirectConfig = RedirectConfig(
+                StatusCode="HTTP_301",
+                Protocol="HTTPS",
+                Port="443"
+            )
+        )
+        return action
+
+    def _generate_pascalcase_name(self, name: str, max_length: int = 32) -> str:
+        pascal_case = pascalcase(name)
+        pascalcase_name = re.sub(r'[\W_]+', '', pascal_case )
+        if len(pascalcase_name) > max_length:
+            raise UnrecoverableException(
+                f"Name {name} is too long. Max length is {max_length}, got pascalcase length of {len(pascalcase_name)}"
+            )
+        return pascalcase_name

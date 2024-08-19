@@ -45,6 +45,7 @@ class ServiceConfiguration(object):
         self.masked_config_keys = {}
         self.config_utils = ConfigUtils(changes_validation_function=self._validate_changes)
         self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
+        self.service_defaults = self.environment_configuration.get('service_defaults', {})
 
     def edit_config(self):
         '''
@@ -178,19 +179,22 @@ class ServiceConfiguration(object):
                             "type": "string",
                             "pattern": "^\/.*$"
                         },
-                        "use_cluster_alb": {
-                            "type": "boolean"
+                        "alb_mode": {
+                            "type": "string",
+                            "pattern": "^(cluster|dedicated)$"
                         },
-                        "alb_hostname": {
-                            "type": "string"
+                        "hostname": {
+                            "type": "string",
+                            # Regex for FQDN: https://stackoverflow.com/a/20204811/9716730
+                            "pattern": "(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}$)"
                         }
                     },
                     "required": [
                         "internal",
                         "restrict_access_to",
                         "container_port",
-                        "use_cluster_alb",
-                        "alb_hostname"
+                        "alb_mode",
+                        "hostname"
                     ]
                 },
                 "custom_metrics": {
@@ -335,17 +339,18 @@ class ServiceConfiguration(object):
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
+        default_alb_mode = self.service_defaults.get('alb_mode', 'dedicated')
         return {
             'notifications_arn': None,
             'services': {
                 pascalcase(self.service_name): {
                     'http_interface': {
-                        'internal': False,
+                        'internal': True,
                         'restrict_access_to': ['0.0.0.0/0'],
                         'container_port': 80,
                         'health_check_path': '/elb-check',
-                        'use_cluster_alb': True,
-                        'alb_hostname': f'{self.service_name}.{self.environment}.getsimpl.com',
+                        'alb_mode': default_alb_mode,
+                        'hostname': '',
                     },
                     'memory_reservation': 250,
                     'command': None,
@@ -353,6 +358,7 @@ class ServiceConfiguration(object):
                 }
             }
         }
+
     def _mask_config_keys(self, configuration, keys_to_mask):
         for service_name, service_data in configuration["services"].items():
             if service_name not in self.masked_config_keys:
@@ -375,8 +381,7 @@ class ServiceConfiguration(object):
         Inject fluentbit sidecar in service configuration
         '''
         try:
-            service_defaults = self.environment_configuration.get('service_defaults', {})
-            logging_driver = service_configuration.get('logging') or service_defaults.get('logging')
+            logging_driver = service_configuration.get('logging') or self.service_defaults.get('logging')
 
             # If 'logging' is explicitly set to None in service_configuration, override with None
             if 'logging' in service_configuration and service_configuration.get('logging') is None:
@@ -398,7 +403,7 @@ class ServiceConfiguration(object):
                     depends_on = [depend_on for depend_on in depends_on if depend_on.get('container_name') != FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME]
                     if len(depends_on) == 0:
                         del service_configuration['depends_on']
-                    else: 
+                    else:
                         service_configuration['depends_on'] = depends_on
                 return service_configuration
             
@@ -409,7 +414,7 @@ class ServiceConfiguration(object):
             
             sidecars = service_configuration.get('sidecars', [])
 
-            default_fluentbit_config = service_defaults.get('fluentbit_config', {})
+            default_fluentbit_config = self.service_defaults.get('fluentbit_config', {})
             
             if default_fluentbit_config == {}:
                 log_warning('Default fluentbit configuration not found in environment configuration. To avoid entering fluentbit image URI manually repeatedly, add it to environment configuration.')

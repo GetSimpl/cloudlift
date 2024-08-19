@@ -1,10 +1,7 @@
 import json
 import re
 import uuid
-import re
 import random
-from typing import List, Dict
-import sys
 
 import boto3
 from botocore.exceptions import ClientError
@@ -26,12 +23,8 @@ from troposphere.ecs import (AwsvpcConfiguration, ContainerDefinition,
                              PortMapping, Service, TaskDefinition, ServiceRegistry, PlacementConstraint, 
                              MountPoint, ContainerDependency, Environment,
                              FirelensConfiguration, HealthCheck)
-from troposphere.elasticloadbalancingv2 import (Action, Certificate, 
-                                                Listener, ListenerRule, 
-                                                ListenerRuleAction, 
-                                                Condition, ForwardConfig, 
-                                                HostHeaderConfig, 
-                                                TargetGroupTuple)
+from troposphere.elasticloadbalancingv2 import (Action, Certificate, Listener, ListenerRule, 
+                                                ListenerRuleAction, Condition, HostHeaderConfig)
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 from troposphere.elasticloadbalancingv2 import (Matcher, RedirectConfig,
                                                 TargetGroup,
@@ -385,11 +378,14 @@ service is down',
             MinimumHealthyPercent=100,
             MaximumPercent=200
         )
+        if 'http_interface' in config:
+            http_interface = config.get('http_interface', {})
+            # if no environment default is set, fallback to 'dedicated'
+            environment_default_alb_mode = self.service_defaults.get('alb_mode', 'dedicated')
+            # if 'alb_mode' not in http_interface, then fallback to environment default
+            alb_mode = http_interface.get('alb_mode', environment_default_alb_mode)
 
-        if 'http_interface' in config and not config.get('http_interface', {}).get('use_cluster_alb', False):
-            log_bold(f"Using service level ALB for {service_name}")
-
-            alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type)
+            alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type, alb_mode)
 
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
@@ -409,7 +405,8 @@ service is down',
                         GroupName=pascalcase("FargateService" + self.env + service_name),
                         SecurityGroupIngress=[{
                             'IpProtocol': 'TCP',
-                            'SourceSecurityGroupId': Ref(alb_sg),
+                            # alb_sg is either a string i.e. the security group id or a tropsphere SecurityGroup object
+                            'SourceSecurityGroupId': alb_sg if isinstance(alb_sg, str) else Ref(alb_sg),
                             'ToPort': int(config['http_interface']['container_port']),
                             'FromPort': int(config['http_interface']['container_port']),
                         }],
@@ -457,18 +454,22 @@ service is down',
                         'Role': Ref(self.ecs_service_role),
                         'PlacementStrategies': self.PLACEMENT_STRATEGIES
                     }
-
+            service_depends_on = {}
+            if service_listener:
+                service_depends_on = {
+                    'DependsOn': service_listener.title
+                }
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
                 Cluster=self.cluster_name,
                 TaskDefinition=Ref(td),
                 DesiredCount=desired_count,
-                DependsOn=service_listener.title,
                 LaunchType=launch_type,
                 **launch_type_svc,
                 Tags=Tags(Team=self.team_name, environment=self.env),
-                **placement_constraint
+                **placement_constraint,
+                **service_depends_on
             )
             self.template.add_output(
                 Output(
@@ -477,103 +478,15 @@ service is down',
                     Value=GetAtt(svc, 'Name')
                 )
             )
-            self.template.add_output(
-                Output(
-                    service_name + "URL",
-                    Description="The URL at which the service is accessible",
-                    Value=Sub("https://${" + alb.name + ".DNSName}")
-                )
-            )
-            self.template.add_resource(svc)
-
-        elif 'http_interface' in config and config.get('http_interface', {}).get('use_cluster_alb'):
-            # create listener rules here.
-            # TODO: check the cluster alb exists; check alb, listener rule.
-            # 1. get the http_interface scheme
-            # 2. get the listeners
-            # 3. if no listener for the specified schema, exit out
-            # 4. create a listener rule
-
-            log_bold(f"Using cluster level ALB for {service_name}")
-
-            # get the http_interface scheme
-            hostname = config.get('http_interface', {}).get('alb_hostname')
-            is_internal = config.get('http_interface', {}).get('internal')
-
-            internal_listeners, internet_facing_listeners = self._fetch_alb_listeners()
-
-            # check if the alb_listeners has internal alb listener
-            # for listener in cluster_alb_listeners:
-            #     if listener.get("Key").find("Internal") == -1:
-            #         is_internal_listener_exist = True
-            #         # break
-            #     elif listener.get("Key").find("InternetFacing") == -1:
-            #         is_internet_facing_listener_exist = True
-            #         # break
-
-            if is_internal and not internal_listeners:
-                raise UnrecoverableException(f"Internal listener does not exist for the cluster alb")
-            elif not is_internal and not internet_facing_listeners:
-                raise UnrecoverableException(f"Internet facing listener does not exist for the cluster alb")
-                
-
-            # # create a target group
-            # target_group = TargetGroup(
-            #     title=pascalcase(f"TargetGroup{service_name}"),
-            #     # HealthCheckPath=
-            #     VpcId=Ref(self.vpc),
-            #     Protocol='HTTP',
-            #     Port=int(config['http_interface']['container_port']),
-            # )
-            # self.template.add_resource(target_group)
-
-            target_group = self._add_service_target_group(service_name, config, launch_type)
-
-            # target_group_arn = Ref("") # TODO: add the target group arn
-            target_group_arn = Ref(target_group)
-
-            # create listener rules
-            if is_internal:
-                self._create_listener_rules(is_internal, hostname, internal_listeners, target_group_arn)
-            else:
-                self._create_listener_rules(is_internal, hostname, internet_facing_listeners, target_group_arn)
-
-            launch_type_svc = {}
-
-            svc = Service(
-                service_name,
-                # LoadBalancers=load_balancers,
-                Cluster=self.cluster_name,
-                TaskDefinition=Ref(td),
-                DesiredCount=desired_count,
-                LoadBalancers=[
-                    LoadBalancer(
-                        ContainerName=cd.Name,
-                        TargetGroupArn=target_group_arn,
-                        ContainerPort=int(config['http_interface']['container_port'])
+            if isinstance(alb, ALBLoadBalancer):
+                self.template.add_output(
+                    Output(
+                        service_name + "URL",
+                        Description="The URL at which the service is accessible",
+                        Value=Sub("https://${" + alb.name + ".DNSName}")
                     )
-                ],
-                DeploymentConfiguration=deployment_configuration,
-                LaunchType=launch_type,
-                # **launch_type_svc,
-                Tags=Tags(Team=self.team_name, environment=self.env),
-                **placement_constraint
-            )
-            
-
-            # self.template.add_output(
-            #     Output(
-            #         service_name + 'EcsServiceName',
-            #         Description='The ECS name which needs to be entered',
-            #         Value=GetAtt(svc, 'Name')
-            #     )
-            # )
-
+                )
             self.template.add_resource(svc)
-
-
-            print(to_yaml(self.template.to_json()))
-        
         else:
             launch_type_svc = {}
             if launch_type == self.LAUNCH_TYPE_FARGATE:
@@ -674,255 +587,6 @@ service is down',
         if not is_alarms_disabled:
             self._add_service_alarms(svc)
 
-    def _create_listener_rules(
-            self, is_internal: bool, hostname: str, alb_listeners: List[Dict[str, str]], target_group_arn: str
-    ):
-        if not alb_listeners:
-            raise UnrecoverableException("No alb listeners found")
-
-        http_listener_arns: List[str] = []
-        https_listener_arns: List[str] = []
-
-        for listener in alb_listeners:
-            key = listener.get("Key")
-            if "HTTP" in key and "HTTPS" not in key:
-                if is_internal:
-                    # for internet facing services, we only need to create listener rules for HTTPS listener
-                    # http_listener_arn = listener.get("Value")
-                    http_listener_arns.append(listener.get("Value"))
-            elif "HTTPS" in key:
-                # https_listener_arn = listener.get("Value")
-                https_listener_arns.append(listener.get("Value"))
-
-
-        # listener rules
-        http_listener_rules: List[ListenerRule] = []
-        https_listener_rules: List[ListenerRule] = []
-
-
-        # create listener rules for HTTP and HTTPS listeners
-        for index, http_listener_arn in enumerate(http_listener_arns):
-            index = index + 1
-
-            priority = self._get_listener_rule_priority(http_listener_arn, hostname)
-            http_listener_rule = self._get_listener_rule("HTTP", index, is_internal, http_listener_arn, priority, hostname, target_group_arn)
-
-            http_listener_rules.append(http_listener_rule)
-
-        for index, https_listener_arn in enumerate(https_listener_arns):
-            index = index + 1
-
-            priority = self._get_listener_rule_priority(https_listener_arn, hostname)
-            https_listener_rule = self._get_listener_rule("HTTPS", index, is_internal, https_listener_arn, priority, hostname, target_group_arn)
-
-            https_listener_rules.append(https_listener_rule)
-
-        if is_internal:
-            for rule in http_listener_rules:
-                self.template.add_resource(rule)
-            for rule in https_listener_rules:
-                self.template.add_resource(rule)
-        else:
-            for rule in https_listener_rules:
-                self.template.add_resource(rule)
-            
-
-
-        
-        # get the rule priority
-        # http_rule_priority = self._get_listener_rule_priority(http_listener_arn, hostname)
-        # https_rule_priority = self._get_listener_rule_priority(https_listener_arn, hostname)
-
-        # http_listener_rule = self._get_listener_rule(is_internal, http_listener_arn, http_rule_priority, hostname)
-        # https_listener_rule = self._get_listener_rule(is_internal, https_listener_arn, https_rule_priority, hostname)
-
-
-    def _get_listener_rule(
-            self, 
-            protocol: str, 
-            index: int, 
-            is_internal: bool, 
-            listener_arn: str, 
-            priority: int, 
-            hostname: str,
-            target_group_arn: str
-        ) -> ListenerRule:
-        action = ListenerRuleAction(
-            Type="forward",
-            # ForwardConfig=ForwardConfig(), # not needed as TargetGroupArn is specified
-            # TargetGroupArn=Ref("") # TODO: add the target group arn
-            TargetGroupArn=target_group_arn
-        )
-        condition = Condition(
-            Field="host-header",
-            HostHeaderConfig=HostHeaderConfig(
-                Values=[
-                    hostname
-                ]
-            ),
-        )
-
-        title = None
-        if is_internal:
-            title = pascalcase(f"Internal{protocol}{index}ListenerRule")
-        else:
-            title = pascalcase(f"InternetFacing{protocol}{index}ListenerRule")
-
-        listener_rule = ListenerRule(
-            title=title,
-            Actions=[
-                action
-            ],
-            Conditions=[
-                condition
-            ],
-            ListenerArn=listener_arn,
-            Priority=priority
-        )
-        listener_rule.validate()
-
-        return listener_rule
-    
-
-    def fetch_cluster_albs(self) -> List[Dict[str, str]]:
-        cluster_albs: List[Dict[str, str]] = []
-
-        for alb in list(
-            filter(
-                lambda x: re.match(r'ALB(Internal|InternetFacing)\d+Arn', x['OutputKey']),
-                self.environment_stack['Outputs']
-            )
-        ):
-            cluster_albs.append(
-                {
-                    "Key": alb['OutputKey'],
-                    "Value": alb['OutputValue']
-                }
-            )
-
-        return cluster_albs
-       
-
-    def _fetch_alb_listeners(self) -> List[Dict[str, str]]:
-        # # alb listeners
-        cluster_alb_listeners = []
-
-        # NOTE: update later when required
-        # here, "1" in the key means the listeners from the first alb
-        # as there can be multiple albs for a scheme in a cluster
-        # if all the listeners are required, then update the regex pattern
-        # as r'ListenerHTTPS?(Internal|InternetFacing)\d+Arn'
-
-        for listener in list(
-            filter(
-                lambda x: re.match(r'ListenerHTTPS?(Internal|InternetFacing)1Arn', x['OutputKey']),
-                # lambda x: re.match(r'ListenerHTTPInternal1Arn', x['OutputKey']),
-                # lambda x: bool(re.search(r'ListenerHTTPS?(Internal|InternetFacing)\d+Arn', x['OutputKey'])),
-                self.environment_stack['Outputs']
-            )
-        ):
-            cluster_alb_listeners.append({
-                "Key": listener['OutputKey'],
-                "Value": listener['OutputValue']
-            })
-
-
-        internal_listeners = list(filter(lambda x: x.get("Key").find("Internal") != -1, cluster_alb_listeners))
-        internet_facing_listeners = list(filter(lambda x: x.get("Key").find("InternetFacing") != -1, cluster_alb_listeners))
-
-
-        return internal_listeners, internet_facing_listeners
-    
-    def _get_listener_rule_priority(self, listener_arn: str, hostname: str) -> int:
-        MIN_PRIORITY = 100
-        MAX_PRIORITY = 49999
-
-        # get all the listener rules in the listener
-        client = boto3.client('elbv2')
-        rules = client.describe_rules(ListenerArn=listener_arn, PageSize=400)
-
-        # check if there's already a rule with Conditions = Field: host-header, Values: hostname
-        for rule in rules['Rules']:
-            if 'Conditions' not in rule:
-                continue
-
-            for condition in rule['Conditions']:
-                if condition['Field'] == 'host-header' and hostname in condition['HostHeaderConfig']['Values']:
-                    return int(rule['Priority'])
-        
-        existing_priorities: List[int] = []
-
-        for rule in rules['Rules']:
-            if rule['IsDefault']:
-                continue
-
-            priority = int(rule['Priority'])
-            existing_priorities.append(priority)
-
-        # random_rule = random.randint(MIN_PRIORITY, MAX_PRIORITY)
-        
-        # while random_rule in existing_priorities:
-        #     random_rule = random.randint(MIN_PRIORITY, MAX_PRIORITY)
-
-        random_priority = self._generate_unique_priority(existing_priorities, MIN_PRIORITY, MAX_PRIORITY)
-        return random_priority
-    
-    def _generate_unique_priority(self, existing_priorities: List[int], min_priority=1, max_priority=49999) -> int:
-        while True:
-            priority = random.randint(min_priority, max_priority)
-            if priority not in existing_priorities:
-                return priority
-        
-        # return cluster_alb_listeners
-
-    def _add_service_target_group(self, service_name: any, config: any, launch_type: any) -> TargetGroup:
-        target_group_name = f"TargetGroup{service_name}"
-        health_check_path = config.get('http_interface', {}).get('health_check_path', '/')
-        if config['http_interface']['internal']:
-            target_group_name = f"{target_group_name}Internal"
-        
-        # target group config
-        target_group_config = {}
-
-        if launch_type == self.LAUNCH_TYPE_FARGATE or 'custom_metrics' in config:
-            target_group_config['TargetType'] = "ip"
-
-
-        service_target_group = TargetGroup(
-            title=target_group_name,
-            HealthCheckPath=health_check_path,
-            HealthyThresholdCount=2,
-            HealthCheckIntervalSeconds=30,
-            TargetGroupAttributes=[
-                TargetGroupAttribute(
-                    Key='deregistration_delay.timeout_seconds',
-                    Value='30'
-                )
-            ],
-            VpcId=Ref(self.vpc),
-            Protocol='HTTP',
-            Matcher=Matcher(HttpCode='200-399'),
-            Port=int(config['http_interface']['container_port']),
-            HealthCheckTimeoutSeconds=10,
-            UnhealthyThresholdCount=3,
-            **target_group_config,
-            Tags=[
-                {
-                    "Key": "Team",
-                    "Value": self.team_name,
-                },
-                {
-                    "Key": "environment",
-                    "Value": self.env,  
-                }
-            ]
-        )
-
-        self.template.add_resource(service_target_group)
-
-        return service_target_group
-
-
     def _gen_log_config(self, service_name, config):
         if config == 'awslogs':
             return LogConfiguration(
@@ -950,72 +614,8 @@ service is down',
             LogDriver="none"
         )
 
-    def _add_alb(self, cd, service_name, config, launch_type):
-        sg_name = 'SG' + self.env + service_name
-        svc_alb_sg = SecurityGroup(
-            re.sub(r'\W+', '', sg_name),
-            GroupName=self.env + '-' + service_name,
-            SecurityGroupIngress=self._generate_alb_security_group_ingress(
-                config
-            ),
-            VpcId=Ref(self.vpc),
-            GroupDescription=Sub(service_name + "-alb-sg"),
-            Tags=Tags(Team=self.team_name, environment=self.env)
-        )
-        self.template.add_resource(svc_alb_sg)
-        alb_name = service_name + pascalcase(self.env)
-        if config['http_interface']['internal']:
-            alb_subnets = [
-                Ref(self.private_subnet1),
-                Ref(self.private_subnet2)
-            ]
-            scheme = "internal"
-            if len(alb_name) > 32:
-                alb_name = service_name[:32-len(self.env[:4])-len(scheme)] + \
-                    pascalcase(self.env)[:4] + "Internal"
-            else:
-                alb_name += 'Internal'
-                alb_name = alb_name[:32]
-            alb = ALBLoadBalancer(
-                'ALB' + service_name,
-                Subnets=alb_subnets,
-                SecurityGroups=[
-                    self.alb_security_group,
-                    Ref(svc_alb_sg)
-                ],
-                Name=alb_name,
-                Tags=[
-                    {'Value': alb_name, 'Key': 'Name'},
-                    {"Key": "Team", "Value": self.team_name},
-                    {'Key': 'environment', 'Value': self.env}
-                ],
-                Scheme=scheme
-            )
-        else:
-            alb_subnets = [
-                Ref(self.public_subnet1),
-                Ref(self.public_subnet2)
-            ]
-            if len(alb_name) > 32:
-                alb_name = service_name[:32-len(self.env)] + pascalcase(self.env)
-            alb = ALBLoadBalancer(
-                'ALB' + service_name,
-                Subnets=alb_subnets,
-                SecurityGroups=[
-                    self.alb_security_group,
-                    Ref(svc_alb_sg)
-                ],
-                Name=alb_name,
-                Tags=[
-                    {'Value': alb_name, 'Key': 'Name'},
-                    {"Key": "Team", "Value": self.team_name},
-                    {'Key': 'environment', 'Value': self.env}
-                ]
-            )
-
-        self.template.add_resource(alb)
-
-        target_group_name = "TargetGroup" + service_name
+    def _add_alb(self, cd, service_name, config, launch_type, alb_mode):
+        target_group_name = f"TargetGroup" + service_name + alb_mode.capitalize()
         health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
         if config['http_interface']['internal']:
             target_group_name = target_group_name + 'Internal'
@@ -1044,7 +644,8 @@ service is down',
             **target_group_config,
             Tags=[
                 {"Key": "Team", "Value": self.team_name},
-                {'Key': 'environment', 'Value': self.env}
+                {'Key': 'environment', 'Value': self.env},
+                {'Key': 'alb_mode', 'Value': alb_mode}
             ]
         )
 
@@ -1057,24 +658,272 @@ service is down',
             TargetGroupArn=Ref(service_target_group),
             ContainerPort=int(config['http_interface']['container_port'])
         )
-        target_group_action = Action(
-            TargetGroupArn=Ref(target_group_name),
-            Type="forward"
-        )
-        service_listener = self._add_service_listener(
-            service_name,
-            target_group_action,
-            alb,
-            config['http_interface']['internal']
-        )
 
-        default_disable_service_alarms = self.service_defaults.get('disable_service_alarms', False)
-        is_alarms_disabled = config.get('disable_service_alarms', default_disable_service_alarms)
-        if not is_alarms_disabled:
-            self._add_alb_alarms(service_name, alb)
+        if alb_mode == 'dedicated':
+            sg_name = 'SG' + self.env + service_name
+            svc_alb_sg = SecurityGroup(
+                re.sub(r'\W+', '', sg_name),
+                GroupName=self.env + '-' + service_name,
+                SecurityGroupIngress=self._generate_alb_security_group_ingress(
+                    config
+                ),
+                VpcId=Ref(self.vpc),
+                GroupDescription=Sub(service_name + "-alb-sg"),
+                Tags=Tags(Team=self.team_name, environment=self.env)
+            )
+            self.template.add_resource(svc_alb_sg)
+            alb_name = service_name + pascalcase(self.env)
+            if config['http_interface']['internal']:
+                alb_subnets = [
+                    Ref(self.private_subnet1),
+                    Ref(self.private_subnet2)
+                ]
+                scheme = "internal"
+                if len(alb_name) > 32:
+                    alb_name = service_name[:32-len(self.env[:4])-len(scheme)] + \
+                        pascalcase(self.env)[:4] + "Internal"
+                else:
+                    alb_name += 'Internal'
+                    alb_name = alb_name[:32]
+                alb = ALBLoadBalancer(
+                    'ALB' + service_name,
+                    Subnets=alb_subnets,
+                    SecurityGroups=[
+                        self.alb_security_group,
+                        Ref(svc_alb_sg)
+                    ],
+                    Name=alb_name,
+                    Tags=[
+                        {'Value': alb_name, 'Key': 'Name'},
+                        {"Key": "Team", "Value": self.team_name},
+                        {'Key': 'environment', 'Value': self.env}
+                    ],
+                    Scheme=scheme
+                )
+            else:
+                alb_subnets = [
+                    Ref(self.public_subnet1),
+                    Ref(self.public_subnet2)
+                ]
+                if len(alb_name) > 32:
+                    alb_name = service_name[:32-len(self.env)] + pascalcase(self.env)
+                alb = ALBLoadBalancer(
+                    'ALB' + service_name,
+                    Subnets=alb_subnets,
+                    SecurityGroups=[
+                        self.alb_security_group,
+                        Ref(svc_alb_sg)
+                    ],
+                    Name=alb_name,
+                    Tags=[
+                        {'Value': alb_name, 'Key': 'Name'},
+                        {"Key": "Team", "Value": self.team_name},
+                        {'Key': 'environment', 'Value': self.env}
+                    ]
+                )
+
+            self.template.add_resource(alb)
+
+            target_group_action = Action(
+                TargetGroupArn=Ref(target_group_name),
+                Type="forward"
+            )
+            service_listener = self._add_service_listener(
+                service_name,
+                target_group_action,
+                alb,
+                config['http_interface']['internal']
+            )
+            default_disable_service_alarms = self.service_defaults.get('disable_service_alarms', False)
+            is_alarms_disabled = config.get('disable_service_alarms', default_disable_service_alarms)
+
+            if not is_alarms_disabled:
+                self._add_alb_alarms(service_name, alb)
+        else:
+            is_alb_internal = config.get('http_interface', {}).get('internal', True)
+            self._add_listener_rules_to_cluster_alb(config, service_target_group, is_alb_internal)
+            service_listener = None
+            alb = None
+            svc_alb_sg = self._fetch_cluster_alb_sg_id(is_alb_internal)
 
         return alb, lb, service_listener, svc_alb_sg
 
+    def _fetch_cluster_alb_sg_id(self, is_alb_internal):
+        security_groups = list(
+            filter(
+                lambda x: re.match(r"SG(Internal|Public)\d+ID", x["OutputKey"]),
+                self.environment_stack["Outputs"],
+            )
+        )
+        if not security_groups:
+            raise UnrecoverableException("No security group found for cluster ALB")
+        for sg_id in security_groups:
+            if is_alb_internal and sg_id["OutputKey"].find("Internal") != -1:
+                return sg_id["OutputValue"]
+            return sg_id["OutputValue"]
+
+    def _add_listener_rules_to_cluster_alb(self, config, target_group, is_alb_internal):
+        # get the http_interface scheme
+        hostname = config.get('http_interface', {}).get('hostname')
+        internal_listeners, public_listeners = self._fetch_alb_listeners_arns()
+
+        if is_alb_internal and not internal_listeners:
+            raise UnrecoverableException("No Internal HTTP/HTTPS listeners found on cluster ALB")
+        elif not is_alb_internal and not public_listeners:
+            raise UnrecoverableException("No Internet facing HTTP/HTTPS listeners found on cluster ALB")
+
+        target_group_arn = Ref(target_group)
+        # create listener rules
+        if is_alb_internal:
+            self._create_listener_rules(is_alb_internal, hostname, internal_listeners, target_group_arn)
+        else:
+            self._create_listener_rules(is_alb_internal, hostname, public_listeners, target_group_arn)
+
+    def _fetch_alb_listeners_arns(self) -> list[dict[str, str]]:
+        internal_listeners = []
+        public_listeners = []
+        for listener in list(
+            filter(
+                lambda x: re.match(r'ListenerHTTPS?(Internal|Public)\d+ARN', x['OutputKey']),
+                self.environment_stack['Outputs']
+            )
+        ):
+            if listener['OutputKey'].find("Internal") != -1:
+                internal_listeners.append({
+                    "Key": listener['OutputKey'],
+                    "Value": listener['OutputValue']
+                })
+            else:
+                public_listeners.append({
+                    "Key": listener['OutputKey'],
+                    "Value": listener['OutputValue']
+                })
+
+        return internal_listeners, public_listeners
+
+
+    def _create_listener_rules(
+            self, is_internal: bool, hostname: str, alb_listeners: list[dict[str, str]], target_group_arn: str
+    ):
+        if not alb_listeners:
+            raise UnrecoverableException("No listener found on the cluster ALB")
+
+        http_listener_arns: list[str] = []
+        https_listener_arns: list[str] = []
+
+        for listener in alb_listeners:
+            key = listener.get("Key")
+            if "HTTP" in key and "HTTPS" not in key:
+                if is_internal:
+                    # for internet facing services, we only need to create listener rules for HTTPS listener
+                    http_listener_arns.append(listener.get("Value"))
+            elif "HTTPS" in key:
+                https_listener_arns.append(listener.get("Value"))
+
+        # listener rules
+        http_listener_rules: list[ListenerRule] = []
+        https_listener_rules: list[ListenerRule] = []
+
+        # create listener rules for HTTP and HTTPS listeners
+        for index, http_listener_arn in enumerate(http_listener_arns):
+            index = index + 1
+
+            priority = self._get_listener_rule_priority(http_listener_arn, hostname)
+            http_listener_rule = self._get_listener_rule("HTTP", index, is_internal, http_listener_arn, priority, hostname, target_group_arn)
+
+            http_listener_rules.append(http_listener_rule)
+
+        for index, https_listener_arn in enumerate(https_listener_arns):
+            index = index + 1
+
+            priority = self._get_listener_rule_priority(https_listener_arn, hostname)
+            https_listener_rule = self._get_listener_rule("HTTPS", index, is_internal, https_listener_arn, priority, hostname, target_group_arn)
+
+            https_listener_rules.append(https_listener_rule)
+
+        if is_internal:
+            for rule in http_listener_rules:
+                self.template.add_resource(rule)
+            for rule in https_listener_rules:
+                self.template.add_resource(rule)
+        else:
+            for rule in https_listener_rules:
+                self.template.add_resource(rule)
+
+    def _get_listener_rule_priority(self, listener_arn: str, hostname: str) -> int:
+        MIN_PRIORITY = 100
+        MAX_PRIORITY = 49999
+
+        # get all the listener rules in the listener
+        client = boto3.client('elbv2')
+        rules = client.describe_rules(ListenerArn=listener_arn, PageSize=400)
+
+        # check if there's already a rule with same host-header condition
+        for rule in rules['Rules']:
+            for condition in rule['Conditions']:
+                if condition['Field'] == 'host-header' and hostname in condition['HostHeaderConfig']['Values']:
+                    return int(rule['Priority'])
+
+        existing_priorities: list[int] = []
+
+        for rule in rules['Rules']:
+            if rule['IsDefault']:
+                continue
+
+            priority = int(rule['Priority'])
+            existing_priorities.append(priority)
+
+        random_priority = self._generate_unique_priority(existing_priorities, MIN_PRIORITY, MAX_PRIORITY)
+        return random_priority
+
+    def _generate_unique_priority(self, existing_priorities: list[int], min_priority=1, max_priority=49999) -> int:
+        while True:
+            priority = random.randint(min_priority, max_priority)
+            if priority not in existing_priorities:
+                return priority
+
+    def _get_listener_rule(
+            self, 
+            protocol: str, 
+            index: int, 
+            is_internal: bool, 
+            listener_arn: str, 
+            priority: int, 
+            hostname: str,
+            target_group_arn: str
+        ) -> ListenerRule:
+        action = ListenerRuleAction(
+            Type="forward",
+            TargetGroupArn=target_group_arn
+        )
+        condition = Condition(
+            Field="host-header",
+            HostHeaderConfig=HostHeaderConfig(
+                Values=[
+                    hostname
+                ]
+            ),
+        )
+
+        title = None
+        if is_internal:
+            title = pascalcase(f"Internal{protocol}{index}ListenerRule")
+        else:
+            title = pascalcase(f"Public{protocol}{index}ListenerRule")
+
+        listener_rule = ListenerRule(
+            title=title,
+            Actions=[
+                action
+            ],
+            Conditions=[
+                condition
+            ],
+            ListenerArn=listener_arn,
+            Priority=priority
+        )
+        return listener_rule
+    
     def _add_service_listener(self, service_name, target_group_action,
                               alb, internal):
         ssl_cert = Certificate(CertificateArn=self.ssl_certificate_arn)
@@ -1321,34 +1170,6 @@ building this service",
                 self.environment_stack['Outputs']
             )
         )[0]['OutputValue']
-
-        # # internal ALB
-        # self.alb_internal = Parameter(
-        #     "AlbInternal",
-        #     Description='Internal ALB in the cluster environment',
-        #     Type="AWS::ElasticLoadBalancingV2::LoadBalancer::Id",
-        #     Default=list(
-        #         filter(
-        #             lambda x: x['OutputKey'] == "ALBInternal1Arn",
-        #             self.environment_stack['Outputs']
-        #         )
-        #     )[0]['OutputValue']
-        # )
-        # self.template.add_parameter(self.alb_internal)
-
-        # # internet facing ALB
-        # self.alb_internet_facing = Parameter(
-        #     "AlbInternetFacing",
-        #     Description='Internet facing ALB in the cluster environment',
-        #     Type="AWS::ElasticLoadBalancingV2::LoadBalancer::Id",
-        #     Default=list(
-        #         filter(
-        #             lambda x: x['OutputKey'] == "ALBInternetFacing1Arn",
-        #             self.environment_stack['Outputs']
-        #         )
-        #     )[0]['OutputValue']
-        # )
-        # self.template.add_parameter(self.alb_internet_facing)
 
     def _fetch_current_desired_count(self):
         stack_name = get_service_stack_name(self.env, self.application_name)
