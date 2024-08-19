@@ -615,9 +615,15 @@ service is down',
         )
 
     def _add_alb(self, cd, service_name, config, launch_type, alb_mode):
-        target_group_name = f"TargetGroup" + service_name + alb_mode.capitalize()
+        target_group_name = "TargetGroup" + service_name
+        if alb_mode == 'cluster':
+            # suffix 'C' denotes cluster mode
+            target_group_name = target_group_name + 'C'
+
         health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
-        if config['http_interface']['internal']:
+        alb_scheme = 'internal' if config['http_interface']['internal'] else 'internet-facing'
+
+        if alb_scheme == 'internal':
             target_group_name = target_group_name + 'Internal'
 
         target_group_config = {}
@@ -645,7 +651,8 @@ service is down',
             Tags=[
                 {"Key": "Team", "Value": self.team_name},
                 {'Key': 'environment', 'Value': self.env},
-                {'Key': 'alb_mode', 'Value': alb_mode}
+                {'Key': 'alb_mode', 'Value': alb_mode},
+                {'Key': 'alb_scheme', 'Value': alb_scheme}
             ]
         )
 
