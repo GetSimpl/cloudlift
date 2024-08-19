@@ -617,8 +617,8 @@ service is down',
     def _add_alb(self, cd, service_name, config, launch_type, alb_mode):
         target_group_name = "TargetGroup" + service_name
         if alb_mode == 'cluster':
-            # suffix 'C' denotes cluster mode
-            target_group_name = target_group_name + 'C'
+            # suffix 'Cluster' denotes that the target group is for a cluster ALB
+            target_group_name = target_group_name + 'Cluster'
 
         health_check_path = config['http_interface']['health_check_path'] if 'health_check_path' in config['http_interface'] else "/elb-check"
         alb_scheme = 'internal' if config['http_interface']['internal'] else 'internet-facing'
@@ -862,8 +862,8 @@ service is down',
         MAX_PRIORITY = 49999
 
         # get all the listener rules in the listener
-        client = boto3.client('elbv2')
-        rules = client.describe_rules(ListenerArn=listener_arn, PageSize=400)
+        elbv2_client = get_client_for('elbv2', self.env)
+        rules = elbv2_client.describe_rules(ListenerArn=listener_arn, PageSize=400)
 
         # check if there's already a rule with same host-header condition
         for rule in rules['Rules']:
