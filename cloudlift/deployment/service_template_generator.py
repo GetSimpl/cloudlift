@@ -756,18 +756,20 @@ service is down',
         return alb, lb, service_listener, svc_alb_sg
 
     def _fetch_cluster_alb_sg_id(self, is_alb_internal):
-        security_groups = list(
+        sg_outputs = list(
             filter(
                 lambda x: re.match(r"SG(Internal|Public)\d+ID", x["OutputKey"]),
                 self.environment_stack["Outputs"],
             )
         )
-        if not security_groups:
+        if not sg_outputs:
             raise UnrecoverableException("No security group found for cluster ALB")
-        for sg_id in security_groups:
-            if is_alb_internal and sg_id["OutputKey"].find("Internal") != -1:
-                return sg_id["OutputValue"]
-            return sg_id["OutputValue"]
+
+        for sg_output in sg_outputs:
+            if is_alb_internal and sg_output["OutputKey"].startswith("SGInternal"):
+                return sg_output["OutputValue"]
+            elif not is_alb_internal and sg_output["OutputKey"].startswith("SGPublic"):
+                return sg_output["OutputValue"]
 
     def _add_listener_rules_to_cluster_alb(self, config, target_group, is_alb_internal):
         # get the http_interface scheme
