@@ -748,7 +748,7 @@ service is down',
                 self._add_alb_alarms(service_name, alb)
         else:
             is_alb_internal = config.get('http_interface', {}).get('internal', True)
-            self._add_listener_rules_to_cluster_alb(config, service_target_group, is_alb_internal)
+            self._add_listener_rules_to_cluster_alb(config, service_name, service_target_group, is_alb_internal)
             service_listener = None
             alb = None
             svc_alb_sg = self._fetch_cluster_alb_sg_id(is_alb_internal)
@@ -771,7 +771,7 @@ service is down',
             elif not is_alb_internal and sg_output["OutputKey"].startswith("SGPublic"):
                 return sg_output["OutputValue"]
 
-    def _add_listener_rules_to_cluster_alb(self, config, target_group, is_alb_internal):
+    def _add_listener_rules_to_cluster_alb(self, config, service_name, target_group, is_alb_internal):
         # get the http_interface scheme
         hostname = config.get('http_interface', {}).get('hostname')
         internal_listeners, public_listeners = self._fetch_alb_listeners_arns()
@@ -784,9 +784,9 @@ service is down',
         target_group_arn = Ref(target_group)
         # create listener rules
         if is_alb_internal:
-            self._create_listener_rules(is_alb_internal, hostname, internal_listeners, target_group_arn)
+            self._create_listener_rules(service_name, is_alb_internal, hostname, internal_listeners, target_group_arn)
         else:
-            self._create_listener_rules(is_alb_internal, hostname, public_listeners, target_group_arn)
+            self._create_listener_rules(service_name, is_alb_internal, hostname, public_listeners, target_group_arn)
 
     def _fetch_alb_listeners_arns(self) -> list[dict[str, str]]:
         internal_listeners = []
@@ -812,7 +812,7 @@ service is down',
 
 
     def _create_listener_rules(
-            self, is_internal: bool, hostname: str, alb_listeners: list[dict[str, str]], target_group_arn: str
+            self, service_name: str, is_internal: bool, hostname: str, alb_listeners: list[dict[str, str]], target_group_arn: str
     ):
         if not alb_listeners:
             raise UnrecoverableException("No listener found on the cluster ALB")
@@ -838,7 +838,7 @@ service is down',
             index = index + 1
 
             priority = self._get_listener_rule_priority(http_listener_arn, hostname)
-            http_listener_rule = self._get_listener_rule("HTTP", index, is_internal, http_listener_arn, priority, hostname, target_group_arn)
+            http_listener_rule = self._get_listener_rule("HTTP", index, is_internal, http_listener_arn, priority, hostname, service_name, target_group_arn)
 
             http_listener_rules.append(http_listener_rule)
 
@@ -846,7 +846,7 @@ service is down',
             index = index + 1
 
             priority = self._get_listener_rule_priority(https_listener_arn, hostname)
-            https_listener_rule = self._get_listener_rule("HTTPS", index, is_internal, https_listener_arn, priority, hostname, target_group_arn)
+            https_listener_rule = self._get_listener_rule("HTTPS", index, is_internal, https_listener_arn, priority, hostname, service_name, target_group_arn)
 
             https_listener_rules.append(https_listener_rule)
 
@@ -892,13 +892,14 @@ service is down',
                 return priority
 
     def _get_listener_rule(
-            self, 
-            protocol: str, 
-            index: int, 
-            is_internal: bool, 
-            listener_arn: str, 
-            priority: int, 
+            self,
+            protocol: str,
+            index: int,
+            is_internal: bool,
+            listener_arn: str,
+            priority: int,
             hostname: str,
+            service_name: str,
             target_group_arn: str
         ) -> ListenerRule:
         action = ListenerRuleAction(
@@ -916,9 +917,9 @@ service is down',
 
         title = None
         if is_internal:
-            title = pascalcase(f"Internal{protocol}{index}ListenerRule")
+            title = pascalcase(f"{service_name}Internal{protocol}{index}ListenerRule")
         else:
-            title = pascalcase(f"Public{protocol}{index}ListenerRule")
+            title = pascalcase(f"{service_name}Public{protocol}{index}ListenerRule")
 
         listener_rule = ListenerRule(
             title=title,
