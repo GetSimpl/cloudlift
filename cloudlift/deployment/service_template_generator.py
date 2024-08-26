@@ -385,7 +385,7 @@ service is down',
             # if 'alb_mode' not in http_interface, then fallback to environment default
             alb_mode = http_interface.get('alb_mode', environment_default_alb_mode)
 
-            alb, lb, service_listener, alb_sg = self._add_alb(cd, service_name, config, launch_type, alb_mode)
+            alb, lb, service_listener, alb_sg, cluster_alb_listener_rules = self._add_alb(cd, service_name, config, launch_type, alb_mode)
 
             if launch_type == self.LAUNCH_TYPE_FARGATE:
                 # if launch type is ec2, then services inherit the ec2 instance security group
@@ -454,11 +454,17 @@ service is down',
                         'Role': Ref(self.ecs_service_role),
                         'PlacementStrategies': self.PLACEMENT_STRATEGIES
                     }
-            service_depends_on = {}
+            service_dependencies = []
+
             if service_listener:
-                service_depends_on = {
-                    'DependsOn': service_listener.title
-                }
+                service_dependencies.append(
+                    service_listener.title
+                )
+            if cluster_alb_listener_rules:
+                service_dependencies.extend(
+                    [rule.title for rule in cluster_alb_listener_rules]
+                )
+
             svc = Service(
                 service_name,
                 LoadBalancers=[lb],
@@ -469,7 +475,7 @@ service is down',
                 **launch_type_svc,
                 Tags=Tags(Team=self.team_name, environment=self.env),
                 **placement_constraint,
-                **service_depends_on
+                DependsOn=service_dependencies
             )
             self.template.add_output(
                 Output(
@@ -615,6 +621,7 @@ service is down',
         )
 
     def _add_alb(self, cd, service_name, config, launch_type, alb_mode):
+        cluster_alb_listener_rules = None # default value
         target_group_name = "TargetGroup" + service_name
         if alb_mode == 'cluster':
             # suffix 'Cluster' denotes that the target group is for a cluster ALB
@@ -652,7 +659,9 @@ service is down',
                 {"Key": "Team", "Value": self.team_name},
                 {'Key': 'environment', 'Value': self.env},
                 {'Key': 'alb_mode', 'Value': alb_mode},
-                {'Key': 'alb_scheme', 'Value': alb_scheme}
+                {'Key': 'alb_scheme', 'Value': alb_scheme},
+                {'Key': 'cloudlift_app', 'Value': self.application_name},
+                {'Key': 'service_name', 'Value': service_name}
             ]
         )
 
@@ -748,12 +757,12 @@ service is down',
                 self._add_alb_alarms(service_name, alb)
         else:
             is_alb_internal = config.get('http_interface', {}).get('internal', True)
-            self._add_listener_rules_to_cluster_alb(config, service_name, service_target_group, is_alb_internal)
+            cluster_alb_listener_rules = self._add_listener_rules_to_cluster_alb(config, service_name, service_target_group, is_alb_internal)
             service_listener = None
             alb = None
             svc_alb_sg = self._fetch_cluster_alb_sg_id(is_alb_internal)
 
-        return alb, lb, service_listener, svc_alb_sg
+        return alb, lb, service_listener, svc_alb_sg, cluster_alb_listener_rules
 
     def _fetch_cluster_alb_sg_id(self, is_alb_internal):
         sg_outputs = list(
@@ -771,9 +780,9 @@ service is down',
             elif not is_alb_internal and sg_output["OutputKey"].startswith("SGPublic"):
                 return sg_output["OutputValue"]
 
-    def _add_listener_rules_to_cluster_alb(self, config, service_name, target_group, is_alb_internal):
+    def _add_listener_rules_to_cluster_alb(self, config, service_name, target_group, is_alb_internal) -> list[ListenerRule]:
         # get the http_interface scheme
-        hostname = config.get('http_interface', {}).get('hostname')
+        hostnames = config.get('http_interface', {}).get('hostnames')
         internal_listeners, public_listeners = self._fetch_alb_listeners_arns()
 
         if is_alb_internal and not internal_listeners:
@@ -784,9 +793,8 @@ service is down',
         target_group_arn = Ref(target_group)
         # create listener rules
         if is_alb_internal:
-            self._create_listener_rules(service_name, is_alb_internal, hostname, internal_listeners, target_group_arn)
-        else:
-            self._create_listener_rules(service_name, is_alb_internal, hostname, public_listeners, target_group_arn)
+            return self._create_listener_rules(service_name, is_alb_internal, hostnames, internal_listeners, target_group_arn)
+        return self._create_listener_rules(service_name, is_alb_internal, hostnames, public_listeners, target_group_arn)
 
     def _fetch_alb_listeners_arns(self) -> list[dict[str, str]]:
         internal_listeners = []
@@ -812,8 +820,8 @@ service is down',
 
 
     def _create_listener_rules(
-            self, service_name: str, is_internal: bool, hostname: str, alb_listeners: list[dict[str, str]], target_group_arn: str
-    ):
+            self, service_name: str, is_internal: bool, hostnames: list[str], alb_listeners: list[dict[str, str]], target_group_arn: str
+    ) -> list[ListenerRule]:
         if not alb_listeners:
             raise UnrecoverableException("No listener found on the cluster ALB")
 
@@ -837,16 +845,16 @@ service is down',
         for index, http_listener_arn in enumerate(http_listener_arns):
             index = index + 1
 
-            priority = self._get_listener_rule_priority(http_listener_arn, hostname)
-            http_listener_rule = self._get_listener_rule("HTTP", index, is_internal, http_listener_arn, priority, hostname, service_name, target_group_arn)
+            priority = self._get_listener_rule_priority(http_listener_arn, hostnames[0])
+            http_listener_rule = self._get_listener_rule("HTTP", index, is_internal, http_listener_arn, priority, hostnames, service_name, target_group_arn)
 
             http_listener_rules.append(http_listener_rule)
 
         for index, https_listener_arn in enumerate(https_listener_arns):
             index = index + 1
 
-            priority = self._get_listener_rule_priority(https_listener_arn, hostname)
-            https_listener_rule = self._get_listener_rule("HTTPS", index, is_internal, https_listener_arn, priority, hostname, service_name, target_group_arn)
+            priority = self._get_listener_rule_priority(https_listener_arn, hostnames[0])
+            https_listener_rule = self._get_listener_rule("HTTPS", index, is_internal, https_listener_arn, priority, hostnames, service_name, target_group_arn)
 
             https_listener_rules.append(https_listener_rule)
 
@@ -858,6 +866,7 @@ service is down',
         else:
             for rule in https_listener_rules:
                 self.template.add_resource(rule)
+        return https_listener_rules + http_listener_rules
 
     def _get_listener_rule_priority(self, listener_arn: str, hostname: str) -> int:
         MIN_PRIORITY = 100
@@ -898,7 +907,7 @@ service is down',
             is_internal: bool,
             listener_arn: str,
             priority: int,
-            hostname: str,
+            hostnames: list[str],
             service_name: str,
             target_group_arn: str
         ) -> ListenerRule:
@@ -909,9 +918,7 @@ service is down',
         condition = Condition(
             Field="host-header",
             HostHeaderConfig=HostHeaderConfig(
-                Values=[
-                    hostname
-                ]
+                Values=hostnames
             ),
         )
 

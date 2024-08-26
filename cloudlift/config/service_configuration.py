@@ -183,10 +183,15 @@ class ServiceConfiguration(object):
                             "type": "string",
                             "pattern": "^(cluster|dedicated)$"
                         },
-                        "hostname": {
-                            "type": "string",
-                            # Regex for FQDN: https://stackoverflow.com/a/20204811/9716730
-                            "pattern": "(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}$)"
+                        "hostnames": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                # Regex for FQDN: https://stackoverflow.com/a/20204811/9716730
+                                "pattern": "(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}$)"
+                            },
+                            "minItems": 1,
+                            "maxItems": 5
                         }
                     },
                     "required": [
@@ -194,7 +199,7 @@ class ServiceConfiguration(object):
                         "restrict_access_to",
                         "container_port",
                         "alb_mode",
-                        "hostname"
+                        "hostnames"
                     ]
                 },
                 "custom_metrics": {
@@ -332,8 +337,16 @@ class ServiceConfiguration(object):
         except ValidationError as validation_error:
             log_err("Schema validation failed!")
             if validation_error.relative_path:
-                raise UnrecoverableException(validation_error.message + " in " +
-                        str(".".join(list(validation_error.relative_path))))
+                path = []
+                for item in validation_error.relative_path:
+                    if isinstance(item, str):
+                        path.append(item)
+                    elif isinstance(item, int):
+                        path.append(str(item))
+                    else:
+                        path.append(str(item))
+                path_string = ".".join(path)
+                raise UnrecoverableException(f"{validation_error.message} in {path_string}")
             else:
                 raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
@@ -350,7 +363,7 @@ class ServiceConfiguration(object):
                         'container_port': 80,
                         'health_check_path': '/elb-check',
                         'alb_mode': default_alb_mode,
-                        'hostname': '',
+                        'hostnames': [''],
                     },
                     'memory_reservation': 250,
                     'command': None,
