@@ -166,9 +166,9 @@ In addition, a service object may contain any of the following optional fields:
   
   - `restrict_access_to`: An array of strings representing the IP addresses that should be allowed to access the ALB.
   
-  - `hostname`: A string representing the hostname to be used for host based routing in the cluster ALB.
+  - `hostnames`: A list of strings (fully qualified domain names) representing the hostnames to be used for host based routing in the cluster ALB.
 
-  - `alb_mode`: A string representing the mode of the ALB. Valid options are `dedicated` or `cluster`. Default is `dedicated`. If set to `cluster`, hostname will be added to the cluster ALB for host-header based routing. If set to `dedicated`, a dedicated ALB will be created for the service.
+  - `alb_mode`: A string representing the mode of the ALB. Valid options are `dedicated` or `cluster`. Default is `dedicated`. If set to `cluster`, hostnames will be added to the cluster ALB for host-header based routing. If set to `dedicated`, a dedicated ALB will be created for the service.
 
 - `volume`: An object containing configuration information for mounting an Amazon Elastic File System (EFS) volume to the service. This field is only used if an EFS volume is required.
 
