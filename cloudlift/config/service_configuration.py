@@ -127,7 +127,8 @@ class ServiceConfiguration(object):
         if config.get('services'):
             for service_name, service_configuration in config.get('services').items():
                 config['services'][service_name] = self._inject_fluentbit_sidecar(service_configuration)
-
+        
+        config = self._inject_alb_mode(config)
 
         self._validate_changes(config)
         check_sns_topic_exists(config['notifications_arn'], self.environment)
@@ -147,6 +148,23 @@ class ServiceConfiguration(object):
             return configuration_response
         except ClientError:
             raise UnrecoverableException("Unable to store service configuration in DynamoDB.")
+
+    def _inject_alb_mode(self, config: dict) -> dict:
+        """
+        Adds `alb_mode` to the `http_interface` of each service from service_defaults of
+        environment configuration if not already present.
+        """
+        services = config.get("services", {})
+
+        # Falls back to 'dedicated' if not present in service_defaults
+        default_alb_mode = self.service_defaults.get("alb_mode", "dedicated")
+
+        for _service_name, service_configuration in services.items():
+            http_interface = service_configuration.get("http_interface", {})
+            if "alb_mode" not in http_interface:
+                log_warning(f"'alb_mode' not found in 'http_interface'. Using environment default: '{default_alb_mode}'")
+                http_interface["alb_mode"] = default_alb_mode
+        return config
 
     def update_cloudlift_version(self):
         '''
@@ -198,7 +216,6 @@ class ServiceConfiguration(object):
                         "internal",
                         "restrict_access_to",
                         "container_port",
-                        "alb_mode",
                         "hostnames"
                     ]
                 },
@@ -363,7 +380,7 @@ class ServiceConfiguration(object):
                         'container_port': 80,
                         'health_check_path': '/elb-check',
                         'alb_mode': default_alb_mode,
-                        'hostnames': [''],
+                        'hostnames': [],
                     },
                     'memory_reservation': 250,
                     'command': None,
