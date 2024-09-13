@@ -354,16 +354,12 @@ class ServiceConfiguration(object):
         except ValidationError as validation_error:
             log_err("Schema validation failed!")
             if validation_error.relative_path:
-                path = []
+                path_parts = []
                 for item in validation_error.relative_path:
-                    if isinstance(item, str):
-                        path.append(item)
-                    elif isinstance(item, int):
-                        path.append(str(item))
-                    else:
-                        path.append(str(item))
-                path_string = ".".join(path)
-                raise UnrecoverableException(f"{validation_error.message} in {path_string}")
+                    # casting to string to handle integer keys, else str.join() will fail
+                    path_parts.append(str(item))
+                relative_path = ".".join(path_parts)
+                raise UnrecoverableException(f"{validation_error.message} in {relative_path}")
             else:
                 raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
