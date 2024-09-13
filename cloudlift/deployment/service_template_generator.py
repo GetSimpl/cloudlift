@@ -821,8 +821,7 @@ service is down',
             output_value = listener['OutputValue']
             protocol = "https" if "HTTPS" in output_key else "http"
             if output_key.find("Internal") != -1:
-                if 'HTTPS' in output_key:
-                    internal_alb_listener_arns[protocol].append(output_value)
+                internal_alb_listener_arns[protocol].append(output_value)
             else:
                 public_alb_listener_arns[protocol].append(output_value)
 
