@@ -783,94 +783,91 @@ service is down',
     def _add_listener_rules_to_cluster_alb(self, config, service_name, target_group, is_alb_internal) -> list[ListenerRule]:
         # get the http_interface scheme
         hostnames = config.get('http_interface', {}).get('hostnames')
-        internal_listeners, public_listeners = self._fetch_alb_listeners_arns()
+        internal_listener_arns, public_listener_arns = self._fetch_cluster_alb_listeners_arns()
 
-        if is_alb_internal and not internal_listeners:
-            raise UnrecoverableException("No Internal HTTP/HTTPS listeners found on cluster ALB")
-        elif not is_alb_internal and not public_listeners:
-            raise UnrecoverableException("No Internet facing HTTP/HTTPS listeners found on cluster ALB")
+        listener_arns = internal_listener_arns if is_alb_internal else public_listener_arns
+
+        if len(listener_arns['http']) + len(listener_arns['https']) == 0:
+            alb_type = "Internal" if is_alb_internal else "Internet facing"
+            raise UnrecoverableException(f"No {alb_type} HTTP/HTTPS listeners found on cluster ALB")
 
         target_group_arn = Ref(target_group)
         # create listener rules
         if is_alb_internal:
-            return self._create_listener_rules(service_name, is_alb_internal, hostnames, internal_listeners, target_group_arn)
-        return self._create_listener_rules(service_name, is_alb_internal, hostnames, public_listeners, target_group_arn)
+            return self._create_listener_rules(service_name, is_alb_internal, hostnames, internal_listener_arns, target_group_arn)
+        return self._create_listener_rules(service_name, is_alb_internal, hostnames, public_listener_arns, target_group_arn)
 
-    def _fetch_alb_listeners_arns(self) -> list[dict[str, str]]:
-        internal_listeners = []
-        public_listeners = []
+    def _fetch_cluster_alb_listeners_arns(self): 
+        """
+        Fetches the ARNs of the HTTP and HTTPS listeners on the cluster ALB from the environment
+        stack outputs, categorized by internal and public ALB listeners.
+        """
+        internal_alb_listener_arns = {
+            'http': [],
+            'https': []
+        }
+        public_alb_listener_arns = {
+            'http': [],
+            'https': []
+        }
+
         for listener in list(
             filter(
                 lambda x: re.match(r'ListenerHTTPS?(Internal|Public)\d+ARN', x['OutputKey']),
                 self.environment_stack['Outputs']
             )
         ):
-            if listener['OutputKey'].find("Internal") != -1:
-                internal_listeners.append({
-                    "Key": listener['OutputKey'],
-                    "Value": listener['OutputValue']
-                })
+            output_key = listener['OutputKey']
+            output_value = listener['OutputValue']
+            protocol = "https" if "HTTPS" in output_key else "http"
+            if output_key.find("Internal") != -1:
+                if 'HTTPS' in output_key:
+                    internal_alb_listener_arns[protocol].append(output_value)
             else:
-                public_listeners.append({
-                    "Key": listener['OutputKey'],
-                    "Value": listener['OutputValue']
-                })
+                public_alb_listener_arns[protocol].append(output_value)
 
-        return internal_listeners, public_listeners
+        return internal_alb_listener_arns, public_alb_listener_arns
 
 
     def _create_listener_rules(
-            self, service_name: str, is_internal: bool, hostnames: list[str], alb_listeners: list[dict[str, str]], target_group_arn: str
+        self,
+        service_name: str,
+        is_internal: bool,
+        hostnames: list[str],
+        alb_listener_arns: dict[str, str],
+        target_group_arn: str,
     ) -> list[ListenerRule]:
-        if not alb_listeners:
-            raise UnrecoverableException("No listener found on the cluster ALB")
 
-        http_listener_arns: list[str] = []
-        https_listener_arns: list[str] = []
+        listener_rules: list[ListenerRule] = []
 
-        for listener in alb_listeners:
-            key = listener.get("Key")
-            if "HTTP" in key and "HTTPS" not in key:
-                if is_internal:
-                    # for internet facing services, we only need to create listener rules for HTTPS listener
-                    http_listener_arns.append(listener.get("Value"))
-            elif "HTTPS" in key:
-                https_listener_arns.append(listener.get("Value"))
-
-        # listener rules
-        http_listener_rules: list[ListenerRule] = []
-        https_listener_rules: list[ListenerRule] = []
-
-        # create listener rules for HTTP and HTTPS listeners
-        for index, http_listener_arn in enumerate(http_listener_arns):
-            index = index + 1
-
-            priority = self._get_listener_rule_priority(http_listener_arn, hostnames[0])
-            http_listener_rule = self._get_listener_rule("HTTP", index, is_internal, http_listener_arn, priority, hostnames, service_name, target_group_arn)
-
-            http_listener_rules.append(http_listener_rule)
-
-        for index, https_listener_arn in enumerate(https_listener_arns):
-            index = index + 1
-
-            priority = self._get_listener_rule_priority(https_listener_arn, hostnames[0])
-            https_listener_rule = self._get_listener_rule("HTTPS", index, is_internal, https_listener_arn, priority, hostnames, service_name, target_group_arn)
-
-            https_listener_rules.append(https_listener_rule)
-
-        if is_internal:
-            for rule in http_listener_rules:
-                self.template.add_resource(rule)
-            for rule in https_listener_rules:
-                self.template.add_resource(rule)
-        else:
-            for rule in https_listener_rules:
-                self.template.add_resource(rule)
-        return https_listener_rules + http_listener_rules
+        for protocol, listener_arns in alb_listener_arns.items():
+            protocol = protocol.upper()
+            # Only internal ALBs should have HTTP listener rules.
+            # The public ALB's HTTP listener has a default rule to redirect all traffic to HTTPS.
+            # We don't want to serve any response from target groups on the public load balancer.
+            if not is_internal and protocol == "HTTP":
+                continue
+            for index, listener_arn in enumerate(listener_arns):
+                index = index + 1
+                priority = self._get_listener_rule_priority(listener_arn, hostnames[0])
+                listener_rule = self._get_listener_rule(
+                    protocol,
+                    index,
+                    is_internal,
+                    listener_arn,
+                    priority,
+                    hostnames,
+                    service_name,
+                    target_group_arn,
+                )
+                self.template.add_resource(listener_rule)
+                listener_rules.append(listener_rule)
+        return listener_rules
 
     def _get_listener_rule_priority(self, listener_arn: str, hostname: str) -> int:
+        # Keeping room for 100 rules before and after to define any custom rules.
         MIN_PRIORITY = 100
-        MAX_PRIORITY = 49999
+        MAX_PRIORITY = 49899
 
         # get all the listener rules in the listener
         elbv2_client = get_client_for('elbv2', self.env)
@@ -880,7 +877,10 @@ service is down',
         for rule in rules['Rules']:
             for condition in rule['Conditions']:
                 if condition['Field'] == 'host-header' and hostname in condition['HostHeaderConfig']['Values']:
-                    return int(rule['Priority'])
+                    priority = int(rule['Priority'])
+                    # return the priority only if it's not a custom rule
+                    if priority > MIN_PRIORITY and priority < MAX_PRIORITY:
+                        return priority
 
         existing_priorities: list[int] = []
 
