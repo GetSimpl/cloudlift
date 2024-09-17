@@ -21,16 +21,17 @@ in AWS.
 ### Using Script
 
 ```sh
-curl -LO https://raw.githubusercontent.com/tasnimzotder/cloudlift/master/install-bin.sh
-chmod +x install-bin.sh
-sudo ./install-bin.sh
+curl -LO https://raw.githubusercontent.com/GetSimpl/cloudlift/master/scripts/installer.sh    
+chmod +x installer.sh
+sudo ./installer.sh
 ```
 
-Note: This will download the `install-bin.sh` script to the current directory and run it. Run `install-bin.sh --help` for more options.
+Note: This will download the `installer.sh` script to the current directory and run it. Run `installer.sh --help` for more options.
 
 Currently supported platforms using the above script are -
 
 - `linux-x86_64`
+- `alpine-x86_64`
 - `macos-arm64`
 
 The support for alpine linux and windows using the script will be added soon.
