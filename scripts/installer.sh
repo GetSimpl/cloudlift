@@ -26,7 +26,7 @@ if [ "${OS_TYPE}" = "linux" ]; then
   fi
 fi
 
-REPO_OWNER="tasnimzotder"
+REPO_OWNER="GetSimpl"
 DOWNLOAD_BASE_URL="https://github.com/${REPO_OWNER}/cloudlift/releases/download"
 RELEASES_URL="https://api.github.com/repos/${REPO_OWNER}/cloudlift/releases"
 LATEST_RELEASE_URL="${RELEASES_URL}/latest"
