@@ -1,0 +1,34 @@
+FROM --platform=linux/amd64 python:3.9-alpine3.12
+
+# install system dependencies
+RUN apk add --no-cache \
+    bash \
+    build-base \
+    ca-certificates \
+    curl \
+    gcc \
+    git \
+    libc-dev \
+    libffi-dev \
+    libgcc \
+    make \
+    musl-dev \
+    openssl \
+    openssl-dev \
+    zlib-dev
+
+# set pyinstaller version
+ARG PYINSTALLER_VERSION=6.10.0
+ENV PYINSTALLER_VERSION=$PYINSTALLER_VERSION
+
+# install pyinstaller
+RUN set -ex \
+    && git clone --branch "v$PYINSTALLER_VERSION" --depth 1 https://github.com/pyinstaller/pyinstaller.git /tmp/pyinstaller \
+    && cd /tmp/pyinstaller/bootloader \
+    && python3 ./waf configure all \
+    && pip install .. \
+    && pyinstaller --version \
+    && rm -rf /tmp/pyinstaller
+
+# set the default command
+CMD ["/bin/bash"]

@@ -1,0 +1,146 @@
+name: Build and Release PyInstaller Packages
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            build_os: darwin
+          - os: ubuntu-latest
+            build_os: linux
+          - os: ubuntu-latest
+            build_os: alpine
+    runs-on:
+      - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "${{ env.PYTHON_VERSION }}"
+
+      - name: Set Variables
+        id: set_variables
+        run: |
+          echo "version=$(cat cloudlift/version/__init__.py | cut -d'=' -f2 | tr -d "'" | tr -d ' ')" >> $GITHUB_ENV
+          package_name=$(python scripts/build.py --package-name --os ${{ matrix.build_os }})
+          echo "Package Name: $package_name"
+          echo "package_name=$package_name" >> $GITHUB_ENV
+
+      - name: Install build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev libffi-dev python3-dev
+
+      - name: Set up Docker Buildx
+        if: matrix.os == 'ubuntu-latest'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        if: matrix.os == 'ubuntu-latest'
+        uses: docker/build-push-action@v5
+        with:
+          context: scripts/dockerfiles/
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          file: scripts/dockerfiles/dockerfile.${{ matrix.build_os }}
+          tags: cloudlift-builder-${{ matrix.build_os }}:latest
+          load: true
+
+      - name: Build
+        run: python scripts/build.py --os ${{ matrix.build_os }}
+
+      - name: Archive Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ env.package_name }}"
+          path: "/tmp/${{ env.package_name }}.tar.gz"
+
+  test:
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            build_os: darwin
+          - os: ubuntu-latest
+            build_os: linux
+          - os: ubuntu-latest
+            build_os: alpine
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "${{ env.PYTHON_VERSION }}"
+
+      - name: Set Variables
+        id: set_variables
+        run: |
+          echo "version=$(cat cloudlift/version/__init__.py | cut -d'=' -f2 | tr -d "'" | tr -d ' ')" >> $GITHUB_ENV
+          package_name=$(python scripts/build.py --package-name --os ${{ matrix.build_os }})
+          echo "Package Name: $package_name"
+          echo "package_name=$package_name" >> $GITHUB_ENV
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ github.workspace }}/artifacts"
+
+      - name: Run Tests
+        run: |
+          python scripts/build.py --os ${{ matrix.build_os }}  --only-test --package-dir ${{ github.workspace }}/artifacts/${{ env.package_name }}
+
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+
+    steps:
+      - name: Get and Set Tag
+        id: set_tag
+        run: |
+          tag=$(echo $GITHUB_REF | cut -d'/' -f3)
+          echo "tag=$tag" >> $GITHUB_ENV
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ github.workspace }}/artifacts"
+
+      - name: Calculate SHA of Packages
+        run: |
+          find "${{ github.workspace }}/artifacts" -type f -name "*.tar.gz" | while read -r file; do
+              sha=$(sha256sum "$file" | cut -d' ' -f1)
+              echo "$(basename "$file"): $sha" >> checksums.txt
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ github.workspace }}/artifacts/**/*.tar.gz
+            checksums.txt
+          tag_name: ${{ env.tag }}
+          name: "Release ${{ env.tag }}"
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
