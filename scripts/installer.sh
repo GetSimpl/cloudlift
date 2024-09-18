@@ -215,6 +215,18 @@ preflight_check() {
 # Main Execution
 # ----------------------------------------
 
+usage() {
+  echo "
+  Usage: $0 [options]
+
+  Options:
+    -h, --help          Display this help message
+    -v, --version       Install specific version of Cloudlift package
+    -u, --uninstall     Uninstall Cloudlift package
+    -y, --auto-approve  Auto-approve installation
+  "
+}
+
 parse_arguments() {
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -262,7 +274,7 @@ main() {
 
 status_message() {
   if [ $1 -eq 0 ]; then
-    version=$(cloudlift --version)
+    version=$(cloudlift --version | cut -d' ' -f3)
     printf '
             _                    _  _  _   __  _
        ___ | |  ___   _   _   __| || |(_) / _|| |_

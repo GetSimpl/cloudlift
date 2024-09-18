@@ -17,7 +17,7 @@ PYINSTALLER_VERSION = os.getenv("PYINSTALLER_VERSION", "6.10.0")
 # test distros are mainly used for testing the package
 # while developing on the local machine. these are not required
 # for the CI/CD pipeline as CI/CD pipeline will run tests separately.
-# to test the packages while building, use the --test flag.
+# to test the packages while building, use the --test flag. otherwise use --only-test flag to only run tests.
 TEST_DISTROS = {
     "linux": {
         "ubuntu": [
@@ -552,7 +552,7 @@ def main():
     parser.add_argument(
         "--only-test",
         action="store_true",
-        help="Only run tests on the package; mainly used in CI/CD pipeline. This will not build the package. Also pass the path to the package using --package-path",
+        help="Only run tests on the package; mainly used in CI/CD pipeline. This will not build the package. Also pass the path to the package using --package-dir, which is optional",
     )
     parser.add_argument(
         "--package-dir",
@@ -563,7 +563,7 @@ def main():
     parser.add_argument(
         "--build-image",
         action="store_true",
-        help="Build Docker image for the specified OS",
+        help="Build base Docker image required for building Cloudlift packages with PyInstaller for the specified OS",
     )
     args = parser.parse_args()
 

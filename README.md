@@ -21,21 +21,16 @@ in AWS.
 ### Using Script
 
 ```sh
-curl -LO https://raw.githubusercontent.com/GetSimpl/cloudlift/master/scripts/installer.sh    
-chmod +x installer.sh
-sudo ./installer.sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/GetSimpl/cloudlift/master/scripts/installer.sh)"
 ```
 
-Note: This will download the `installer.sh` script to the current directory and run it. Run `installer.sh --help` for more options.
+Note: Append `sudo` to the above command if you are not running as root user. For running in a docker container, no need to append `sudo`.
 
 Currently supported platforms using the above script are -
 
 - `linux-x86_64`
 - `alpine-x86_64`
 - `macos-arm64`
-
-The support for alpine linux and windows using the script will be added soon.
-
 
 ### 1. Pre-requisites
 
