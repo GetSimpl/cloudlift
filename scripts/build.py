@@ -20,31 +20,10 @@ PYINSTALLER_VERSION = os.getenv("PYINSTALLER_VERSION", "6.10.0")
 # to test the packages while building, use the --test flag. otherwise use --only-test flag to only run tests.
 TEST_DISTROS = {
     "linux": {
-        "ubuntu": [
-            "24.04",
-            "22.04",
-            "20.04",
-            "18.04",
-            "16.04",
-            "14.04",
-        ],
-        "debian": [
-            "12",
-            "11",
-            "10",
-            "9",
-            "8",
-        ],
-        "amazonlinux": [
-            "2023",
-            "2",
-            "1",
-        ],
-        "fedora": [
-            "40",
-            "39",
-            "38",
-        ],
+        "ubuntu": ["24.04", "22.04", "20.04", "18.04", "16.04", "14.04"],
+        "debian": ["12", "11", "10", "9", "8"],
+        "amazonlinux": ["2023", "2", "1"],
+        "fedora": ["40", "39", "38"],
     },
     "alpine": {
         "alpine": [

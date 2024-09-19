@@ -186,7 +186,9 @@ uninstall_cloudlift() {
   [ -d "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}" ] && rm -rf "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}"
   [ -L "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}" ] && rm "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}"
 
-  if command -v "cloudlift" >/dev/null; then
+  # clear the shell cache
+  hash -r
+  if command -v "cloudlift"; then
     print_error "Failed to uninstall Cloudlift package."
   fi
   print_info "Cloudlift package uninstalled successfully."
