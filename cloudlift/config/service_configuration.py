@@ -45,6 +45,7 @@ class ServiceConfiguration(object):
         self.masked_config_keys = {}
         self.config_utils = ConfigUtils(changes_validation_function=self._validate_changes)
         self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
+        self.service_defaults = self.environment_configuration.get('service_defaults', {})
 
     def edit_config(self):
         '''
@@ -126,7 +127,8 @@ class ServiceConfiguration(object):
         if config.get('services'):
             for service_name, service_configuration in config.get('services').items():
                 config['services'][service_name] = self._inject_fluentbit_sidecar(service_configuration)
-
+        
+        config = self._inject_alb_mode(config)
 
         self._validate_changes(config)
         check_sns_topic_exists(config['notifications_arn'], self.environment)
@@ -146,6 +148,23 @@ class ServiceConfiguration(object):
             return configuration_response
         except ClientError:
             raise UnrecoverableException("Unable to store service configuration in DynamoDB.")
+
+    def _inject_alb_mode(self, config: dict) -> dict:
+        """
+        Adds `alb_mode` to the `http_interface` of each service from service_defaults of
+        environment configuration if not already present.
+        """
+        services = config.get("services", {})
+
+        # Falls back to 'dedicated' if not present in service_defaults
+        default_alb_mode = self.service_defaults.get("alb_mode", "dedicated")
+
+        for _service_name, service_configuration in services.items():
+            http_interface = service_configuration.get("http_interface", {})
+            if "alb_mode" not in http_interface:
+                log_warning(f"'alb_mode' not found in 'http_interface'. Using environment default: '{default_alb_mode}'")
+                http_interface["alb_mode"] = default_alb_mode
+        return config
 
     def update_cloudlift_version(self):
         '''
@@ -177,12 +196,27 @@ class ServiceConfiguration(object):
                         "health_check_path": {
                             "type": "string",
                             "pattern": "^\/.*$"
+                        },
+                        "alb_mode": {
+                            "type": "string",
+                            "pattern": "^(cluster|dedicated)$"
+                        },
+                        "hostnames": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                # Regex for FQDN: https://stackoverflow.com/a/20204811/9716730
+                                "pattern": "(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}$)"
+                            },
+                            "minItems": 1,
+                            "maxItems": 5
                         }
                     },
                     "required": [
                         "internal",
                         "restrict_access_to",
-                        "container_port"
+                        "container_port",
+                        "hostnames"
                     ]
                 },
                 "custom_metrics": {
@@ -230,6 +264,9 @@ class ServiceConfiguration(object):
                     "type": "boolean"
                 },
                 "logging": logging_json_schema,
+                "disable_service_alarms": {
+                    "type": "boolean"
+                },
                 "depends_on": {
                     "type": "array",
                     "items": {
@@ -317,29 +354,37 @@ class ServiceConfiguration(object):
         except ValidationError as validation_error:
             log_err("Schema validation failed!")
             if validation_error.relative_path:
-                raise UnrecoverableException(validation_error.message + " in " +
-                        str(".".join(list(validation_error.relative_path))))
+                path_parts = []
+                for item in validation_error.relative_path:
+                    # casting to string to handle integer keys, else str.join() will fail
+                    path_parts.append(str(item))
+                relative_path = ".".join(path_parts)
+                raise UnrecoverableException(f"{validation_error.message} in {relative_path}")
             else:
                 raise UnrecoverableException(validation_error.message)
         log_bold("Schema valid!")
 
     def _default_service_configuration(self):
+        default_alb_mode = self.service_defaults.get('alb_mode', 'dedicated')
         return {
-            u'notifications_arn': None,
-            u'services': {
+            'notifications_arn': None,
+            'services': {
                 pascalcase(self.service_name): {
-                    u'http_interface': {
-                        u'internal': False,
-                        u'restrict_access_to': [u'0.0.0.0/0'],
-                        u'container_port': 80,
-                        u'health_check_path': u'/elb-check'
+                    'http_interface': {
+                        'internal': True,
+                        'restrict_access_to': ['0.0.0.0/0'],
+                        'container_port': 80,
+                        'health_check_path': '/elb-check',
+                        'alb_mode': default_alb_mode,
+                        'hostnames': [],
                     },
-                    u'memory_reservation': 250,
-                    u'command': None,
-                    u'spot_deployment': False
+                    'memory_reservation': 250,
+                    'command': None,
+                    'spot_deployment': False
                 }
             }
         }
+
     def _mask_config_keys(self, configuration, keys_to_mask):
         for service_name, service_data in configuration["services"].items():
             if service_name not in self.masked_config_keys:
@@ -362,8 +407,7 @@ class ServiceConfiguration(object):
         Inject fluentbit sidecar in service configuration
         '''
         try:
-            service_defaults = self.environment_configuration.get('service_defaults', {})
-            logging_driver = service_configuration.get('logging') or service_defaults.get('logging')
+            logging_driver = service_configuration.get('logging') or self.service_defaults.get('logging')
 
             # If 'logging' is explicitly set to None in service_configuration, override with None
             if 'logging' in service_configuration and service_configuration.get('logging') is None:
@@ -385,7 +429,7 @@ class ServiceConfiguration(object):
                     depends_on = [depend_on for depend_on in depends_on if depend_on.get('container_name') != FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME]
                     if len(depends_on) == 0:
                         del service_configuration['depends_on']
-                    else: 
+                    else:
                         service_configuration['depends_on'] = depends_on
                 return service_configuration
             
@@ -396,7 +440,7 @@ class ServiceConfiguration(object):
             
             sidecars = service_configuration.get('sidecars', [])
 
-            default_fluentbit_config = service_defaults.get('fluentbit_config', {})
+            default_fluentbit_config = self.service_defaults.get('fluentbit_config', {})
             
             if default_fluentbit_config == {}:
                 log_warning('Default fluentbit configuration not found in environment configuration. To avoid entering fluentbit image URI manually repeatedly, add it to environment configuration.')

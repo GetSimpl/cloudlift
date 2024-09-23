@@ -1,0 +1,76 @@
+FROM --platform=linux/amd64 ubuntu:14.04
+
+# install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    zlib1g-dev \
+    libncurses5-dev \
+    libgdbm-dev \
+    libnss3-dev \
+    libssl-dev \
+    libreadline-dev \
+    libffi-dev \
+    wget \
+    curl \
+    llvm \
+    libncursesw5-dev \
+    xz-utils \
+    tk-dev \
+    liblzma-dev \
+    libsqlite3-dev \
+    libbz2-dev \
+    libdb-dev \
+    libuuid1 \
+    uuid-dev \
+    gcc \
+    git \
+    libc-dev \
+    make \
+    openssl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# install OpenSSL 1.1.1
+RUN wget https://www.openssl.org/source/openssl-1.1.1k.tar.gz && \
+    tar -xvf openssl-1.1.1k.tar.gz && \
+    cd openssl-1.1.1k && \
+    ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl shared zlib && \
+    make -j $(nproc) && \
+    make install && \
+    cd .. && \
+    rm -rf openssl-1.1.1k.tar.gz openssl-1.1.1k
+
+# download and install Python 3.9.20
+RUN wget https://www.python.org/ftp/python/3.9.20/Python-3.9.20.tgz && \
+    tar -xf Python-3.9.20.tgz && \
+    cd Python-3.9.20 && \
+    ./configure \
+    --enable-optimizations \
+    --with-openssl=/usr/local/ssl \
+    --with-ensurepip=install \
+    --enable-shared \
+    LDFLAGS="-L/usr/local/ssl/lib -Wl,-rpath,/usr/local/ssl/lib" \
+    CPPFLAGS="-I/usr/local/ssl/include" && \
+    make install && \
+    cd .. && \
+    rm -rf Python-3.9.20.tgz Python-3.9.20
+
+# update library cache
+RUN ldconfig
+
+# upgrade pip
+RUN python3.9 -m pip install --upgrade pip
+
+# set pyinstaller version
+ARG PYINSTALLER_VERSION=6.10.0
+ENV PYINSTALLER_VERSION=$PYINSTALLER_VERSION
+
+# install pyinstaller
+RUN git clone --branch "v$PYINSTALLER_VERSION" --depth 1 https://github.com/pyinstaller/pyinstaller.git /tmp/pyinstaller && \
+    cd /tmp/pyinstaller/bootloader && \
+    python3 ./waf configure all && \
+    pip install ..
+
+RUN pyinstaller --version
+
+CMD ["/bin/bash"]
