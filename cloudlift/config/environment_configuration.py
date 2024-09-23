@@ -201,6 +201,8 @@ class EnvironmentConfiguration(object):
             },
             "service_defaults": {
                 "logging": "awslogs",
+                "alb_mode": "dedicated",
+                "disable_service_alarms": False,
                 "fluentbit_config": {
                 "image_uri": "amazon/aws-for-fluent-bit:stable",
                 "env": {
@@ -425,6 +427,13 @@ class EnvironmentConfiguration(object):
                             "type": "object",
                             "properties": {
                                 "logging": logging_json_schema,
+                                "alb_mode": {
+                                    "type": "string",
+                                    "pattern": "^(cluster|dedicated)$"
+                                },
+                                "disable_service_alarms": {
+                                    "type": "boolean"
+                                },
                                 "fluentbit_config": {
                                     "type": "object",
                                     "properties": {

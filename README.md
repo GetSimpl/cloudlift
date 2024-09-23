@@ -176,9 +176,13 @@ In addition, a service object may contain any of the following optional fields:
 
   - `container_port`: A number representing the port number on which the service is running inside the container.
   
-  - `internal`: A boolean value indicating whether the ALB should be internal. If set to false, the ALB will be public.
+  - `internal`: A boolean value indicating whether the ALB should be internal. If set to false, the ALB will be public. Default is `true`
   
   - `restrict_access_to`: An array of strings representing the IP addresses that should be allowed to access the ALB.
+  
+  - `hostnames`: A list of strings (fully qualified domain names) representing the hostnames to be used for host based routing in the cluster ALB.
+
+  - `alb_mode`: A string representing the mode of the ALB. Valid options are `dedicated` or `cluster`. Default is `dedicated`. If set to `cluster`, hostnames will be added to the cluster ALB for host-header based routing. If set to `dedicated`, a dedicated ALB will be created for the service.
 
 - `volume`: An object containing configuration information for mounting an Amazon Elastic File System (EFS) volume to the service. This field is only used if an EFS volume is required.
 
@@ -188,7 +192,7 @@ In addition, a service object may contain any of the following optional fields:
   
   - `container_path`: A string representing the mount path inside the container.
 
-- `logging`: A string or null value representing the log driver to be used. Valid options are "fluentd", "awslogs", or null. If this field is null, the default log driver (CloudWatch Logs) will be used.
+- `logging`: A string or null value representing the log driver to be used. Valid options are `fluentd`, `awslogs`, `awsfirelens` or `null`. If this field is null, the default log driver (CloudWatch Logs) will be used.
 
 
 ### 1. Upload configuration to Parameter Store
