@@ -18,6 +18,20 @@ in AWS.
 
 ## Installing cloudlift
 
+### Using Script
+
+```sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/GetSimpl/cloudlift/master/scripts/installer.sh)"
+```
+
+Note: Append `sudo` to the above command if you are not running as root user. For running in a docker container, no need to append `sudo`.
+
+Currently supported platforms using the above script are -
+
+- `linux-x86_64`
+- `alpine-x86_64`
+- `macos-arm64`
+
 ### 1. Pre-requisites
 
 - pip
