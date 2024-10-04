@@ -160,10 +160,11 @@ class ServiceConfiguration(object):
         default_alb_mode = self.service_defaults.get("alb_mode", "dedicated")
 
         for _service_name, service_configuration in services.items():
-            http_interface = service_configuration.get("http_interface", {})
-            if "alb_mode" not in http_interface:
-                log_warning(f"'alb_mode' not found in 'http_interface'. Using environment default: '{default_alb_mode}'")
-                http_interface["alb_mode"] = default_alb_mode
+            if "http_interface" in service_configuration:
+                http_interface = service_configuration.get("http_interface")
+                if "alb_mode" not in http_interface:
+                    log_warning(f"'alb_mode' not found in 'http_interface'. Using environment default: '{default_alb_mode}'")
+                    http_interface["alb_mode"] = default_alb_mode
         return config
 
     def update_cloudlift_version(self):
