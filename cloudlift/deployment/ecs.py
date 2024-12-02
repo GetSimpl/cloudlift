@@ -14,10 +14,15 @@ or updated. If the package supports deleting configs, use that.
 from datetime import datetime
 from json import dumps
 
+from cloudlift.exceptions import UnrecoverableException
+
 from boto3.session import Session
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
+
+from cloudlift.version import VERSION
+from distutils.version import LooseVersion
 
 
 class EcsClient(object):
@@ -38,7 +43,10 @@ class EcsClient(object):
     def describe_task_definition(self, task_definition_arn):
         try:
             return self.boto.describe_task_definition(
-                taskDefinition=task_definition_arn
+                taskDefinition=task_definition_arn,
+                include=[
+                'TAGS'
+                ]
             )
         except ClientError:
             raise UnknownTaskDefinitionError(
@@ -74,6 +82,9 @@ class EcsClient(object):
             executionRoleArn=execution_role_arn,
             taskRoleArn=role_arn or u'',
             networkMode=network_mode,
+            tags=[
+                {'key': 'cloudlift_version', 'value': VERSION},
+            ],
             **fargate_td
         )
 
@@ -419,7 +430,8 @@ class EcsAction(object):
             task_definition_arn=task_definition
         )
         task_definition = EcsTaskDefinition(
-            task_definition=task_definition_payload[u'taskDefinition']
+            task_definition=task_definition_payload[u'taskDefinition'],
+            tags=task_definition_payload[u'tags']
         )
         return task_definition
 
@@ -432,6 +444,8 @@ class EcsAction(object):
                 'memory' : task_definition.memory or u'',
 
             }
+        td_tags=task_definition[u'tags']
+        self.check_tags(td_tags)
         response = self._client.register_task_definition(
             family=task_definition.family,
             containers=task_definition.containers,
@@ -444,6 +458,21 @@ class EcsAction(object):
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
+
+    def check_tags(self, tags):
+        if tags:
+            for tag in tags:
+                if tag[u'key']=="cloudlift_version":
+                    if LooseVersion(tag[u'value'])>LooseVersion(VERSION):
+                        raise UnrecoverableException(f'Cloudlift Version {tag[u"value"]} was used to '
+                                                     f'create this task_definition. You are using version {VERSION}, '
+                                                     f'which is older and can cause corruption. Please upgrade to at least '
+                                                     f'version {tag[u"value"]} to proceed.\n\nUpgrade to the '
+                                                     f'latest version (Recommended):\n'
+                                                     f'\tpip install -U cloudlift\n\nOR\n\nUpgrade to a compatible version:\n'
+                                                     f'\tpip install -U cloudlift=={tag[u"value"]}')
+        else:
+            return
 
     def update_service(self, service):
         response = self._client.update_service(
