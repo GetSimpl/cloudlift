@@ -233,8 +233,14 @@ service is down',
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "Cpu": 0
+            "Cpu": 0 # Default to 0
         }
+        
+        # Add CPU reservation to the container definition
+        if config.get("cpu_reservation"):
+            cpu_reservation = config.get("cpu_reservation")
+            container_definition_arguments["Cpu"] = int(cpu_reservation)
+
         placement_constraint = {}
         if 'fargate' not in config:
             for key in self.environment_stack["Outputs"]:
@@ -331,6 +337,24 @@ service is down',
                 'Cpu': str(config['fargate']['cpu']),
                 'Memory': str(config['fargate']['memory'])
             }
+
+        if launch_type == self.LAUNCH_TYPE_EC2:
+            cpu_limit = None
+
+            if config.get("cpu_reservation"):
+                cpu_reservation = int(config['cpu_reservation'])
+                # Add 25% to the cpu reservation for the cpu limit
+                cpu_limit = str(cpu_reservation * 1.25)
+
+            # Override cpu_limit if cpu_limit is provided
+            if config.get("cpu_limit"):
+                cpu_limit = str(config.get("cpu_limit"))
+            
+            # Do not set a default value unless cpu_limit or cpu_reservation is provided
+            if cpu_limit:
+                launch_type_td = {
+                    'Cpu': cpu_limit,
+                }
 
         if 'custom_metrics' in config:
             launch_type_td['NetworkMode'] = 'awsvpc'

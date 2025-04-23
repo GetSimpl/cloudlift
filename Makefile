@@ -3,6 +3,9 @@ clean:
 	find . -name '*.pyc' -exec rm --force {} +
 	find . -name '*.pyo' -exec rm --force {} +
 
+test-unit:
+	pytest test/unit --numprocesses=auto --dist=load --junit-xml=junit_unit.xml --verbose
+
 test-template:
 		python3 -m pytest test/deployment/service_template_generator_test.py -vv
 

@@ -6,7 +6,10 @@ cloudlift.egg-info/
 build/
 dist/
 venv/
+.venv/
 metastore_db/
 .eggs
 .idea
 *.spec
+__pycache__
+junit-*.xml

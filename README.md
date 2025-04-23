@@ -24,7 +24,7 @@ in AWS.
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/GetSimpl/cloudlift/master/scripts/installer.sh)"
 ```
 
-Note: Append `sudo` to the above command if you are not running as root user. For running in a docker container, no need to append `sudo`.
+Note: Prepend `sudo` to the above command if you are not running as root user. For running in a docker container, no need to prepend `sudo`.
 
 Currently supported platforms using the above script are -
 
