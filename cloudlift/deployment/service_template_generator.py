@@ -340,11 +340,12 @@ service is down',
 
         if launch_type == self.LAUNCH_TYPE_EC2:
             cpu_limit = None
+            multiplier_factor = 1.25
 
             if config.get("cpu_reservation"):
                 cpu_reservation = int(config['cpu_reservation'])
                 # Add 25% to the cpu reservation for the cpu limit
-                cpu_limit = str(cpu_reservation * 1.25)
+                cpu_limit = str(cpu_reservation * multiplier_factor)
 
             # Do not set a default value unless cpu_reservation is provided
             if cpu_limit:

@@ -154,8 +154,6 @@ class TestCpuConfiguration:
             (128, 128, int(128 * MULTIPLIER)),
             # None values
             (None, 0, None),
-            (None, 0, None),
-            (None, 0, None),
         ],
     )
     def test_cpu_configuration(
