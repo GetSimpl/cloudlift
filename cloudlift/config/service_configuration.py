@@ -240,16 +240,11 @@ class ServiceConfiguration(object):
                     "minimum": 10,
                     "maximum": 30000
                 },
+                # For EC2 launch type - minimum number of CPU units are 128
                 "cpu_reservation": {
                     "type": "number",
                     "minimum": 128,
-                    "maximum": 16384
-                },
-                # For EC2 launch type - minimum number of CPU units are 128
-                "cpu_limit": {
-                    "type": "number",
-                    "minimum": 128,
-                    "maximum": 16384
+                    "maximum": 4096
                 },
                 "fargate": {
                     "type": "object",

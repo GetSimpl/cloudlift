@@ -346,11 +346,7 @@ service is down',
                 # Add 25% to the cpu reservation for the cpu limit
                 cpu_limit = str(cpu_reservation * 1.25)
 
-            # Override cpu_limit if cpu_limit is provided
-            if config.get("cpu_limit"):
-                cpu_limit = str(config.get("cpu_limit"))
-            
-            # Do not set a default value unless cpu_limit or cpu_reservation is provided
+            # Do not set a default value unless cpu_reservation is provided
             if cpu_limit:
                 launch_type_td = {
                     'Cpu': cpu_limit,

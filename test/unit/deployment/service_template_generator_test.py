@@ -147,21 +147,15 @@ MULTIPLIER = 1.25
 class TestCpuConfiguration:
     # parametrize the test with different CPU configurations
     @pytest.mark.parametrize(
-        "cpu_reservation, cpu_limit, expected_container_cpu, expected_task_cpu",
+        "cpu_reservation, expected_container_cpu, expected_task_cpu",
         [
             # Normal values
-            (256, None, 256, int(256 * MULTIPLIER)),
-            (256, 256, 256, 256),
-            (256, 512, 256, 512),
+            (256, 256, int(256 * MULTIPLIER)),
+            (128, 128, int(128 * MULTIPLIER)),
             # None values
-            (None, 256, 0, 256),
-            (None, 512, 0, 512),
-            (None, None, 0, None),
-            # Zero values
-            (0, 0, 0, None),
-            (0, None, 0, None),
-            (0, 256, 0, 256),
-            (128, 0, 128, int(128 * MULTIPLIER)),
+            (None, 0, None),
+            (None, 0, None),
+            (None, 0, None),
         ],
     )
     def test_cpu_configuration(
@@ -170,26 +164,19 @@ class TestCpuConfiguration:
         service_config,
         mock_aws,
         cpu_reservation,
-        cpu_limit,
         expected_container_cpu,
         expected_task_cpu,
     ):
         """
         Test that the CPU configuration is set correctly in the CloudFormation template.
         This test checks the following scenarios:
-        1. When both cpu_reservation and cpu_limit are set, the container CPU should be equal to cpu_reservation
-           and the task CPU should be equal to cpu_limit.
-        2. When cpu_reservation is set and cpu_limit is None, the container CPU should be equal to cpu_reservation
-           and the task CPU should be equal to cpu_reservation multiplied by MULTIPLIER.
-        3. When cpu_reservation is None and cpu_limit is set, the container CPU should be None and the task CPU
-           should be equal to cpu_limit.
-        4. When both cpu_reservation and cpu_limit are None, the container CPU should be 0 and the task CPU
-            should not be set.
+        1. When cpu_reservation is set to a normal value, the container CPU is set to that value,
+           and the task CPU is set to the value multiplied by a constant.
+        2. When cpu_reservation is None, the container CPU is set to 0, and the task CPU is None.
         """
         # Set CPU values in service config
         service_name = "testservice"
         service_config.services[service_name]["cpu_reservation"] = cpu_reservation
-        service_config.services[service_name]["cpu_limit"] = cpu_limit
 
         # Create the service template generator
         config = service_config.services[service_name]
@@ -212,17 +199,11 @@ class TestCpuConfiguration:
         assert container_definition is not None
         assert task_definition is not None
 
-        if not cpu_reservation and not cpu_limit:
-            # When both are None, the container CPU should be `0` but the task CPU should not be set
-            assert (
-                task_definition.get("Properties", {}).get("Cpu", None)
-                is expected_task_cpu
-            )
-        else:
-            actual_cpu_container = container_definition.get("Cpu", None)
+        actual_cpu_container = container_definition.get("Cpu", None)
+        assert actual_cpu_container == expected_container_cpu
+
+        if cpu_reservation:
             actual_cpu_task = int(
                 float(task_definition.get("Properties", {}).get("Cpu"))
             )
-
-            assert actual_cpu_container == expected_container_cpu
             assert actual_cpu_task == expected_task_cpu

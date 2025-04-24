@@ -19,8 +19,8 @@ SNS_TOPIC_NAME = "sns-topic"
 SNS_TOPIC_ARN = f"arn:aws:sns:ap-south-1:123456789012:{SNS_TOPIC_NAME}"
 
 CPU_MIN_VALUE = 128
-CPU_MID_VALUE = 1024
-CPU_MAX_VALUE = 16384
+CPU_MID_VALUE = 512
+CPU_MAX_VALUE = 4096
 
 
 @pytest.fixture
@@ -1445,7 +1445,6 @@ def test_inject_fluent_bit_sidecar_properties(
     }
 
 
-@pytest.mark.parametrize("cpu_config_key", ["cpu_reservation", "cpu_limit"])
 @pytest.mark.parametrize(
     "cpu_value,is_valid",
     [
@@ -1461,12 +1460,9 @@ def test_inject_fluent_bit_sidecar_properties(
         ("1024", False),
     ],
 )
-def test_validate_changes_cpu_settings(
-    service_configuration, cpu_config_key, cpu_value, is_valid
-):
+def test_validate_changes_cpu_settings(service_configuration, cpu_value, is_valid):
     """
-    Test that the cpu_reservation and cpu_limit are validated correctly.
-    It should raise an exception for invalid values.
+    Test that _validate_changes correctly validates the cpu_reservation settings.
     """
     config = {
         "notifications_arn": "sns-arn",
@@ -1474,7 +1470,7 @@ def test_validate_changes_cpu_settings(
             "TestService": {
                 "memory_reservation": 100,
                 "command": None,
-                cpu_config_key: cpu_value,
+                "cpu_reservation": cpu_value,
             }
         },
         "cloudlift_version": "1.0.0",
@@ -1489,7 +1485,7 @@ def test_validate_changes_cpu_settings(
 
 def test_validate_changes_cpu_configs_optional(service_configuration):
     """
-    Test that the cpu_reservation and cpu_limit are optional.
+    Test that the cpu_reservation field is optional and does not raise an exception
     """
     config = {
         "notifications_arn": "sns-arn",
@@ -1497,32 +1493,11 @@ def test_validate_changes_cpu_configs_optional(service_configuration):
             "TestService": {
                 "memory_reservation": 100,
                 "command": None,
-                # No cpu_reservation or cpu_limit specified
+                # No cpu_reservation is specified
             }
         },
         "cloudlift_version": "1.0.0",
     }
 
-    # Should not raise an exception as both fields are optional
-    service_configuration._validate_changes(config)
-
-
-def test_validate_changes_cpu_configs_both_specified(service_configuration):
-    """
-    Test that the cpu_reservation and cpu_limit are validated correctly when both are specified.
-    """
-    config = {
-        "notifications_arn": "sns-arn",
-        "services": {
-            "TestService": {
-                "memory_reservation": 100,
-                "command": None,
-                "cpu_reservation": 512,
-                "cpu_limit": 1024,
-            }
-        },
-        "cloudlift_version": "1.0.0",
-    }
-
-    # Should not raise an exception as both fields are provided
+    # Should not raise an exception as cpu_reservation is optional
     service_configuration._validate_changes(config)
