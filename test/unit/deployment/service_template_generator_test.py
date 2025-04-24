@@ -201,7 +201,6 @@ class TestCpuConfiguration:
         assert actual_cpu_container == expected_container_cpu
 
         if cpu_reservation:
-            actual_cpu_task = int(
-                float(task_definition.get("Properties", {}).get("Cpu"))
-            )
-            assert actual_cpu_task == expected_task_cpu
+            actual_cpu_task = task_definition.get("Properties", {}).get("Cpu")
+            # Round the expected task CPU to the nearest integer
+            assert actual_cpu_task == format(expected_task_cpu, ".0f")

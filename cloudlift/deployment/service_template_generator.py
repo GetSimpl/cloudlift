@@ -345,12 +345,16 @@ service is down',
             if config.get("cpu_reservation"):
                 cpu_reservation = int(config['cpu_reservation'])
                 # Add 25% to the cpu reservation for the cpu limit
-                cpu_limit = str(cpu_reservation * multiplier_factor)
+                cpu_limit = cpu_reservation * multiplier_factor
 
             # Do not set a default value unless cpu_reservation is provided
             if cpu_limit:
+                # Round the value to the nearest integer
+                # Task definition requires a string value for cpu without decimal places in it
+                # Example: 256, 512, 1024, not 256.0, 512.0, 1024.0
+                cpu_limit_str = format(cpu_limit, '.0f')
                 launch_type_td = {
-                    'Cpu': cpu_limit,
+                    'Cpu': cpu_limit_str,
                 }
 
         if 'custom_metrics' in config:
