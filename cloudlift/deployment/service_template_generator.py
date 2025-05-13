@@ -233,13 +233,8 @@ service is down',
             "Name": service_name + "Container",
             "Image": self.ecr_image_uri + ':' + self.current_version,
             "Essential": 'true',
-            "Cpu": 0 # Default to 0
+            "Cpu": 0
         }
-        
-        # Add CPU reservation to the container definition
-        if config.get("cpu_reservation"):
-            cpu_reservation = config.get("cpu_reservation")
-            container_definition_arguments["Cpu"] = int(cpu_reservation)
 
         placement_constraint = {}
         if 'fargate' not in config:

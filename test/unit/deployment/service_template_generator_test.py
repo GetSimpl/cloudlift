@@ -1,4 +1,3 @@
-import os
 from unittest.mock import Mock, patch
 
 import boto3
@@ -147,13 +146,13 @@ MULTIPLIER = 1.25
 class TestCpuConfiguration:
     # parametrize the test with different CPU configurations
     @pytest.mark.parametrize(
-        "cpu_reservation, expected_container_cpu, expected_task_cpu",
+        "cpu_reservation,  expected_task_cpu",
         [
             # Normal values
-            (256, 256, int(256 * MULTIPLIER)),
-            (128, 128, int(128 * MULTIPLIER)),
+            (256, int(256 * MULTIPLIER)),
+            (128, int(128 * MULTIPLIER)),
             # None values
-            (None, 0, None),
+            (None, None),
         ],
     )
     def test_cpu_configuration(
@@ -162,7 +161,6 @@ class TestCpuConfiguration:
         service_config,
         mock_aws,
         cpu_reservation,
-        expected_container_cpu,
         expected_task_cpu,
     ):
         """
@@ -184,21 +182,6 @@ class TestCpuConfiguration:
 
         resources = service_template_generator.template.to_dict().get("Resources", {})
         task_definition = resources.get(f"{service_name}TaskDefinition")
-        container_definitions = task_definition.get("Properties", {}).get(
-            "ContainerDefinitions", {}
-        )
-
-        container_definition = None
-        for container in container_definitions:
-            if container.get("Name") == f"{service_name}Container":
-                container_definition = container
-                break
-
-        assert container_definition is not None
-        assert task_definition is not None
-
-        actual_cpu_container = container_definition.get("Cpu", None)
-        assert actual_cpu_container == expected_container_cpu
 
         if cpu_reservation:
             actual_cpu_task = task_definition.get("Properties", {}).get("Cpu")
