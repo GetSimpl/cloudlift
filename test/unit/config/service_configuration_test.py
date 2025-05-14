@@ -1446,7 +1446,7 @@ def test_inject_fluent_bit_sidecar_properties(
 
 
 @pytest.mark.parametrize(
-    "cpu_value,is_valid",
+    "cpu_reservation,is_valid",
     [
         # Valid values
         (CPU_MIN_VALUE, True),
@@ -1458,9 +1458,13 @@ def test_inject_fluent_bit_sidecar_properties(
         (0, False),
         (CPU_MAX_VALUE + 1, False),
         ("1024", False),
+        # None
+        (None, True),
     ],
 )
-def test_validate_changes_cpu_settings(service_configuration, cpu_value, is_valid):
+def test_validate_changes_cpu_reservation_values(
+    service_configuration, cpu_reservation, is_valid
+):
     """
     Test that _validate_changes correctly validates the cpu_reservation settings.
     """
@@ -1470,13 +1474,17 @@ def test_validate_changes_cpu_settings(service_configuration, cpu_value, is_vali
             "TestService": {
                 "memory_reservation": 100,
                 "command": None,
-                "cpu_reservation": cpu_value,
             }
         },
         "cloudlift_version": "1.0.0",
     }
 
+    # Add cpu_reservation to the config only if it's not None
+    if cpu_reservation is not None:
+        config["services"]["TestService"]["cpu_reservation"] = cpu_reservation
+
     if is_valid:
+        # Should not raise an exception
         service_configuration._validate_changes(config)
     else:
         with pytest.raises(UnrecoverableException):
@@ -1501,3 +1509,41 @@ def test_validate_changes_cpu_configs_optional(service_configuration):
 
     # Should not raise an exception as cpu_reservation is optional
     service_configuration._validate_changes(config)
+
+
+@pytest.mark.parametrize(
+    "use_cpu_flag_present, expected_flag_value",
+    [
+        (True, True),  # use_use_container_cpu_reservation is present
+        (False, None),  # use_use_container_cpu_reservation is not present
+    ],
+)
+def test_validate_changes_cpu_reservation_and_usage_flag(
+    service_configuration, use_cpu_flag_present, expected_flag_value
+):
+    test_service = {
+        "memory_reservation": 100,
+        "command": None,
+        "cpu_reservation": 256,
+    }
+
+    if use_cpu_flag_present:
+        test_service["use_use_container_cpu_reservation"] = True
+
+    config = {
+        "notifications_arn": "sns-arn",
+        "services": {
+            "TestService": test_service,
+        },
+        "cloudlift_version": "1.0.0",
+    }
+
+    service_configuration._validate_changes(config)
+
+    assert config["services"]["TestService"]["cpu_reservation"] == 256
+    if expected_flag_value is not None:
+        assert config["services"]["TestService"]["use_use_container_cpu_reservation"]
+    else:
+        assert (
+            "use_use_container_cpu_reservation" not in config["services"]["TestService"]
+        )

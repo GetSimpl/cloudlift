@@ -246,6 +246,11 @@ class ServiceConfiguration(object):
                     "minimum": 128,
                     "maximum": 4096
                 },
+                "use_container_cpu_reservation": {
+                    "type": "boolean",
+                    "description": "If true, use cpu_reservation for both task and container. If false, use cpu_reservation for task only.",
+                    "default": False
+                },
                 "fargate": {
                     "type": "object",
                     "properties": {
