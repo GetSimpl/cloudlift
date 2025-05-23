@@ -60,13 +60,17 @@ class EcsClient(object):
 
     def register_task_definition(self, family, containers, volumes, role_arn, cpu=False, memory=False, execution_role_arn=None,
                                  requires_compatibilities=[], network_mode='bridge'):
-        fargate_td = {}
+        base_td: dict = {}
         if 'FARGATE' in requires_compatibilities:
-            fargate_td = {
+            base_td = {
                 'requiresCompatibilities': requires_compatibilities or [],
                 'cpu': cpu,
                 'memory': memory,
             }
+            
+        if cpu:
+            base_td['cpu'] = cpu
+            
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
@@ -74,7 +78,7 @@ class EcsClient(object):
             executionRoleArn=execution_role_arn,
             taskRoleArn=role_arn or u'',
             networkMode=network_mode,
-            **fargate_td
+            **base_td
         )
 
     def deregister_task_definition(self, task_definition_arn):
@@ -424,14 +428,18 @@ class EcsAction(object):
         return task_definition
 
     def update_task_definition(self, task_definition):
-        fargate_td = {}
+        base_td: dict = {}
         if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
-            fargate_td = {
+            base_td = {
                 'requires_compatibilities': task_definition.requires_compatibilities or [],
                 'cpu' : task_definition.cpu or u'',
                 'memory' : task_definition.memory or u'',
 
             }
+            
+        if task_definition.cpu:
+            base_td['cpu'] = task_definition.cpu
+            
         response = self._client.register_task_definition(
             family=task_definition.family,
             containers=task_definition.containers,
@@ -439,7 +447,7 @@ class EcsAction(object):
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn if task_definition.execution_role_arn else boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
             network_mode=task_definition.network_mode or u'bridge',
-            **fargate_td
+            **base_td
         )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)

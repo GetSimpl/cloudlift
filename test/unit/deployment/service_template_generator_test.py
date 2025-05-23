@@ -149,19 +149,16 @@ MULTIPLIER = 1.25
 class TestCpuConfiguration:
     # parametrize the test with different CPU configurations
     @pytest.mark.parametrize(
-        "cpu_reservation, use_cpu_flag, expected_task_cpu, expected_container_cpu",
+        "cpu_reservation, expected_task_cpu",
         [
-            # use_use_container_cpu_reservation is True
-            (256, True, int(256 * MULTIPLIER), 256),
-            (128, True, int(128 * MULTIPLIER), 128),
-            (None, True, None, 0),
-            # use_use_container_cpu_reservation is False
-            (256, False, int(256 * MULTIPLIER), 0),
-            (128, False, int(128 * MULTIPLIER), 0),
-            (None, False, None, 0),
-            # use_use_container_cpu_reservation is not set
-            (256, None, int(256 * MULTIPLIER), 0),
-            (None, None, None, 0),
+            # use_container_cpu_reservation is True
+            (256, int(256 * MULTIPLIER)),
+            (128, int(128 * MULTIPLIER)),
+            (None, None),
+            # use_container_cpu_reservation is False
+            (256, int(256 * MULTIPLIER)),
+            (128, int(128 * MULTIPLIER)),
+            (None, None),
         ],
     )
     def test_cpu_configuration(
@@ -170,9 +167,7 @@ class TestCpuConfiguration:
         service_config: ServiceConfig,
         mock_aws: Any,
         cpu_reservation: Optional[int],
-        use_cpu_flag: Optional[bool],
         expected_task_cpu: Optional[int],
-        expected_container_cpu: int,
     ):
         """
         Test that the CPU configuration is set correctly in the CloudFormation template.
@@ -180,16 +175,11 @@ class TestCpuConfiguration:
         1. When cpu_reservation is set to a normal value, the container CPU is set to that value,
            and the task CPU is set to the value multiplied by a constant.
         2. When cpu_reservation is None, the container CPU is set to 0, and the task CPU is None.
-        3. When use_use_container_cpu_reservation is set to True, the container CPU is set to the
-           cpu_reservation value.
-        4. When use_use_container_cpu_reservation is set to False, the container CPU is set to 0 (default).
         """
         # Set CPU values in service config
         service_name = "testservice"
         service_def = service_config.services[service_name]
         service_def["cpu_reservation"] = cpu_reservation
-        if use_cpu_flag is not None:
-            service_def["use_use_container_cpu_reservation"] = use_cpu_flag
 
         service_template_generator._add_service(
             service_name=service_name, config=service_def
@@ -198,13 +188,9 @@ class TestCpuConfiguration:
         task_def = resources.get(f"{service_name}TaskDefinition", {}).get(
             "Properties", {}
         )
-        container_def = task_def.get("ContainerDefinitions", [{}])[0]
 
         # Validate task-level CPU configuration
         if expected_task_cpu is not None:
             assert task_def.get("Cpu") == format(expected_task_cpu, ".0f")
         else:
             assert "Cpu" not in task_def or task_def.get("Cpu") is None
-
-        # Validate container-level CPU configuration
-        assert container_def.get("Cpu", 0) == expected_container_cpu

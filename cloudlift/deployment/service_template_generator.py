@@ -236,10 +236,6 @@ service is down',
             "Cpu": 0
         }
 
-        if config.get("cpu_reservation", None) and config.get("use_use_container_cpu_reservation", False):
-            cpu_reservation = int(config['cpu_reservation'])
-            container_definition_arguments['Cpu'] = cpu_reservation
-
         placement_constraint = {}
         if 'fargate' not in config:
             for key in self.environment_stack["Outputs"]:
