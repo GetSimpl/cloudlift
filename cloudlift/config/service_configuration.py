@@ -344,7 +344,8 @@ class ServiceConfiguration(object):
                 "services": {
                     "type": "object",
                     "patternProperties": {
-                        "^[a-zA-Z]+$": service_schema
+                        # Service names must start with a letter and can contain letters and numbers (no hyphens)
+                        "^[a-zA-Z][a-zA-Z0-9]*$": service_schema
                     },
                     "additionalProperties": False
                 },

@@ -940,8 +940,8 @@ def test_validate_changes_invalid_configuration(
     invalid_config_combos = [
         {
             "notifications_arn": "sns-arn",
-            # scenario: service name is not in PascalCase
-            "services": {"test-service": {}},
+            # scenario: service name starts with number (invalid)
+            "services": {"1test-service": {}},
             "cloudlift_version": "1.0.0",
         },
         {
@@ -1509,3 +1509,53 @@ def test_validate_changes_cpu_configs_optional(service_configuration):
 
     # Should not raise an exception as cpu_reservation is optional
     service_configuration._validate_changes(config)
+
+
+@pytest.mark.parametrize(
+    "service_name, should_be_valid",
+    [
+        # Valid service names (should not raise exception)
+        ("TestService", True),  # PascalCase
+        ("testservice", True),  # lowercase
+        ("Service1", True),  # letters + numbers
+        ("Test123", True),  # letters + numbers
+        ("testService080", True),  # complex with numbers
+        ("Unity", True),  # single word
+        ("Kafdrop2", True),  # letters + number at end
+        ("A", True),  # single letter
+        ("testService123", True),  # complex with numbers
+        ("MerchantDashboardD2C", True),  # mixed case with numbers
+        # Invalid service names (should raise exception)
+        ("1testService", False),  # starts with number
+        ("test-service", False),  # contains hyphen
+        ("service_underscore", False),  # contains underscore
+        ("service.", False),  # contains period
+        ("service name", False),  # contains space
+        ("Test-123", False),  # contains hyphen
+        ("notification-service-mock", False),  # contains hyphens
+        ("", False),  # empty string
+    ],
+)
+def test_service_name_validation(service_configuration, service_name, should_be_valid):
+    """
+    Test service name validation with regex pattern that allows letters and numbers only.
+    Service names must start with a letter and cannot contain hyphens or special characters.
+    """
+    config = {
+        "notifications_arn": "sns-arn",
+        "services": {
+            service_name: {
+                "memory_reservation": 100,
+                "command": None,
+            }
+        },
+        "cloudlift_version": "1.0.0",
+    }
+
+    if should_be_valid:
+        # Should not raise an exception
+        service_configuration._validate_changes(config)
+    else:
+        # Should raise UnrecoverableException
+        with pytest.raises(UnrecoverableException):
+            service_configuration._validate_changes(config)
