@@ -940,8 +940,14 @@ def test_validate_changes_invalid_configuration(
     invalid_config_combos = [
         {
             "notifications_arn": "sns-arn",
+            # scenario: service name is not in PascalCase
+            "services": {"test-service": {}},
+            "cloudlift_version": "1.0.0",
+        },
+        {
+            "notifications_arn": "sns-arn",
             # scenario: service name starts with number (invalid)
-            "services": {"1test-service": {}},
+            "services": {"1testService": {}},
             "cloudlift_version": "1.0.0",
         },
         {
@@ -1526,13 +1532,15 @@ def test_validate_changes_cpu_configs_optional(service_configuration):
         ("testService123", True),  # complex with numbers
         ("MerchantDashboardD2C", True),  # mixed case with numbers
         # Invalid service names (should raise exception)
-        ("1testService", False),  # starts with number
-        ("test-service", False),  # contains hyphen
+        ("1test-service", False),  # starts with number
+        ("-invalid", False),  # starts with hyphen
         ("service_underscore", False),  # contains underscore
         ("service.", False),  # contains period
         ("service name", False),  # contains space
-        ("Test-123", False),  # contains hyphen
-        ("notification-service-mock", False),  # contains hyphens
+        (
+            "test-",
+            False,
+        ),  # ends with hyphen (invalid)
         ("", False),  # empty string
     ],
 )
