@@ -151,11 +151,6 @@ class TestCpuConfiguration:
     @pytest.mark.parametrize(
         "cpu_reservation, expected_task_cpu",
         [
-            # use_container_cpu_reservation is True
-            (256, int(256 * MULTIPLIER)),
-            (128, int(128 * MULTIPLIER)),
-            (None, None),
-            # use_container_cpu_reservation is False
             (256, int(256 * MULTIPLIER)),
             (128, int(128 * MULTIPLIER)),
             (None, None),
