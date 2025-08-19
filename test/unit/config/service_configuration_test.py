@@ -10,7 +10,7 @@ from cloudlift.config.environment_configuration import EnvironmentConfiguration
 from cloudlift.config.service_configuration import ServiceConfiguration
 from cloudlift.constants import FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
 from cloudlift.exceptions import UnrecoverableException
-from cloudlift.utils import flatten_dict
+from test.utils.helpers import flatten_dict
 from cloudlift.version import VERSION
 
 SERVICE_NAME = "test-service"

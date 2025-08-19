@@ -343,7 +343,7 @@ service is down',
                 cpu_limit = cpu_reservation * multiplier_factor
 
             # Do not set a default value unless cpu_reservation is provided
-            if cpu_limit:
+            if cpu_limit and cpu_limit > 0:
                 # Round the value to the nearest integer
                 # Task definition requires a string value for cpu without decimal places in it
                 # Example: 256, 512, 1024, not 256.0, 512.0, 1024.0

@@ -428,27 +428,30 @@ class EcsAction(object):
         return task_definition
 
     def update_task_definition(self, task_definition):
-        base_td: dict = {}
+        base_td: dict = {
+            'family': task_definition.family,
+            'containers': task_definition.containers,
+            'volumes': task_definition.volumes,
+            'role_arn': task_definition.role_arn,
+            'execution_role_arn': task_definition.execution_role_arn if task_definition.execution_role_arn else boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
+            'network_mode': task_definition.network_mode or u'bridge'
+        }
+
+        # If FARGATE is specified, add the required compatibilities, cpu and memory
         if task_definition.requires_compatibilities and 'FARGATE' in task_definition.requires_compatibilities:
-            base_td = {
+            fargate_td = {
                 'requires_compatibilities': task_definition.requires_compatibilities or [],
                 'cpu' : task_definition.cpu or u'',
                 'memory' : task_definition.memory or u'',
 
             }
+            base_td.update(fargate_td)
             
+        # If cpu is specified, add it to the base_td (This is for EC2 tasks)
         if task_definition.cpu:
             base_td['cpu'] = task_definition.cpu
             
-        response = self._client.register_task_definition(
-            family=task_definition.family,
-            containers=task_definition.containers,
-            volumes=task_definition.volumes,
-            role_arn=task_definition.role_arn,
-            execution_role_arn=task_definition.execution_role_arn if task_definition.execution_role_arn else boto3.resource('iam').Role('ecsTaskExecutionRole').arn,
-            network_mode=task_definition.network_mode or u'bridge',
-            **base_td
-        )
+        response = self._client.register_task_definition(**base_td)
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
