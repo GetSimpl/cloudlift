@@ -141,12 +141,11 @@ def service_template_generator(service_config, environment_stack, mocked_depende
     return generator
 
 
-# This constant is used to multiply the CPU reservation value
-# to get the task CPU value. The value is set to 1.25 as per the original code.
-MULTIPLIER = 1.25
-
-
 class TestCpuConfiguration:
+    # This constant is used to multiply the CPU reservation value
+    # to get the task CPU value. The value is set to 1.25 as per the original code.
+    MULTIPLIER = 1.25
+
     # parametrize the test with different CPU configurations
     @pytest.mark.parametrize(
         "cpu_reservation, expected_task_cpu",

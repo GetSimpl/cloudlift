@@ -75,6 +75,8 @@ class ServiceTemplateGenerator(TemplateGenerator):
         self.environment_configuration = EnvironmentConfiguration(self.environment).get_config().get(self.environment, {})
         self.service_defaults = self.environment_configuration.get('service_defaults', {})
         self.cluster_alb_listeners: list = []
+        # This constant is used to multiply the CPU reservation value to get the task CPU value
+        self.CPU_LIMIT_MULTIPLIER_FACTOR = 1.25
 
     def _derive_configuration(self, service_configuration):
         self.application_name = service_configuration.service_name
@@ -335,7 +337,7 @@ service is down',
 
         if launch_type == self.LAUNCH_TYPE_EC2:
             cpu_limit = None
-            multiplier_factor = 1.25
+            multiplier_factor = self.CPU_LIMIT_MULTIPLIER_FACTOR
 
             if config.get("cpu_reservation"):
                 cpu_reservation = int(config['cpu_reservation'])
