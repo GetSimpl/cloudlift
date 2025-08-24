@@ -1,4 +1,5 @@
 import functools
+import os
 
 import boto3
 import click
@@ -40,6 +41,17 @@ repo')
         return func(*args, **kwargs)
 
     return wrapper
+
+
+def _fetch_build_args(ctx, param, value):
+    return_values = []
+    for arg_name in value:
+        try:
+            value = os.environ[arg_name]
+            return_values.append((str(arg_name), str(value)))
+        except KeyError:
+            raise click.BadParameter("Value not found in environment for build arg " + arg_name)
+    return dict(return_values)
 
 
 class CommandWrapper(click.Group):
@@ -116,8 +128,12 @@ def edit_config(name, environment):
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def deploy_service(name, environment, version, build_arg):
-    ServiceUpdater(name, environment, None, version, dict(build_arg)).run()
+@click.option("--fetch-build-arg", multiple=True, callback=_fetch_build_args, help="These args are passed to docker "
+                                                                                   "build command as --build-args. "
+                                                                                   "Supports multiple.\
+                                                                                    Values are picked from environment")
+def deploy_service(name, environment, version, build_arg, fetch_build_arg):
+    ServiceUpdater(name, environment, None, version, dict(build_arg, **fetch_build_arg)).run()
 
 
 @cli.command()
@@ -128,8 +144,12 @@ def deploy_service(name, environment, version, build_arg):
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def create_task_definition(name, environment, version, build_arg):
-    TaskDefinitionCreator(name, environment, version, dict(build_arg)).create()
+@click.option("--fetch-build-arg", multiple=True, callback=_fetch_build_args, help="These args are passed to docker "
+                                                                                   "build command as --build-args. "
+                                                                                   "Supports multiple.\
+                                                                                    Values are picked from environment")
+def create_task_definition(name, environment, version, build_arg, fetch_build_arg):
+    TaskDefinitionCreator(name, environment, version, dict(build_arg, **fetch_build_arg)).create()
 
 
 @cli.command()
@@ -140,8 +160,12 @@ def create_task_definition(name, environment, version, build_arg):
 @click.option("--build-arg", type=(str, str), multiple=True, help="These args are passed to docker build command "
                                                                   "as --build-args. Supports multiple.\
                                                                    Please leave space between name and value" )
-def update_task_definition(name, environment, version, build_arg):
-    TaskDefinitionCreator(name, environment, version, dict(build_arg)).update()
+@click.option("--fetch-build-arg", multiple=True, callback=_fetch_build_args, help="These args are passed to docker "
+                                                                                   "build command as --build-args. "
+                                                                                   "Supports multiple.\
+                                                                                    Values are picked from environment")
+def update_task_definition(name, environment, version, build_arg, fetch_build_arg):
+    TaskDefinitionCreator(name, environment, version, dict(build_arg, **fetch_build_arg)).update()
 
 
 @cli.command()
