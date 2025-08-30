@@ -20,8 +20,6 @@ class SessionCreator(object):
   def start_session(self, mfa_code, component):
     user_id = (self.sts_client.get_caller_identity()['Arn'].split("/")[0]).split(":")[-1]
     if user_id == "user":
-      if mfa_code == None:
-        mfa_code = prompt("MFA code")
       mfa.do_mfa_login(mfa_code, get_region_for_environment(self.environment))
       target_instance = self._get_target_instance(component)
     elif user_id == "assumed-role":
