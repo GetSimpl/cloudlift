@@ -173,5 +173,11 @@ def start_session(name, environment, mfa, component):
     SessionCreator(name, environment).start_session(mfa, component)
 
 
+@cli.command(help="Get Service stack Output details")
+@_require_environment
+@_require_name
+def service_output(name, environment):
+    ServiceInformationFetcher(name, environment).get_stack_outputs()
+
 if __name__ == '__main__':
     cli()
